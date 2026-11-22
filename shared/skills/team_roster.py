@@ -46,6 +46,10 @@ guardie che ne limitano il costo quando l'inferenza sbaglia.
    (`sentinel-orders`): il watchdog non puo' ricostruire il team che qualcuno ha
    appena smontato.
 
+`stop-mark` scrive che una sessione e' stata FERMATA (`jht team stop`, la chiusura a fine orario): `stopped` non e' ne'
+`active` (il watchdog non la ricrea a meta' giornata: l'hanno appena fermata) ne' `retired` (il restore all'apertura la riporta).
+Prima dello stop il roster restava `active` e diceva il falso a chiunque lo leggesse.
+
 `retire` resta il lifecycle ordinario (scale-down). Un containment di sicurezza
 ha invece uno stato distinto e sticky: `record` non lo cancella, quindi neppure
 uno spawn manuale puo' riattivare per sbaglio una sessione contenuta. Solo
@@ -59,6 +63,7 @@ CLI::
 
     python3 team_roster.py record scout 3 --src start-agent.sh
     python3 team_roster.py retire SCOUT-3 --reason "scale-down"
+    python3 team_roster.py stop-mark SCOUT-1 SCOUT-2 --by hours   # fermate, non ritirate
     python3 team_roster.py contain SCRITTORE-2 --by capitano --reason "unsafe output" --evidence /path/to/pane.txt
     python3 team_roster.py release SCRITTORE-2 --by operatore --reason "incident resolved"
     python3 team_roster.py release-user [SESSION ...]   # an explicit start by the user
@@ -131,6 +136,15 @@ PRODUCTION = {
 PRODUCTION_AUTHOR = {
     "closer": "agent_closer",
 }
+
+# Chi avvia da solo, senza che nessuno l'abbia chiesto (JHT_SPAWN_SRC): il watchdog (respawn, coda, restore), il pid1, le sonde
+# dell'uso. Uno spawn loro NON riporta ad `active` un worker ritirato: il 21/11 la coda ha riacceso ANALISTA-1, ritirato dal roster,
+# e record() l'aveva rimesso fra gli attesi. Lo riattiva solo un avvio voluto (il Capitano con `jht team start`, l'utente).
+AUTOMATIC_SPAWN_SOURCES = frozenset({"agent-watchdog", "pid1", "pid1-autostart", "check-usage", "sentinel-bridge",
+                                     "roster-restore", "queue-demand"})
+
+STOPPED = "stopped"
+STOP_BY = ("user", "hours")
 
 _SESSION_RE = re.compile(r"^([A-Z]+)(?:-(\d+))?$")
 
@@ -233,14 +247,24 @@ def save(state: dict, path: Path | None = None) -> bool:
         return False
 
 
-def record(role: str, instance=None, src: str = "", path: Path | None = None) -> dict:
+def record(role: str, instance=None, src: str = "", path: Path | None = None,
+           spawn_source: str | None = None) -> dict:
     """Registra uno spawn riuscito. Idempotente: riporta l'entry ad `active`
-    (un `retire` seguito da un nuovo spawn e' una ri-attivazione esplicita)."""
+    (un `stopped` che riparte; un `retire` seguito da un avvio VOLUTO e' una
+    ri-attivazione esplicita). Uno spawn automatico (`spawn_source`, di norma
+    JHT_SPAWN_SRC, in AUTOMATIC_SPAWN_SOURCES) lascia `retired` un ritirato."""
     role = role.strip().lower()
     sess = session_name(role, instance)
     state = load(path)
     entry = state["agents"].get(sess) or {}
     now = _iso(_now())
+    source = (os.environ.get("JHT_SPAWN_SRC", "") if spawn_source is None else spawn_source).strip().lower()
+    if entry.get("status") == "retired" and source in AUTOMATIC_SPAWN_SOURCES:
+        entry["last_spawn"] = now
+        entry["spawned_while_retired"] = {"at": now, "src": source}
+        state["agents"][sess] = entry
+        save(state, path)
+        return entry
     contained = (entry.get("status") == "contained" or
                  containment_marker(sess, path).exists())
     entry.update({
@@ -261,6 +285,9 @@ def record(role: str, instance=None, src: str = "", path: Path | None = None) ->
     # sparizione, non un avvio che non riesce.
     entry.pop("respawn_failed_at", None)
     entry.pop("owed_respawn_at", None)
+    entry.pop("stopped_at", None)
+    entry.pop("stop_by", None)
+    entry.pop("spawned_while_retired", None)
     if not contained:
         entry.pop("retired_at", None)
         entry.pop("retire_reason", None)
@@ -270,6 +297,33 @@ def record(role: str, instance=None, src: str = "", path: Path | None = None) ->
     state["agents"][sess] = entry
     save(state, path)
     return entry
+
+
+def stop_mark(sessions, by: str = "user", reason: str = "", path: Path | None = None) -> list:
+    """Le sessioni FERMATE (non ritirate): `active` → `stopped`. Un ritirato o un contenuto resta com'e' (il ritiro e il
+    containment sono decisioni piu' forti di uno stop); una sessione che il roster non conosce si salta. Ritorna i nomi segnati."""
+    by = by if by in STOP_BY else "user"
+    state = load(path)
+    now = _iso(_now())
+    marked = []
+    for raw in sessions:
+        sess = str(raw).strip().upper()
+        if sess.startswith("JHT-"):
+            sess = sess[4:]
+        entry = state["agents"].get(sess)
+        if not entry or entry.get("status") != "active":
+            continue
+        entry["status"] = STOPPED
+        entry["stopped_at"] = now
+        entry["stop_by"] = by
+        if reason:
+            entry["stop_reason"] = reason
+        else:
+            entry.pop("stop_reason", None)
+        marked.append(sess)
+    if marked:
+        save(state, path)
+    return marked
 
 
 def retire(session: str, reason: str = "", path: Path | None = None) -> bool:
@@ -586,13 +640,15 @@ def last_activity(session: str, home: Path | None = None) -> datetime | None:
     return best
 
 
-def missing(path: Path | None = None, live: set | None = None) -> list:
-    """Entry attese (`status=active`) senza sessione tmux viva."""
+def missing(path: Path | None = None, live: set | None = None, include_stopped: bool = False) -> list:
+    """Entry attese (`status=active`) senza sessione tmux viva. `include_stopped`: anche le fermate (`stopped`), per il restore
+    che le riporta all'apertura o a un nuovo avvio; il respawn del watchdog no."""
     state = load(path)
     alive = live_sessions() if live is None else live
+    wanted = ("active", STOPPED) if include_stopped else ("active",)
     out = []
     for sess, entry in sorted(state["agents"].items()):
-        if entry.get("status") != "active":
+        if entry.get("status") not in wanted:
             continue
         if sess in alive:
             continue
@@ -936,6 +992,11 @@ def main(argv=None) -> int:
     pt.add_argument("session")
     pt.add_argument("--reason", default="")
 
+    ps = sub.add_parser("stop-mark", help="the sessions were STOPPED (not retired): the restore brings them back")
+    ps.add_argument("sessions", nargs="+")
+    ps.add_argument("--by", choices=STOP_BY, default="user")
+    ps.add_argument("--reason", default="")
+
     pc = sub.add_parser("contain", help="persist a sticky safety containment")
     pc.add_argument("session")
     pc.add_argument("--by", required=True)
@@ -992,6 +1053,9 @@ def main(argv=None) -> int:
             inst = None
         entry = record(args.role, inst, src=args.src)
         print(json.dumps(entry, ensure_ascii=False))
+        return 0
+    if args.cmd == "stop-mark":
+        print(json.dumps({"stopped": stop_mark(args.sessions, by=args.by, reason=args.reason)}))
         return 0
     if args.cmd == "retire":
         ok = retire(args.session, args.reason)

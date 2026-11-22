@@ -27,8 +27,9 @@ class FakeRoster:
     def live_sessions(self):
         return self.alive
 
-    def missing(self, live=None):
-        return [e for e in self.entries if e["status"] == "active" and e["session"] not in (live or set())]
+    def missing(self, live=None, include_stopped=False):
+        wanted = ("active", "stopped") if include_stopped else ("active",)
+        return [e for e in self.entries if e["status"] in wanted and e["session"] not in (live or set())]
 
     def last_activity(self, session, home=None):
         return self.signs.get(session)

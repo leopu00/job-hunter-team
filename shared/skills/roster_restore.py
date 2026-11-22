@@ -88,13 +88,14 @@ def phase() -> str | None:
 
 
 def _roster_entries():
-    """(entries of the workers expected and without a session, the sessions alive), or (None, None) when it cannot be read."""
+    """(entries of the workers expected, or stopped by `jht team stop` / the close of the hours, and without a session, the
+    sessions alive), or (None, None) when it cannot be read."""
     roster = _load("team_roster")
     if roster is None:
         return None, None
     try:
         alive = roster.live_sessions()
-        return roster.missing(live=alive), alive
+        return roster.missing(live=alive, include_stopped=True), alive
     except Exception:  # noqa: BLE001
         return None, None
 
