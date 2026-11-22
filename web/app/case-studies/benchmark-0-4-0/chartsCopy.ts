@@ -108,6 +108,8 @@ const SOURCES = {
   linkedin: "LinkedIn",
   publicCompetitions: "concorsipubblici.it",
   jobInTourism: "jobintourism.it",
+  jobsora: "jobsora.it",
+  jobeka: "jobeka.it",
 };
 
 const en: ChartCopy = {
@@ -282,7 +284,7 @@ const en: ChartCopy = {
     maintainer: "Maintainer",
     mentor: "Mentor",
   },
-  sources: SOURCES,
+  sources: { ...SOURCES, other: "Other sites" },
   benchProfiles: {
     nurse: "Nurse",
     cook: "Cook",
@@ -475,6 +477,7 @@ const it: ChartCopy = {
   second: "secondo giro",
   seriesMark: "◆ = serie minuto per minuto",
   bench: "Banco",
+  sources: { ...SOURCES, other: "Altri siti" },
 };
 
 const de: ChartCopy = {
@@ -656,6 +659,7 @@ const de: ChartCopy = {
   second: "zweite Runde",
   seriesMark: "◆ = Reihe Minute für Minute",
   bench: "Bank",
+  sources: { ...SOURCES, other: "Andere Seiten" },
 };
 
 const es: ChartCopy = {
@@ -845,6 +849,7 @@ const es: ChartCopy = {
   second: "segunda ronda",
   seriesMark: "◆ = serie minuto a minuto",
   bench: "Banco",
+  sources: { ...SOURCES, other: "Otros sitios" },
 };
 
 const fr: ChartCopy = {
@@ -1027,6 +1032,7 @@ const fr: ChartCopy = {
   second: "deuxième tour",
   seriesMark: "◆ = série minute par minute",
   bench: "Banc",
+  sources: { ...SOURCES, other: "Autres sites" },
 };
 
 const hu: ChartCopy = {
@@ -1214,6 +1220,7 @@ const hu: ChartCopy = {
   second: "második kör",
   seriesMark: "◆ = percenkénti sor",
   bench: "Pad",
+  sources: { ...SOURCES, other: "Egyéb oldalak" },
 };
 
 const pt: ChartCopy = {
@@ -1402,6 +1409,7 @@ const pt: ChartCopy = {
   second: "segunda rodada",
   seriesMark: "◆ = série minuto a minuto",
   bench: "Bancada",
+  sources: { ...SOURCES, other: "Outros sites" },
 };
 
 export const CHART_COPY: Record<Locale, ChartCopy> = {
