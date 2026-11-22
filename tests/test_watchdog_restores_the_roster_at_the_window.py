@@ -74,7 +74,7 @@ def _world(monkeypatch, tmp_path, inside):
         {"days": ["mon", "tue", "wed", "thu", "fri", "sat", "sun"], "start": "%02d:00" % start, "end": "%02d:00" % end}]}}}))
     monkeypatch.setenv("JHT_HOME", str(home))
     entry = {"session": "SCOUT-6", "role": "scout", "instance": 6, "status": "active"}
-    roster = type("R", (), {"live_sessions": staticmethod(lambda: set()), "missing": staticmethod(lambda live=None: [entry]),
+    roster = type("R", (), {"live_sessions": staticmethod(lambda: set()), "missing": staticmethod(lambda live=None, include_stopped=False: [entry]),
                             "last_activity": staticmethod(lambda s, h=None: now - timedelta(hours=10))})
     registry = type("P", (), {"_host_agent_cap": staticmethod(lambda: None)})
     rr._MODULES.clear()

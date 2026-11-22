@@ -35,6 +35,15 @@ export function onboardingOpen(run = execArgvInContainer) {
   return r?.code === 1;
 }
 
+// The roster has to say the truth after a stop: the sessions closed here are `stopped` (not `active`, or the watchdog brings them
+// back within the hour; not `retired`, the restore brings them back at the next start). Best effort, one call for all of them: a
+// roster that cannot be written never undoes a stop that happened. Returns true when the roster took it.
+export function markStopped(sessions, run = execArgvInContainer) {
+  if (!sessions.length) return false;
+  const r = run(['python3', '/app/shared/skills/team_roster.py', 'stop-mark', ...sessions, '--by', 'user'], { timeoutMs: 15_000 });
+  return r?.code === 0;
+}
+
 // The sessions `stop --all` closes: the team's, but the Assistente (unless `assistantStops`), plus the infrastructure ones.
 export function stopAllTargets(sessions, { assistantStops = false } = {}) {
   return sessions.filter((s) =>
@@ -147,12 +156,14 @@ export function stopAction(agentArg, options = {}) {
   console.log('');
 
   let stopped = 0;
+  const closed = [];
   for (const s of targets.sort()) {
     if (usingContainer()) {
       const r = execArgvInContainer(['tmux', 'kill-session', '-t', exactSession(s)]);
       if (r.code === 0) {
         console.log(`  ${c.green('✓')} ${say('stop.stopped_one', { session: s })}`);
         stopped++;
+        closed.push(s);
       } else {
         console.log(`  ${c.yellow('⚠')} ${s} — ${(r.stderr || r.stdout || say('stop.not_found')).split('\n')[0]}`);
       }
@@ -172,6 +183,8 @@ export function stopAction(agentArg, options = {}) {
       }
     }
   }
+
+  if (usingContainer()) markStopped(closed);
 
   console.log('');
   console.log(c.green(say('stop.stopped_n', { n: stopped })));
