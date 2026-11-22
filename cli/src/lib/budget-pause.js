@@ -117,3 +117,26 @@ export function ramGuardText({ home = JHT_HOME, now = new Date() } = {}) {
     return null;
   }
 }
+
+/**
+ * «The quota of the subscription is spent»: shared/skills/quota_wall.py writes $JHT_HOME/state/quota-wall.json = { on, resumes_at
+ * (ISO or null), probe, until } while the team is paused because the workers answer the provider's limit. Said in `jht team status`
+ * only while the pause stands (the team flag is checked too: a file left behind by a stopped pause says nothing). Null otherwise.
+ */
+export function quotaWallText({ home = JHT_HOME, now = new Date() } = {}) {
+  try {
+    const seen = JSON.parse(readFileSync(join(home, 'state', 'quota-wall.json'), 'utf8'));
+    const flag = JSON.parse(readFileSync(join(home, '.team-standby.flag'), 'utf8'));
+    const until = Date.parse(flag?.until ?? '');
+    if (seen?.on !== true || flag?.requested_by !== 'quota' || !(until > now.getTime())) return null;
+    const resumes = Date.parse(seen.resumes_at ?? '');
+    if (!Number.isFinite(resumes)) return later('agents.quota_wall_unknown', { min: '30' });
+    const moment = new Date(resumes);
+    const sameDay = moment.toDateString() === now.toDateString();
+    const clock = moment.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+    const at = sameDay ? clock : `${moment.toLocaleDateString([], { day: '2-digit', month: '2-digit' })} ${clock}`;
+    return later('agents.quota_wall', { at });
+  } catch {
+    return null;
+  }
+}

@@ -1,6 +1,6 @@
 import { errorBlock } from '../lib/ui.js';
 import { say, show } from '../lib/texts.js';
-import { budgetPauseText, onboardingSpendText, ramGuardText } from '../lib/budget-pause.js';
+import { budgetPauseText, onboardingSpendText, quotaWallText, ramGuardText } from '../lib/budget-pause.js';
 import { readObservation } from '../lib/agent-observation.js';
 import { errorText, renderObservation } from '../lib/agent-observation-view.js';
 import { appendDiagnostic } from '../lib/runtime-diagnostic.js';
@@ -20,6 +20,9 @@ export function handleAgents(options = {}, read = readObservation) {
       // the RAM guard retired workers: the Captain is told too, but a Captain held by the budget never reads it
       const ram = ramGuardText();
       if (ram) console.log(`⚠ ${show(ram)}`);
+      // the quota of the subscription is spent: the team is paused and says when it resumes
+      const quota = quotaWallText();
+      if (quota) console.log(`⚠ ${show(quota)}`);
       // a role that cannot start (the Dottore, the Mantenitore): said here, not only retried in the watchdog's log
       for (const text of spawnFailureTexts()) console.log(`⚠ ${show(text)}`);
     }

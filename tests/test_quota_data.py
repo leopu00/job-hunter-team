@@ -357,3 +357,37 @@ def test_an_api_that_cannot_name_the_home_still_classifies_the_rest(tmp_path, se
 
     api._path = path
     assert quota_data.classify_failure(api, "openai", "codex_rollout_none") == "no_quota_data:no_rate_limits_in_rollouts"
+
+
+def test_a_failed_fetch_leaves_a_row_of_its_own_not_silence():
+    wire = Wire(SUBSCRIPTION)
+    rows = []
+    wire.api.write_noread = rows.append
+    run = wire.run()
+    run.fail_reason = quota_data.classify_failure(wire.api, "openai", "codex_rollout_none")
+    loop._failure(wire.api, run)
+    loop._failure(wire.api, run)
+    assert [r["status"] for r in rows] == ["NO-READ", "NO-READ"]
+    assert rows[1]["fail_streak"] == 2 and rows[0]["reason"] == "codex_rollout_none"
+
+
+def test_a_declared_no_quota_mode_is_recorded_as_such():
+    wire = Wire(API_KEY)
+    rows = []
+    wire.api.write_noread = rows.append
+    run = wire.run()
+    run.fail_reason = quota_data.classify_failure(wire.api, "openai", run.fail_reason)
+    loop._failure(wire.api, run)
+    assert rows[0]["status"] == "NO-QUOTA"
+
+
+def test_a_record_that_cannot_be_written_does_not_stop_the_tick():
+    wire = Wire(SUBSCRIPTION)
+
+    def boom(row):
+        raise OSError("disk full")
+    wire.api.write_noread = boom
+    run = wire.run()
+    run.fail_reason = "codex_rollout_none"
+    loop._failure(wire.api, run)
+    assert run.fail_streak == 1

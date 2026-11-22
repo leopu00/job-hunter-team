@@ -2135,6 +2135,14 @@ def write_jsonl(entry):
         f.write(json.dumps(entry) + "\n")
 
 
+def write_noread(entry):
+    """Tick senza numeri: una riga in logs/sentinel-noread.jsonl, file a parte perche' i lettori di
+    sentinel-data.jsonl si aspettano campioni con usage."""
+    _path("LOGS_DIR").mkdir(parents=True, exist_ok=True)
+    with (_path("DATA_JSONL").parent / "sentinel-noread.jsonl").open("a", encoding="utf-8") as f:
+        f.write(json.dumps(entry) + "\n")
+
+
 ROLE_USAGE_MAX_AGE_SEC = 15 * 60
 _TBA_MOD = None
 

@@ -96,6 +96,8 @@ export default {
   "agents.paused_of": "{running} von {total} pausiert (Budget)",
   "agents.paused": "pausiert",
   "agents.ram_guard": "Um {at} war der Arbeitsspeicher des Computers fast voll ({free} GiB frei von {total}): {n} Arbeiter wurden zum Schutz angehalten. Die Suche läuft mit weniger Arbeitern weiter, bis der Speicher wieder frei ist.",
+  "agents.quota_wall": "Das Kontingent deines Abos ist aufgebraucht: Das Team pausiert und startet um {at} von selbst wieder.",
+  "agents.quota_wall_unknown": "Das Kontingent deines Abos ist aufgebraucht: Das Team pausiert. Wann es zurückkommt, ist nicht bekannt: Das Team prüft alle {min} Minuten von selbst und startet, sobald wieder Kontingent da ist.",
   "team.title": "Team",
   "team.next_start": "Starte das Team mit: jht team start",
   "observation.nd": "k. A.",

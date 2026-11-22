@@ -96,6 +96,8 @@ export default {
   "agents.paused_of": "{running} / {total} szünetel (keret)",
   "agents.paused": "szünetel",
   "agents.ram_guard": "{at}-kor a számítógép memóriája majdnem megtelt ({free} GiB szabad {total}-ból): {n} munkást leállítottunk a védelme érdekében. A keresés kevesebb munkással folytatódik, amíg a memória vissza nem tér.",
+  "agents.quota_wall": "Az előfizetésed kerete elfogyott: a csapat szünetel, és {at}-kor magától újraindul.",
+  "agents.quota_wall_unknown": "Az előfizetésed kerete elfogyott: a csapat szünetel. Nem tudni, mikor tér vissza: a csapat {min} percenként magától ellenőriz, és újraindul, amint van újra keret.",
   "team.title": "Csapat",
   "team.next_start": "Indítsd el a csapatot: jht team start",
   "observation.nd": "n. a.",
