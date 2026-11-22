@@ -82,7 +82,7 @@ export const T: Record<Locale, Copy> = {
   en: {
     metaTitle: "0.4.0 benchmark · Job Hunter Team",
     title: "0.4.0 benchmark: four services, three systems",
-    lead: "What the team spent and found in the test rounds of 14-19 November 2026, with the API-key services the 0.4.0 harness offers. Numbers come from the test reports and the cost samplers.",
+    lead: "What the team spent and found in the test rounds of 14-21 November 2026, with the API-key services the 0.4.0 harness offers. Numbers come from the test reports and the cost samplers.",
     banner:
       "A first comparison, not a clean benchmark. Machines, profiles, builds, budgets and team sizes differ between rounds, and there is one round per service: read the limits below before comparing.",
     roundsTitle: "Every round",
@@ -127,7 +127,7 @@ export const T: Record<Locale, Copy> = {
     need: "Four identical VPSs started together, the same profile for everyone, 30 minutes of work after onboarding, the same build with the budget brake fixed, and credit on all four services.",
     back: "← All case studies",
     footer:
-      "Synthetic profiles, no personal data · numbers from the test reports of 14-19/11/2026.",
+      "Synthetic profiles, no personal data · numbers from the test reports of 14-21/11/2026.",
     marks:
       "The logos only name the service a test used and imply no endorsement. Trademarks and logos belong to their owners.",
     outcome: {
@@ -153,6 +153,7 @@ export const T: Record<Locale, Copy> = {
       receptionist: "Receptionist",
       truckDriver: "Truck driver",
       electrician: "Electrician",
+      shopAssistant: "Shop assistant",
       careAssistant: "Care assistant",
     },
     modes: { onsite: "on site", unspecified: "" },
@@ -225,6 +226,10 @@ export const T: Record<Locale, Copy> = {
         "Full retest, closed early: the stages work, but the estimated reserve of the restart stops the team 10 to 20 seconds after every stage; no new position.",
       retestResumes:
         "Retest, closed early: the unlock now works ten minutes before the first pause, but both resumes stop within the first minute, and after the update the Captain wakes all seven workers outside the stages.",
+      retestDayQuota:
+        "Retest of the budget split by day, over two days (41 h) with the pace off: the team works up to its share of the day, stops with one notice and resumes by itself the next day (1.38 of 2 $, never over a share). 4 minor defects; 4 relevant of 5 new.",
+      candidateWindowsSpanish:
+        "Release candidate on a new Windows user, everything in Spanish: 9 relevant of 10 in 5 minutes (4 also fit hours and contract); the pace brake stops at 1.01 of 1.5 $. Open: empty help from the host, the Scout stopped after its first pass.",
     },
     osNotes: {
       linux:
@@ -329,10 +334,10 @@ export const T: Record<Locale, Copy> = {
         "build 11: positions, scores and key kept, disk space back, all in Portuguese",
       updateWindowsBuild13:
         "build 13: the update with the chat open ends and the jht command works, all in French",
-      relevantCandidate:
-        "release candidate: 20 relevant of 33 for the electrician (61%); 14 of 18 on build 11. To be proven again on a new install",
-      brakeCandidate:
-        "release candidate: the second ceiling passed by 13%; on the test images after it the ceiling always holds, three defects of the pace still open",
+      relevantBuild15:
+        "build 15: 9 relevant of 10 for the shop assistant profile on a new Windows user (4 also fit hours and contract); 4 of 5 for the electrician on the retest; 20 of 33 (61%) on the first candidate",
+      brakeDayQuota:
+        "build 15: the day quota and the pace stop the team before every budget (1.38 of 2 $ over two days; 1.04 of 1.5 $ on Windows); minor defects left in the notices and the status",
       languageFrenchGermanOk:
         "builds 11-13: German and French all through the flow; a few lines still in English (help of the command)",
       languageItalianOk:
@@ -360,7 +365,7 @@ export const T: Record<Locale, Copy> = {
       install: "Install by a new user",
       update: "Update with a team and data",
       scout: "Scout bench: does the Scout find ads of the right trade?",
-      brake: "Spending brake",
+      brake: "Criteria of the last tries (build 15).",
       language: "Language",
       doctor: "Doctor and Maintainer",
       services: "Services",
@@ -453,7 +458,7 @@ export const T: Record<Locale, Copy> = {
   it: {
     metaTitle: "Benchmark 0.4.0 · Job Hunter Team",
     title: "Benchmark 0.4.0: quattro servizi, tre sistemi",
-    lead: "Quanto ha speso e trovato la squadra nei giri di prova del 14-19 novembre 2026, con i servizi a chiave API che l'harness 0.4.0 offre. I numeri vengono dai verbali dei collaudi e dai campionatori dei costi.",
+    lead: "Quanto ha speso e trovato la squadra nei giri di prova del 14-21 novembre 2026, con i servizi a chiave API che l'harness 0.4.0 offre. I numeri vengono dai verbali dei collaudi e dai campionatori dei costi.",
     banner:
       "Un primo confronto, non un benchmark pulito. Macchine, profili, build, budget e dimensioni della squadra cambiano da un giro all'altro, e c'è un giro per servizio: leggi i limiti qui sotto prima di confrontare.",
     roundsTitle: "Ogni giro",
@@ -498,7 +503,7 @@ export const T: Record<Locale, Copy> = {
     need: "Quattro VPS uguali accese insieme, lo stesso profilo per tutti, 30 minuti di lavoro dopo l'onboarding, la stessa build con il freno del budget corretto e credito su tutti e quattro i servizi.",
     back: "← Tutti i case study",
     footer:
-      "Profili finti, nessun dato personale · numeri dai verbali dei collaudi del 14-19/11/2026.",
+      "Profili finti, nessun dato personale · numeri dai verbali dei collaudi del 14-21/11/2026.",
     marks:
       "I loghi indicano solo il servizio usato da una prova e non implicano alcuna approvazione. Marchi e loghi appartengono ai rispettivi proprietari.",
     outcome: {
@@ -524,6 +529,7 @@ export const T: Record<Locale, Copy> = {
       receptionist: "Receptionist",
       truckDriver: "Autista C+E",
       electrician: "Elettricista",
+      shopAssistant: "Commesso/a",
       careAssistant: "Operatrice socio-sanitaria",
     },
     modes: { onsite: "in sede", unspecified: "" },
@@ -596,6 +602,10 @@ export const T: Record<Locale, Copy> = {
         "Riprova completa, chiusa prima: gli scaglioni funzionano, ma la riserva stimata della ripartenza ferma la squadra 10-20 secondi dopo ogni scaglione; nessun annuncio nuovo.",
       retestResumes:
         "Riprova, chiusa prima: lo sblocco ora lavora dieci minuti prima della prima pausa, ma entrambe le riprese si fermano entro il primo minuto, e dopo l'aggiornamento il Capitano sveglia tutti e sette i lavoratori fuori dagli scaglioni.",
+      retestDayQuota:
+        "Retest del budget diviso per giorno, su due giorni (41 h) con il ritmo spento: la squadra lavora fino alla quota del giorno, si ferma con un solo avviso e riparte da sola il giorno dopo (1,38 $ su 2, mai sopra una quota). 4 difetti minori; 4 pertinenti su 5 nuove.",
+      candidateWindowsSpanish:
+        "Candidata su un utente nuovo Windows, tutto in spagnolo: 9 pertinenti su 10 in 5 minuti (4 anche per orario e contratto); il freno del ritmo ferma a 1,01 su 1,5 $. Aperti: aiuto vuoto dall'host, Scout fermo dopo la prima passata.",
     },
     osNotes: {
       linux:
@@ -699,10 +709,10 @@ export const T: Record<Locale, Copy> = {
         "build 11: annunci, punteggi e chiave tenuti, spazio su disco tornato, tutto in portoghese",
       updateWindowsBuild13:
         "build 13: l'aggiornamento con la chat aperta arriva in fondo e il comando jht funziona, tutto in francese",
-      relevantCandidate:
-        "candidata del rilascio: 20 pertinenti su 33 per l'elettricista (61%); 14 su 18 sulla build 11. Da riprovare con un'installazione nuova",
-      brakeCandidate:
-        "candidata del rilascio: secondo tetto superato del 13%; sulle immagini di prova dopo il tetto tiene sempre, aperti ancora tre difetti del ritmo",
+      relevantBuild15:
+        "build 15: 9 pertinenti su 10 per il profilo commesso/a su un utente nuovo Windows (4 anche per orario e contratto); 4 su 5 per l'elettricista nel retest; 20 su 33 (61%) sulla prima candidata",
+      brakeDayQuota:
+        "build 15: la quota del giorno e il ritmo fermano la squadra prima di ogni budget (1,38 $ su 2 in due giorni; 1,04 $ su 1,5 su Windows); restano difetti minori negli avvisi e nello stato",
       languageFrenchGermanOk:
         "build 11-13: tedesco e francese in tutto il flusso; restano poche righe in inglese (aiuto del comando)",
       languageItalianOk:
@@ -730,7 +740,7 @@ export const T: Record<Locale, Copy> = {
       install: "Installazione da utente nuovo",
       update: "Aggiornamento con squadra e dati",
       scout: "Banco Scout: lo Scout trova annunci del mestiere giusto?",
-      brake: "Freno della spesa",
+      brake: "Criteri delle ultime prove (build 15).",
       language: "Lingua",
       doctor: "Dottore e Mantenitore",
       services: "Servizi",
@@ -825,7 +835,7 @@ export const T: Record<Locale, Copy> = {
   de: {
     metaTitle: "Benchmark 0.4.0 · Job Hunter Team",
     title: "Benchmark 0.4.0: vier Dienste, drei Systeme",
-    lead: "Was das Team in den Testläufen vom 14. bis 19. November 2026 ausgegeben und gefunden hat, mit den API-Schlüssel-Diensten des 0.4.0-Harness. Die Zahlen stammen aus den Testprotokollen und den Kostenmessungen.",
+    lead: "Was das Team in den Testläufen vom 14. bis 21. November 2026 ausgegeben und gefunden hat, mit den API-Schlüssel-Diensten des 0.4.0-Harness. Die Zahlen stammen aus den Testprotokollen und den Kostenmessungen.",
     banner:
       "Ein erster Vergleich, kein sauberer Benchmark. Maschinen, Profile, Builds, Budgets und Teamgrößen unterscheiden sich von Lauf zu Lauf, und es gibt einen Lauf pro Dienst: lies die Grenzen unten, bevor du vergleichst.",
     roundsTitle: "Jeder Lauf",
@@ -870,7 +880,7 @@ export const T: Record<Locale, Copy> = {
     need: "Vier identische VPS gleichzeitig gestartet, dasselbe Profil für alle, 30 Minuten Arbeit nach dem Onboarding, derselbe Build mit korrigierter Budgetbremse und Guthaben bei allen vier Diensten.",
     back: "← Alle Fallstudien",
     footer:
-      "Synthetische Profile, keine personenbezogenen Daten · Zahlen aus den Testprotokollen vom 14.-19.11.2026.",
+      "Synthetische Profile, keine personenbezogenen Daten · Zahlen aus den Testprotokollen vom 14.-21.11.2026.",
     marks:
       "Die Logos nennen nur den Dienst, den ein Test genutzt hat, und bedeuten keine Billigung. Marken und Logos gehören ihren jeweiligen Inhabern.",
     outcome: {
@@ -896,6 +906,7 @@ export const T: Record<Locale, Copy> = {
       receptionist: "Rezeptionist",
       truckDriver: "Lkw-Fahrer",
       electrician: "Elektriker",
+      shopAssistant: "Verkäufer/in",
       careAssistant: "Pflegehelferin",
     },
     modes: { onsite: "vor Ort", unspecified: "" },
@@ -968,6 +979,10 @@ export const T: Record<Locale, Copy> = {
         "Vollständiger erneuter Test, vorzeitig beendet: die Staffeln funktionieren, aber die geschätzte Reserve des Neustarts stoppt das Team 10 bis 20 Sekunden nach jeder Staffel; keine neue Stelle.",
       retestResumes:
         "Erneuter Test, vorzeitig beendet: die Freigabe arbeitet jetzt zehn Minuten bis zur ersten Pause, aber beide Wiederaufnahmen stoppen in der ersten Minute, und nach dem Update weckt der Kapitän alle sieben Arbeiter außerhalb der Staffeln.",
+      retestDayQuota:
+        "Retest des nach Tagen aufgeteilten Budgets über zwei Tage (41 Std.) bei ausgeschaltetem Tempo: das Team arbeitet bis zum Tagesanteil, hält mit einer einzigen Meldung an und läuft am nächsten Tag von selbst weiter (1,38 $ von 2, nie über einem Anteil). 4 kleine Mängel; 4 passende von 5 neuen.",
+      candidateWindowsSpanish:
+        "Release-Kandidat bei einem neuen Windows-Nutzer, alles auf Spanisch: 9 passende von 10 in 5 Minuten (4 auch bei Arbeitszeit und Vertrag); die Tempobremse stoppt bei 1,01 von 1,5 $. Offen: leere Hilfe vom Host, Scout nach dem ersten Durchgang gestoppt.",
     },
     osNotes: {
       linux:
@@ -1073,10 +1088,10 @@ export const T: Record<Locale, Copy> = {
         "Build 11: Stellen, Scores und Schlüssel behalten, Speicherplatz zurück, alles auf Portugiesisch",
       updateWindowsBuild13:
         "Build 13: das Update bei offenem Chat läuft durch und der Befehl jht funktioniert, alles auf Französisch",
-      relevantCandidate:
-        "Release-Kandidat: 20 passende von 33 für den Elektriker (61%); 14 von 18 auf Build 11. Mit einer neuen Installation erneut zu prüfen",
-      brakeCandidate:
-        "Release-Kandidat: zweites Limit um 13% überschritten; auf den Test-Images danach hält das Limit immer, drei Mängel des Tempos noch offen",
+      relevantBuild15:
+        "Build 15: 9 passende von 10 für das Profil Verkäufer/in bei einem neuen Windows-Nutzer (4 auch bei Arbeitszeit und Vertrag); 4 von 5 für den Elektriker im Retest; 20 von 33 (61%) beim ersten Kandidaten",
+      brakeDayQuota:
+        "Build 15: Tagesanteil und Tempo halten das Team vor jedem Budget an (1,38 $ von 2 in zwei Tagen; 1,04 $ von 1,5 unter Windows); kleine Mängel bleiben in Meldungen und Status",
       languageFrenchGermanOk:
         "Builds 11-13: Deutsch und Französisch im ganzen Ablauf; ein paar Zeilen noch auf Englisch (Hilfe des Befehls)",
       languageItalianOk:
@@ -1104,7 +1119,7 @@ export const T: Record<Locale, Copy> = {
       install: "Installation durch neue Nutzer",
       update: "Update mit Team und Daten",
       scout: "Scout-Bank: findet der Scout Anzeigen des richtigen Berufs?",
-      brake: "Ausgabenbremse",
+      brake: "Kriterien der letzten Versuche (Build 15).",
       language: "Sprache",
       doctor: "Doktor und Wartung",
       services: "Dienste",
@@ -1199,7 +1214,7 @@ export const T: Record<Locale, Copy> = {
   es: {
     metaTitle: "Benchmark 0.4.0 · Job Hunter Team",
     title: "Benchmark 0.4.0: cuatro servicios, tres sistemas",
-    lead: "Lo que el equipo gastó y encontró en las rondas de prueba del 14 al 19 de noviembre de 2026, con los servicios de clave API que ofrece el harness 0.4.0. Las cifras salen de los informes de las pruebas y de los muestreadores de coste.",
+    lead: "Lo que el equipo gastó y encontró en las rondas de prueba del 14 al 21 de noviembre de 2026, con los servicios de clave API que ofrece el harness 0.4.0. Las cifras salen de los informes de las pruebas y de los muestreadores de coste.",
     banner:
       "Una primera comparación, no un benchmark limpio. Máquinas, perfiles, builds, presupuestos y tamaños del equipo cambian de una ronda a otra, y hay una ronda por servicio: lee los límites de abajo antes de comparar.",
     roundsTitle: "Cada ronda",
@@ -1244,7 +1259,7 @@ export const T: Record<Locale, Copy> = {
     need: "Cuatro VPS iguales encendidas a la vez, el mismo perfil para todos, 30 minutos de trabajo después del onboarding, la misma build con el freno del presupuesto corregido y crédito en los cuatro servicios.",
     back: "← Todos los casos de estudio",
     footer:
-      "Perfiles ficticios, sin datos personales · cifras de los informes de prueba del 14-19/11/2026.",
+      "Perfiles ficticios, sin datos personales · cifras de los informes de prueba del 14-21/11/2026.",
     marks:
       "Los logotipos solo indican el servicio que usó una prueba y no implican ningún respaldo. Las marcas y los logotipos pertenecen a sus respectivos propietarios.",
     outcome: {
@@ -1270,6 +1285,7 @@ export const T: Record<Locale, Copy> = {
       receptionist: "Recepcionista",
       truckDriver: "Conductor de camión",
       electrician: "Electricista",
+      shopAssistant: "Dependiente/a",
       careAssistant: "Auxiliar de enfermería",
     },
     modes: { onsite: "presencial", unspecified: "" },
@@ -1343,6 +1359,10 @@ export const T: Record<Locale, Copy> = {
         "Nueva prueba completa, cerrada antes: los escalones funcionan, pero la reserva estimada del reinicio para el equipo 10-20 segundos después de cada escalón; ningún anuncio nuevo.",
       retestResumes:
         "Nueva prueba, cerrada antes: el desbloqueo ya trabaja diez minutos antes de la primera pausa, pero las dos reanudaciones se paran en el primer minuto, y tras la actualización el Capitán despierta a los siete trabajadores fuera de los escalones.",
+      retestDayQuota:
+        "Retest del presupuesto dividido por día, durante dos días (41 h) con el ritmo apagado: el equipo trabaja hasta la parte del día, se detiene con un solo aviso y reanuda solo al día siguiente (1,38 $ de 2, nunca por encima de una parte). 4 defectos menores; 4 pertinentes de 5 nuevas.",
+      candidateWindowsSpanish:
+        "Candidata con un usuario nuevo de Windows, todo en español: 9 pertinentes de 10 en 5 minutos (4 también en horario y contrato); el freno del ritmo se detiene en 1,01 de 1,5 $. Abiertos: ayuda vacía desde el host, Scout parado tras la primera pasada.",
     },
     osNotes: {
       linux:
@@ -1448,10 +1468,10 @@ export const T: Record<Locale, Copy> = {
         "build 11: anuncios, puntuaciones y clave conservados, espacio en disco recuperado, todo en portugués",
       updateWindowsBuild13:
         "build 13: la actualización con el chat abierto llega al final y el comando jht funciona, todo en francés",
-      relevantCandidate:
-        "candidata de la versión: 20 pertinentes de 33 para el electricista (61%); 14 de 18 en la build 11. Por volver a probar con una instalación nueva",
-      brakeCandidate:
-        "candidata de la versión: segundo tope superado un 13%; en las imágenes de prueba posteriores el tope aguanta siempre, aún abiertos tres defectos del ritmo",
+      relevantBuild15:
+        "build 15: 9 pertinentes de 10 para el perfil dependiente/a con un usuario nuevo de Windows (4 también en horario y contrato); 4 de 5 para el electricista en el retest; 20 de 33 (61%) en la primera candidata",
+      brakeDayQuota:
+        "build 15: la parte del día y el ritmo detienen al equipo antes de cada presupuesto (1,38 $ de 2 en dos días; 1,04 $ de 1,5 en Windows); quedan defectos menores en los avisos y el estado",
       languageFrenchGermanOk:
         "builds 11-13: alemán y francés en todo el flujo; quedan pocas líneas en inglés (ayuda del comando)",
       languageItalianOk:
@@ -1480,7 +1500,7 @@ export const T: Record<Locale, Copy> = {
       update: "Actualización con equipo y datos",
       scout:
         "Banco de Scouts: ¿encuentra el Scout anuncios del oficio correcto?",
-      brake: "Freno del gasto",
+      brake: "Criterios de las últimas pruebas (build 15).",
       language: "Idioma",
       doctor: "Doctor y Mantenedor",
       services: "Servicios",
@@ -1577,7 +1597,7 @@ export const T: Record<Locale, Copy> = {
   fr: {
     metaTitle: "Benchmark 0.4.0 · Job Hunter Team",
     title: "Benchmark 0.4.0 : quatre services, trois systèmes",
-    lead: "Ce que l'équipe a dépensé et trouvé lors des tours d'essai du 14 au 19 novembre 2026, avec les services à clé API que propose le harness 0.4.0. Les chiffres viennent des procès-verbaux d'essai et des échantillonneurs de coûts.",
+    lead: "Ce que l'équipe a dépensé et trouvé lors des tours d'essai du 14 au 21 novembre 2026, avec les services à clé API que propose le harness 0.4.0. Les chiffres viennent des procès-verbaux d'essai et des échantillonneurs de coûts.",
     banner:
       "Une première comparaison, pas un benchmark propre. Machines, profils, builds, budgets et tailles d'équipe changent d'un tour à l'autre, et il y a un tour par service : lis les limites ci-dessous avant de comparer.",
     roundsTitle: "Chaque tour",
@@ -1622,7 +1642,7 @@ export const T: Record<Locale, Copy> = {
     need: "Quatre VPS identiques allumés ensemble, le même profil pour tous, 30 minutes de travail après l'onboarding, la même build avec le frein du budget corrigé et du crédit sur les quatre services.",
     back: "← Toutes les études de cas",
     footer:
-      "Profils fictifs, aucune donnée personnelle · chiffres des procès-verbaux d'essai du 14-19/11/2026.",
+      "Profils fictifs, aucune donnée personnelle · chiffres des procès-verbaux d'essai du 14-21/11/2026.",
     marks:
       "Les logos indiquent seulement le service utilisé par un essai et n'impliquent aucune approbation. Les marques et les logos appartiennent à leurs propriétaires respectifs.",
     outcome: {
@@ -1648,6 +1668,7 @@ export const T: Record<Locale, Copy> = {
       receptionist: "Réceptionniste",
       truckDriver: "Chauffeur routier",
       electrician: "Électricien",
+      shopAssistant: "Vendeur/vendeuse",
       careAssistant: "Aide-soignante",
     },
     modes: { onsite: "sur site", unspecified: "" },
@@ -1721,6 +1742,10 @@ export const T: Record<Locale, Copy> = {
         "Nouvel essai complet, arrêté plus tôt : les paliers marchent, mais la réserve estimée du redémarrage arrête l'équipe 10 à 20 secondes après chaque palier ; aucune nouvelle annonce.",
       retestResumes:
         "Nouvel essai, arrêté plus tôt : le déblocage travaille maintenant dix minutes avant la première pause, mais les deux reprises s'arrêtent dans la première minute, et après la mise à jour le Capitaine réveille les sept travailleurs hors des paliers.",
+      retestDayQuota:
+        "Retest du budget réparti par jour, sur deux jours (41 h) avec le rythme éteint : l'équipe travaille jusqu'à la part du jour, s'arrête avec un seul avis et reprend toute seule le lendemain (1,38 $ sur 2, jamais au-dessus d'une part). 4 défauts mineurs ; 4 pertinentes sur 5 nouvelles.",
+      candidateWindowsSpanish:
+        "Candidate sur un nouvel utilisateur Windows, tout en espagnol : 9 pertinentes sur 10 en 5 minutes (4 aussi pour l'horaire et le contrat) ; le frein du rythme s'arrête à 1,01 sur 1,5 $. Ouverts : aide vide depuis l'hôte, Scout arrêté après sa première passe.",
     },
     osNotes: {
       linux:
@@ -1828,10 +1853,10 @@ export const T: Record<Locale, Copy> = {
         "build 11 : annonces, scores et clé gardés, espace disque revenu, tout en portugais",
       updateWindowsBuild13:
         "build 13 : la mise à jour avec le chat ouvert va au bout et la commande jht marche, tout en français",
-      relevantCandidate:
-        "candidate de la version : 20 pertinentes sur 33 pour l'électricien (61 %) ; 14 sur 18 sur la build 11. À refaire sur une nouvelle installation",
-      brakeCandidate:
-        "candidate de la version : second plafond dépassé de 13 % ; sur les images de test suivantes le plafond tient toujours, trois défauts du rythme encore ouverts",
+      relevantBuild15:
+        "build 15 : 9 pertinentes sur 10 pour le profil vendeur/vendeuse sur un nouvel utilisateur Windows (4 aussi pour l'horaire et le contrat) ; 4 sur 5 pour l'électricien au retest ; 20 sur 33 (61 %) sur la première candidate",
+      brakeDayQuota:
+        "build 15 : la part du jour et le rythme arrêtent l'équipe avant chaque budget (1,38 $ sur 2 en deux jours ; 1,04 $ sur 1,5 sous Windows) ; défauts mineurs restants dans les avis et le statut",
       languageFrenchGermanOk:
         "builds 11-13 : allemand et français dans tout le parcours ; quelques lignes encore en anglais (aide de la commande)",
       languageItalianOk:
@@ -1860,7 +1885,7 @@ export const T: Record<Locale, Copy> = {
       update: "Mise à jour avec équipe et données",
       scout:
         "Banc des Scouts : le Scout trouve-t-il des annonces du bon métier ?",
-      brake: "Frein des dépenses",
+      brake: "Critères des derniers essais (build 15).",
       language: "Langue",
       doctor: "Docteur et Mainteneur",
       services: "Services",
@@ -1956,7 +1981,7 @@ export const T: Record<Locale, Copy> = {
   pt: {
     metaTitle: "Benchmark 0.4.0 · Job Hunter Team",
     title: "Benchmark 0.4.0: quatro serviços, três sistemas",
-    lead: "O que a equipa gastou e encontrou nas rondas de teste de 14 a 19 de novembro de 2026, com os serviços de chave API que o harness 0.4.0 oferece. Os números vêm dos relatórios dos testes e dos amostradores de custo.",
+    lead: "O que a equipa gastou e encontrou nas rondas de teste de 14 a 21 de novembro de 2026, com os serviços de chave API que o harness 0.4.0 oferece. Os números vêm dos relatórios dos testes e dos amostradores de custo.",
     banner:
       "Uma primeira comparação, não um benchmark limpo. Máquinas, perfis, builds, orçamentos e tamanhos da equipa mudam de ronda para ronda, e há uma ronda por serviço: lê os limites abaixo antes de comparar.",
     roundsTitle: "Cada ronda",
@@ -2000,7 +2025,7 @@ export const T: Record<Locale, Copy> = {
     need: "Quatro VPS iguais ligadas ao mesmo tempo, o mesmo perfil para todos, 30 minutos de trabalho depois do onboarding, a mesma build com o travão do orçamento corrigido e crédito nos quatro serviços.",
     back: "← Todos os estudos de caso",
     footer:
-      "Perfis fictícios, sem dados pessoais · números dos relatórios de teste de 14-19/11/2026.",
+      "Perfis fictícios, sem dados pessoais · números dos relatórios de teste de 14-21/11/2026.",
     marks:
       "Os logótipos indicam só o serviço usado num teste e não implicam qualquer aprovação. As marcas e os logótipos pertencem aos respetivos proprietários.",
     outcome: {
@@ -2026,6 +2051,7 @@ export const T: Record<Locale, Copy> = {
       receptionist: "Rececionista",
       truckDriver: "Motorista de pesados",
       electrician: "Eletricista",
+      shopAssistant: "Empregado/a de loja",
       careAssistant: "Auxiliar de saúde",
     },
     modes: { onsite: "presencial", unspecified: "" },
@@ -2098,6 +2124,10 @@ export const T: Record<Locale, Copy> = {
         "Novo teste completo, fechado mais cedo: os escalões funcionam, mas a reserva estimada do reinício para a equipa 10-20 segundos depois de cada escalão; nenhum anúncio novo.",
       retestResumes:
         "Novo teste, fechado mais cedo: o desbloqueio já trabalha dez minutos antes da primeira pausa, mas as duas retomas param no primeiro minuto, e depois da atualização o Capitão acorda os sete trabalhadores fora dos escalões.",
+      retestDayQuota:
+        "Reteste do orçamento dividido por dia, durante dois dias (41 h) com o ritmo desligado: a equipa trabalha até à parte do dia, para com um único aviso e retoma sozinha no dia seguinte (1,38 $ de 2, nunca acima de uma parte). 4 defeitos menores; 4 pertinentes de 5 novas.",
+      candidateWindowsSpanish:
+        "Candidata com um utilizador novo do Windows, tudo em espanhol: 9 pertinentes de 10 em 5 minutos (4 também em horário e contrato); o travão do ritmo para em 1,01 de 1,5 $. Em aberto: ajuda vazia a partir do host, Scout parado depois da primeira passagem.",
     },
     osNotes: {
       linux:
@@ -2203,10 +2233,10 @@ export const T: Record<Locale, Copy> = {
         "build 11: anúncios, pontuações e chave mantidos, espaço em disco de volta, tudo em português",
       updateWindowsBuild13:
         "build 13: a atualização com o chat aberto chega ao fim e o comando jht funciona, tudo em francês",
-      relevantCandidate:
-        "candidata da versão: 20 pertinentes de 33 para o eletricista (61%); 14 de 18 na build 11. A testar de novo numa instalação nova",
-      brakeCandidate:
-        "candidata da versão: segundo teto ultrapassado em 13%; nas imagens de teste seguintes o teto aguenta sempre, ainda abertos três defeitos do ritmo",
+      relevantBuild15:
+        "build 15: 9 pertinentes de 10 para o perfil empregado/a de loja com um utilizador novo do Windows (4 também em horário e contrato); 4 de 5 para o eletricista no reteste; 20 de 33 (61%) na primeira candidata",
+      brakeDayQuota:
+        "build 15: a parte do dia e o ritmo param a equipa antes de cada orçamento (1,38 $ de 2 em dois dias; 1,04 $ de 1,5 no Windows); restam defeitos menores nos avisos e no estado",
       languageFrenchGermanOk:
         "builds 11-13: alemão e francês em todo o fluxo; ficam poucas linhas em inglês (ajuda do comando)",
       languageItalianOk:
@@ -2234,7 +2264,7 @@ export const T: Record<Locale, Copy> = {
       install: "Instalação por um utilizador novo",
       update: "Atualização com equipa e dados",
       scout: "Bancada de Scouts: o Scout encontra anúncios do ofício certo?",
-      brake: "Travão da despesa",
+      brake: "Critérios das últimas tentativas (build 15).",
       language: "Língua",
       doctor: "Doutor e Mantenedor",
       services: "Serviços",
@@ -2330,7 +2360,7 @@ export const T: Record<Locale, Copy> = {
   hu: {
     metaTitle: "0.4.0 benchmark · Job Hunter Team",
     title: "0.4.0 benchmark: négy szolgáltatás, három rendszer",
-    lead: "Amit a csapat 2026. november 14–19. próbafutásaiban elköltött és megtalált, a 0.4.0 harness API-kulcsos szolgáltatásaival. A számok a próbák jegyzőkönyveiből és a költségmintavevőkből származnak.",
+    lead: "Amit a csapat 2026. november 14–21. próbafutásaiban elköltött és megtalált, a 0.4.0 harness API-kulcsos szolgáltatásaival. A számok a próbák jegyzőkönyveiből és a költségmintavevőkből származnak.",
     banner:
       "Első összevetés, nem tiszta benchmark. A gépek, profilok, buildek, költségkeretek és csapatméretek futásonként eltérnek, és szolgáltatásonként egy futás van: összehasonlítás előtt olvasd el az alábbi korlátokat.",
     roundsTitle: "Minden futás",
@@ -2375,7 +2405,7 @@ export const T: Record<Locale, Copy> = {
     need: "Négy egyforma VPS egyszerre elindítva, mindenkinek ugyanaz a profil, az onboarding után 30 perc munka, ugyanaz a build javított költségfékkel, és egyenleg mind a négy szolgáltatáson.",
     back: "← Minden esettanulmány",
     footer:
-      "Kitalált profilok, személyes adat nélkül · számok a 2026.11.14–19-i próbák jegyzőkönyveiből.",
+      "Kitalált profilok, személyes adat nélkül · számok a 2026.11.14–21-i próbák jegyzőkönyveiből.",
     marks:
       "A logók csak azt a szolgáltatást jelzik, amelyet egy próba használt, és nem jelentenek támogatást. A védjegyek és a logók a tulajdonosaiké.",
     outcome: {
@@ -2401,6 +2431,7 @@ export const T: Record<Locale, Copy> = {
       receptionist: "Recepciós",
       truckDriver: "Kamionsofőr",
       electrician: "Villanyszerelő",
+      shopAssistant: "Eladó",
       careAssistant: "Ápolási asszisztens",
     },
     modes: { onsite: "helyszínen", unspecified: "" },
@@ -2473,6 +2504,10 @@ export const T: Record<Locale, Copy> = {
         "Teljes újrapróba, korán lezárva: a lépcsők működnek, de az újraindítás becsült tartaléka minden lépcső után 10–20 másodperccel leállítja a csapatot; nincs új hirdetés.",
       retestResumes:
         "Újrapróba, korán lezárva: a feloldás most tíz percig dolgozik az első szünetig, de mindkét folytatás az első percen belül leáll, és a frissítés után a Kapitány a lépcsőkön kívül mind a hét dolgozót felébreszti.",
+      retestDayQuota:
+        "A napokra osztott költségkeret újratesztje két napon át (41 óra), kikapcsolt tempóval: a csapat a napi részéig dolgozik, egyetlen értesítéssel megáll, és másnap magától folytatja (1,38 $ a 2-ből, soha egy rész felett). 4 kisebb hiba; 5 új pozícióból 4 releváns.",
+      candidateWindowsSpanish:
+        "Kiadásjelölt új Windows-felhasználón, végig spanyolul: 10-ből 9 releváns 5 perc alatt (4 munkaidőben és szerződésben is megfelel); a tempófék 1,01-nél áll meg az 1,5 $-ból. Nyitott: üres súgó a hosztról, a Scout az első kör után megállt.",
     },
     osNotes: {
       linux:
@@ -2576,10 +2611,10 @@ export const T: Record<Locale, Copy> = {
         "11. build: hirdetések, pontszámok és kulcs megmaradnak, a lemezhely visszajön, végig portugálul",
       updateWindowsBuild13:
         "13. build: a frissítés nyitott csevegéssel végigfut, és a jht parancs működik, végig franciául",
-      relevantCandidate:
-        "kiadásjelölt: a villanyszerelőnél 33-ból 20 releváns (61%); a 11. buildön 18-ból 14. Új telepítésen újra bizonyítandó",
-      brakeCandidate:
-        "kiadásjelölt: a második plafont 13%-kal túllépi; az utána következő tesztképeken a plafon mindig tart, a tempó három hibája még nyitott",
+      relevantBuild15:
+        "15. build: új Windows-felhasználónál az eladó profilnál 10-ből 9 releváns (4 munkaidőben és szerződésben is megfelel); a villanyszerelőnél az újratesztben 5-ből 4; az első jelöltnél 33-ból 20 (61%)",
+      brakeDayQuota:
+        "15. build: a napi rész és a tempó minden költségkeret előtt megállítja a csapatot (1,38 $ a 2-ből két nap alatt; 1,04 $ az 1,5-ből Windowson); az értesítésekben és az állapotban kisebb hibák maradtak",
       languageFrenchGermanOk:
         "11–13. build: a német és a francia végig a folyamatban; néhány sor még angolul (a parancs súgója)",
       languageItalianOk:
@@ -2607,7 +2642,7 @@ export const T: Record<Locale, Copy> = {
       install: "Telepítés új felhasználóként",
       update: "Frissítés csapattal és adatokkal",
       scout: "Scout-pad: a Scout a megfelelő szakma hirdetéseit találja?",
-      brake: "Költségfék",
+      brake: "Az utolsó próbák feltételei (15. build).",
       language: "Nyelv",
       doctor: "Doktor és Karbantartó",
       services: "Szolgáltatások",
@@ -2779,6 +2814,7 @@ export const TRADE_EMOJI: Record<string, string> = {
   receptionist: "🛎️",
   truckDriver: "🚚",
   electrician: "⚡",
+  shopAssistant: "🛍️",
   careAssistant: "🩹",
 };
 export type Build = (typeof data.builds)[number];
@@ -2802,6 +2838,7 @@ export const PROFILE_SECTOR: Record<string, Sector | ""> = {
   bricklayer: "trades",
   officeClerk: "office",
   electrician: "trades",
+  shopAssistant: "",
   careAssistant: "health",
 };
 export const CATEGORY_SECTOR: Record<string, Sector | ""> = {

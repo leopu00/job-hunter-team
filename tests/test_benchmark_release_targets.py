@@ -120,3 +120,18 @@ def test_a_round_before_the_numbered_builds_says_so_and_no_figure_of_the_page_is
     for service in DATA["services"]:
         assert "kitEstimate30min" not in service, service["id"]
     assert "kitEstimate30min" not in ALL_FILES
+
+
+def test_the_criteria_of_a_target_say_what_their_numbers_say_and_come_from_a_round_of_the_page():
+    rounds = {r["id"]: r for r in DATA["rounds"]}
+    for target in DATA["targets"]:
+        for c in target.get("criteria", []):
+            # the criteria of the Scout bench come from the bench, not from a round
+            if "round" in c:
+                assert c["round"] in rounds, (target["id"], c)
+            if c["k"] == "relevantOf":
+                # the numbers are the ones of the round, and the mark follows them
+                assert (c["v"], c["of"]) == (rounds[c["round"]]["relevant"], rounds[c["round"]]["found"]), (target["id"], c)
+                assert c["ok"] == (c["v"] * 100 >= c["min"] * c["of"]), (target["id"], c)
+            if c["k"] == "underCeiling":
+                assert c["ok"] == (c["v"] <= c["max"]), (target["id"], c)

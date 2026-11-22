@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updated": "2026-11-19",
+  "updated": "2026-11-22",
   "kind": "first-comparison-not-a-clean-benchmark",
   "privacy": "Synthetic profiles only: invented people, generic names, no real names, hosts, addresses or keys.",
   "targets": [
@@ -75,13 +75,14 @@
     {
       "id": "nonItRelevant",
       "section": "realUser",
-      "status": "fail",
+      "status": "pass",
       "build": 15,
       "proof": [
         "r27",
-        "r30"
+        "r33",
+        "r34"
       ],
-      "note": "relevantCandidate",
+      "note": "relevantBuild15",
       "criteria": [
         {
           "k": "relevantOf",
@@ -100,6 +101,24 @@
           "min": 70,
           "ok": false,
           "round": "r27"
+        },
+        {
+          "k": "relevantOf",
+          "trade": "electrician",
+          "v": 4,
+          "of": 5,
+          "min": 70,
+          "ok": true,
+          "round": "r33"
+        },
+        {
+          "k": "relevantOf",
+          "trade": "shopAssistant",
+          "v": 9,
+          "of": 10,
+          "min": 70,
+          "ok": true,
+          "round": "r34"
         }
       ]
     },
@@ -222,14 +241,13 @@
     {
       "id": "budgetBrake",
       "section": "brake",
-      "status": "fail",
+      "status": "pass",
       "build": 15,
       "proof": [
-        "r27",
-        "r28",
-        "r30"
+        "r33",
+        "r34"
       ],
-      "note": "brakeCandidate",
+      "note": "brakeDayQuota",
       "criteria": [
         {
           "k": "underCeiling",
@@ -240,10 +258,17 @@
         },
         {
           "k": "underCeiling",
-          "v": 2.55,
-          "max": 3,
+          "v": 1.38,
+          "max": 2,
           "ok": true,
-          "round": "r30"
+          "round": "r33"
+        },
+        {
+          "k": "underCeiling",
+          "v": 1.04,
+          "max": 1.5,
+          "ok": true,
+          "round": "r34"
         }
       ]
     },
@@ -457,14 +482,16 @@
     {
       "n": 15,
       "commit": "e498085c7",
-      "day": "18-19/11",
+      "day": "18-21/11",
       "rounds": [
         "r27",
         "r28",
         "r29",
         "r30",
         "r31",
-        "r32"
+        "r32",
+        "r33",
+        "r34"
       ]
     }
   ],
@@ -1506,6 +1533,48 @@
       "outcome": "fail",
       "note": "retestResumes",
       "lang": "it"
+    },
+    {
+      "id": "r33",
+      "os": "linux",
+      "service": "claude",
+      "day": "19-21/11",
+      "profile": "electrician",
+      "mode": "onsite",
+      "build": "535a89197",
+      "buildNo": 15,
+      "minutes": null,
+      "cost": 1.38,
+      "calls": 250,
+      "found": 5,
+      "scored": 4,
+      "relevant": 4,
+      "bestScore": 77,
+      "roster": null,
+      "outcome": "reservations",
+      "note": "retestDayQuota",
+      "lang": "it"
+    },
+    {
+      "id": "r34",
+      "os": "windows",
+      "service": "claude",
+      "day": "20/11",
+      "profile": "shopAssistant",
+      "mode": "onsite",
+      "build": "e498085c7",
+      "buildNo": 15,
+      "minutes": 156.7,
+      "cost": 2.43,
+      "calls": 416,
+      "found": 10,
+      "scored": 10,
+      "relevant": 9,
+      "bestScore": 85,
+      "roster": null,
+      "outcome": "reservations",
+      "note": "candidateWindowsSpanish",
+      "lang": "es"
     }
   ],
   "services": [

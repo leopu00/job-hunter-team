@@ -86,9 +86,19 @@ export default async function RoundPage({
     []) as Criterion[];
   const criterion = (c: Criterion) =>
     (t.targetCriteria[c.k] ?? c.k)
-      .replace("{v}", c.v == null ? "" : String(c.v))
+      .replace(
+        "{v}",
+        c.v == null ? "" : c.k === "underCeiling" ? nf.format(c.v) : String(c.v),
+      )
       .replace("{min}", String(c.min ?? ""))
-      .replace("{max}", String(c.max ?? ""))
+      .replace(
+        "{max}",
+        c.max == null
+          ? ""
+          : Number.isInteger(c.max)
+            ? String(c.max)
+            : nf.format(c.max),
+      )
       .replace("{of}", String(c.of ?? ""))
       .replace(
         "{trade}",

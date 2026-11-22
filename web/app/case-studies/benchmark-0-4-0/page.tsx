@@ -103,7 +103,14 @@ export default async function BenchmarkPage() {
             : String(c.v),
       )
       .replace("{min}", String(c.min ?? ""))
-      .replace("{max}", String(c.max ?? ""))
+      .replace(
+        "{max}",
+        c.max == null
+          ? ""
+          : Number.isInteger(c.max)
+            ? String(c.max)
+            : nf.format(c.max),
+      )
       .replace("{of}", String(c.of ?? ""))
       .replace(
         "{trade}",
