@@ -301,16 +301,18 @@ export const T: Record<Locale, Copy> = {
       updateWindowsBuild10:
         "build 10: positions, profile and key kept, all in German; after the update the Analyst never started (13 positions waiting)",
       languagePortugueseOk: "build 10: Portuguese all the way on the Mac",
-      notTried040:
-        "not tried on the 0.4.0",
+      notTried040: "not tried on the 0.4.0",
       updateLinuxBuild9:
         "build 9: passed (its round is not in the table below)",
       installerBlockedBuild9:
         "build 9: stopped by the installer (fix in build 10, round under way)",
-      benchCook: "1 duplicate (86% relevant); on build 9: 79% relevant, no duplicate",
-      benchWarehouse: "1 duplicate (90% relevant); on build 9: 90% relevant, no duplicate",
+      benchCook:
+        "1 duplicate (86% relevant); on build 9: 79% relevant, no duplicate",
+      benchWarehouse:
+        "1 duplicate (90% relevant); on build 9: 90% relevant, no duplicate",
       benchNurse: "1 duplicate (95% relevant); on build 9: 1 duplicate",
-      benchBricklayer: "14 positions, fewer than 15, and 1 duplicate (71% relevant); on build 9: 6 positions",
+      benchBricklayer:
+        "14 positions, fewer than 15, and 1 duplicate (71% relevant); on build 9: 6 positions",
       brakeFixedRetry: "fixed in builds 9 and 10: to try again",
       languageGermanOk: "build 9: German all the way on Linux",
       securityPreTag:
@@ -684,16 +686,18 @@ export const T: Record<Locale, Copy> = {
         "build 10: annunci, profilo e chiave tenuti, tutto in tedesco; dopo l'aggiornamento l'Analista non è mai partito (13 annunci in attesa)",
       languagePortugueseOk:
         "build 10: portoghese dall'inizio alla fine sul Mac",
-      notTried040:
-        "non provato sulla 0.4.0",
+      notTried040: "non provato sulla 0.4.0",
       updateLinuxBuild9:
         "build 9: superato (il giro non è nella tabella sotto)",
       installerBlockedBuild9:
         "build 9: fermato dall'installer (correzione in build 10, giro in corso)",
-      benchCook: "1 doppione (86% pertinenti); sulla build 9: 79% pertinenti, nessun doppione",
-      benchWarehouse: "1 doppione (90% pertinenti); sulla build 9: 90% pertinenti, nessun doppione",
+      benchCook:
+        "1 doppione (86% pertinenti); sulla build 9: 79% pertinenti, nessun doppione",
+      benchWarehouse:
+        "1 doppione (90% pertinenti); sulla build 9: 90% pertinenti, nessun doppione",
       benchNurse: "1 doppione (95% pertinenti); sulla build 9: 1 doppione",
-      benchBricklayer: "14 posizioni, meno di 15, e 1 doppione (71% pertinenti); sulla build 9: 6 posizioni",
+      benchBricklayer:
+        "14 posizioni, meno di 15, e 1 doppione (71% pertinenti); sulla build 9: 6 posizioni",
       brakeFixedRetry: "corretto nelle build 9 e 10: da riprovare",
       languageGermanOk: "build 9: tedesco dall'inizio alla fine su Linux",
       securityPreTag:
@@ -771,8 +775,7 @@ export const T: Record<Locale, Copy> = {
     targetRules: {
       scout:
         "Solo la ricerca degli Scout, su un server già configurato, con quattro mestieri non IT. Un mestiere passa se tutti e 3 i criteri sono verdi: almeno 70% pertinenti, 0 doppioni, almeno 15 annunci.",
-      brake:
-        "Criteri delle ultime prove (build 15).",
+      brake: "Criteri delle ultime prove (build 15).",
       realUser:
         "Una persona installa il programma da zero, risponde al setup e lascia lavorare la squadra da sola per 30 minuti. Passa se almeno il 70% degli annunci trovati è del suo mestiere.",
     },
@@ -1067,16 +1070,18 @@ export const T: Record<Locale, Copy> = {
       updateWindowsBuild10:
         "Build 10: Stellen, Profil und Schlüssel behalten, alles auf Deutsch; nach dem Update startete der Analyst nie (13 Stellen warten)",
       languagePortugueseOk: "Build 10: durchgehend Portugiesisch auf dem Mac",
-      notTried040:
-        "auf der 0.4.0 nicht geprüft",
+      notTried040: "auf der 0.4.0 nicht geprüft",
       updateLinuxBuild9:
         "Build 9: bestanden (die Runde steht nicht in der Tabelle unten)",
       installerBlockedBuild9:
         "Build 9: vom Installer gestoppt (Korrektur in Build 10, Runde läuft)",
-      benchCook: "1 Duplikat (86 % passend); in Build 9: 79 % passend, kein Duplikat",
-      benchWarehouse: "1 Duplikat (90 % passend); in Build 9: 90 % passend, kein Duplikat",
+      benchCook:
+        "1 Duplikat (86 % passend); in Build 9: 79 % passend, kein Duplikat",
+      benchWarehouse:
+        "1 Duplikat (90 % passend); in Build 9: 90 % passend, kein Duplikat",
       benchNurse: "1 Duplikat (95 % passend); in Build 9: 1 Duplikat",
-      benchBricklayer: "14 Stellen, weniger als 15, und 1 Duplikat (71 % passend); in Build 9: 6 Stellen",
+      benchBricklayer:
+        "14 Stellen, weniger als 15, und 1 Duplikat (71 % passend); in Build 9: 6 Stellen",
       brakeFixedRetry: "in Build 9 und 10 korrigiert: erneut zu prüfen",
       languageGermanOk: "Build 9: durchgehend Deutsch auf Linux",
       securityPreTag:
@@ -1157,8 +1162,7 @@ export const T: Record<Locale, Copy> = {
     targetRules: {
       scout:
         "Nur die Suche der Scouts, auf einem schon eingerichteten Server, mit vier Berufen außerhalb der IT. Ein Beruf besteht, wenn alle 3 Kriterien grün sind: mindestens 70 % passend, 0 Duplikate, mindestens 15 Anzeigen.",
-      brake:
-        "Kriterien der letzten Versuche (Build 15).",
+      brake: "Kriterien der letzten Versuche (Build 15).",
       realUser:
         "Eine Person installiert das Programm von null, beantwortet das Setup und lässt das Team 30 Minuten allein arbeiten. Bestanden, wenn mindestens 70 % der gefundenen Stellen zum Beruf der Person passen.",
     },
@@ -1453,16 +1457,18 @@ export const T: Record<Locale, Copy> = {
       updateWindowsBuild10:
         "build 10: anuncios, perfil y clave conservados, todo en alemán; tras la actualización el Analista nunca arrancó (13 anuncios en espera)",
       languagePortugueseOk: "build 10: portugués de principio a fin en el Mac",
-      notTried040:
-        "no probado en la 0.4.0",
+      notTried040: "no probado en la 0.4.0",
       updateLinuxBuild9:
         "build 9: superada (su ronda no está en la tabla de abajo)",
       installerBlockedBuild9:
         "build 9: parada por el instalador (corrección en la build 10, ronda en curso)",
-      benchCook: "1 duplicado (86 % pertinentes); en la build 9: 79 % pertinentes, sin duplicados",
-      benchWarehouse: "1 duplicado (90 % pertinentes); en la build 9: 90 % pertinentes, sin duplicados",
+      benchCook:
+        "1 duplicado (86 % pertinentes); en la build 9: 79 % pertinentes, sin duplicados",
+      benchWarehouse:
+        "1 duplicado (90 % pertinentes); en la build 9: 90 % pertinentes, sin duplicados",
       benchNurse: "1 duplicado (95 % pertinentes); en la build 9: 1 duplicado",
-      benchBricklayer: "14 puestos, menos de 15, y 1 duplicado (71 % pertinentes); en la build 9: 6 puestos",
+      benchBricklayer:
+        "14 puestos, menos de 15, y 1 duplicado (71 % pertinentes); en la build 9: 6 puestos",
       brakeFixedRetry: "corregido en las builds 9 y 10: por volver a probar",
       languageGermanOk: "build 9: alemán de principio a fin en Linux",
       securityPreTag:
@@ -1544,8 +1550,7 @@ export const T: Record<Locale, Copy> = {
     targetRules: {
       scout:
         "Solo la búsqueda de los Scouts, en un servidor ya configurado, con cuatro oficios fuera de la informática. Un oficio pasa si los 3 criterios están en verde: al menos 70 % pertinentes, 0 duplicados, al menos 15 anuncios.",
-      brake:
-        "Criterios de las últimas pruebas (build 15).",
+      brake: "Criterios de las últimas pruebas (build 15).",
       realUser:
         "Una persona instala el programa desde cero, responde a la configuración y deja trabajar al equipo solo durante 30 minutos. Pasa si al menos el 70 % de los anuncios encontrados son de su oficio.",
     },
@@ -1843,16 +1848,18 @@ export const T: Record<Locale, Copy> = {
       updateWindowsBuild10:
         "build 10 : annonces, profil et clé gardés, tout en allemand ; après la mise à jour l'Analyste n'a jamais démarré (13 annonces en attente)",
       languagePortugueseOk: "build 10 : portugais du début à la fin sur le Mac",
-      notTried040:
-        "non essayé sur la 0.4.0",
+      notTried040: "non essayé sur la 0.4.0",
       updateLinuxBuild9:
         "build 9 : réussi (son tour n'est pas dans le tableau ci-dessous)",
       installerBlockedBuild9:
         "build 9 : arrêté par l'installeur (correction dans la build 10, tour en cours)",
-      benchCook: "1 doublon (86 % pertinents) ; sur la build 9 : 79 % pertinents, aucun doublon",
-      benchWarehouse: "1 doublon (90 % pertinents) ; sur la build 9 : 90 % pertinents, aucun doublon",
+      benchCook:
+        "1 doublon (86 % pertinents) ; sur la build 9 : 79 % pertinents, aucun doublon",
+      benchWarehouse:
+        "1 doublon (90 % pertinents) ; sur la build 9 : 90 % pertinents, aucun doublon",
       benchNurse: "1 doublon (95 % pertinents) ; sur la build 9 : 1 doublon",
-      benchBricklayer: "14 postes, moins de 15, et 1 doublon (71 % pertinents) ; sur la build 9 : 6 postes",
+      benchBricklayer:
+        "14 postes, moins de 15, et 1 doublon (71 % pertinents) ; sur la build 9 : 6 postes",
       brakeFixedRetry: "corrigé dans les builds 9 et 10 : à réessayer",
       languageGermanOk: "build 9 : allemand du début à la fin sous Linux",
       securityPreTag:
@@ -1935,8 +1942,7 @@ export const T: Record<Locale, Copy> = {
     targetRules: {
       scout:
         "Seulement la recherche des Scouts, sur un serveur déjà configuré, avec quatre métiers hors informatique. Un métier passe si les 3 critères sont verts : au moins 70 % pertinents, 0 doublon, au moins 15 annonces.",
-      brake:
-        "Critères des derniers essais (build 15).",
+      brake: "Critères des derniers essais (build 15).",
       realUser:
         "Une personne installe le programme à partir de zéro, répond à la configuration et laisse l'équipe travailler seule pendant 30 minutes. C'est réussi si au moins 70 % des annonces trouvées sont de son métier.",
     },
@@ -2230,16 +2236,18 @@ export const T: Record<Locale, Copy> = {
       updateWindowsBuild10:
         "build 10: anúncios, perfil e chave mantidos, tudo em alemão; depois da atualização o Analista nunca arrancou (13 anúncios à espera)",
       languagePortugueseOk: "build 10: português do início ao fim no Mac",
-      notTried040:
-        "não testado na 0.4.0",
+      notTried040: "não testado na 0.4.0",
       updateLinuxBuild9:
         "build 9: aprovado (a rodada não está na tabela abaixo)",
       installerBlockedBuild9:
         "build 9: parado pelo instalador (correção na build 10, rodada em curso)",
-      benchCook: "1 duplicado (86% pertinentes); na build 9: 79% pertinentes, sem duplicados",
-      benchWarehouse: "1 duplicado (90% pertinentes); na build 9: 90% pertinentes, sem duplicados",
+      benchCook:
+        "1 duplicado (86% pertinentes); na build 9: 79% pertinentes, sem duplicados",
+      benchWarehouse:
+        "1 duplicado (90% pertinentes); na build 9: 90% pertinentes, sem duplicados",
       benchNurse: "1 duplicado (95% pertinentes); na build 9: 1 duplicado",
-      benchBricklayer: "14 vagas, menos de 15, e 1 duplicado (71% pertinentes); na build 9: 6 vagas",
+      benchBricklayer:
+        "14 vagas, menos de 15, e 1 duplicado (71% pertinentes); na build 9: 6 vagas",
       brakeFixedRetry: "corrigido nas builds 9 e 10: a voltar a testar",
       languageGermanOk: "build 9: alemão do início ao fim no Linux",
       securityPreTag:
@@ -2320,8 +2328,7 @@ export const T: Record<Locale, Copy> = {
     targetRules: {
       scout:
         "Só a pesquisa dos Scouts, num servidor já configurado, com quatro ofícios fora da informática. Um ofício passa se os 3 critérios estiverem verdes: pelo menos 70% pertinentes, 0 duplicados, pelo menos 15 anúncios.",
-      brake:
-        "Critérios das últimas tentativas (build 15).",
+      brake: "Critérios das últimas tentativas (build 15).",
       realUser:
         "Uma pessoa instala o programa do zero, responde à configuração e deixa a equipa trabalhar sozinha durante 30 minutos. Passa se pelo menos 70% dos anúncios encontrados forem do seu ofício.",
     },
@@ -2615,16 +2622,18 @@ export const T: Record<Locale, Copy> = {
       updateWindowsBuild10:
         "10. build: hirdetések, profil és kulcs megmaradt, végig németül; a frissítés után az elemző sosem indult el (13 hirdetés vár)",
       languagePortugueseOk: "10. build: végig portugálul a Macen",
-      notTried040:
-        "a 0.4.0-n nem próbáltuk",
+      notTried040: "a 0.4.0-n nem próbáltuk",
       updateLinuxBuild9:
         "9. build: sikeres (a köre nincs az alábbi táblázatban)",
       installerBlockedBuild9:
         "9. build: a telepítő megállította (javítás a 10. buildben, a kör folyamatban)",
-      benchCook: "1 ismétlődés (86% releváns); a 9. buildnél: 79% releváns, ismétlődés nélkül",
-      benchWarehouse: "1 ismétlődés (90% releváns); a 9. buildnél: 90% releváns, ismétlődés nélkül",
+      benchCook:
+        "1 ismétlődés (86% releváns); a 9. buildnél: 79% releváns, ismétlődés nélkül",
+      benchWarehouse:
+        "1 ismétlődés (90% releváns); a 9. buildnél: 90% releváns, ismétlődés nélkül",
       benchNurse: "1 ismétlődés (95% releváns); a 9. buildnél: 1 ismétlődés",
-      benchBricklayer: "14 állás, kevesebb mint 15, és 1 ismétlődés (71% releváns); a 9. buildnél: 6 állás",
+      benchBricklayer:
+        "14 állás, kevesebb mint 15, és 1 ismétlődés (71% releváns); a 9. buildnél: 6 állás",
       brakeFixedRetry: "javítva a 9. és 10. buildben: újra kipróbálandó",
       languageGermanOk: "9. build: végig németül Linuxon",
       securityPreTag:
@@ -2703,8 +2712,7 @@ export const T: Record<Locale, Copy> = {
     targetRules: {
       scout:
         "Csak a Scoutok keresése, egy már beállított szerveren, négy nem IT szakmával. Egy szakma sikeres, ha mind a 3 feltétel zöld: legalább 70% releváns, 0 ismétlődés, legalább 15 hirdetés.",
-      brake:
-        "Az utolsó próbák feltételei (15. build).",
+      brake: "Az utolsó próbák feltételei (15. build).",
       realUser:
         "Valaki a nulláról telepíti a programot, kitölti a beállítást, és 30 percig hagyja egyedül dolgozni a csapatot. Sikeres, ha a talált hirdetések legalább 70%-a az ő szakmájába tartozik.",
     },

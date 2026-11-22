@@ -101,11 +101,14 @@ export default async function RoundPage({
       .filter(Boolean)
       .join(" · ");
   const criterion = (c: Criterion) =>
-    (
-      (t.targetCriteria[c.k] ?? c.k)
+    (t.targetCriteria[c.k] ?? c.k)
       .replace(
         "{v}",
-        c.v == null ? "" : c.k === "underCeiling" ? nf.format(c.v) : String(c.v),
+        c.v == null
+          ? ""
+          : c.k === "underCeiling"
+            ? nf.format(c.v)
+            : String(c.v),
       )
       .replace("{min}", String(c.min ?? ""))
       .replace(
@@ -122,8 +125,7 @@ export default async function RoundPage({
         c.trade
           ? `${TRADE_EMOJI[c.trade] ?? ""} ${profileName(c.trade)}`.trim()
           : "",
-      )
-    ) + (criterionWhere(c) ? ` · ${criterionWhere(c)}` : "");
+      ) + (criterionWhere(c) ? ` · ${criterionWhere(c)}` : "");
   // a criterion of the path of a person, e.g. «2 manual steps (minute 7.7, 10.8)»
   const roundCriterion = (c: RoundCriterion) => {
     const key = c.k === "alone" ? (c.ok ? "alone_ok" : "alone_bad") : c.k;

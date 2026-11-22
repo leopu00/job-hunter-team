@@ -109,8 +109,7 @@ export default async function BenchmarkPage() {
       .join(" · ");
   };
   const criterion = (c: Criterion) =>
-    (
-      (t.targetCriteria[c.k] ?? c.k)
+    (t.targetCriteria[c.k] ?? c.k)
       .replace(
         "{v}",
         c.v == null
@@ -134,8 +133,7 @@ export default async function BenchmarkPage() {
         c.trade
           ? `${TRADE_EMOJI[c.trade] ?? ""} ${t.profiles[c.trade] ?? c.trade}`.trim()
           : "",
-      )
-    ) + (criterionWhere(c) ? ` · ${criterionWhere(c)}` : "");
+      ) + (criterionWhere(c) ? ` · ${criterionWhere(c)}` : "");
   // the test of the Scout bench that proves each bench row of the targets
   const BENCH_TEST: Record<string, string> = {
     scoutBenchCook: "b15-cook",
@@ -150,7 +148,9 @@ export default async function BenchmarkPage() {
       []) as Criterion[];
     // a target tried on two benches keeps the criteria of both on its bench page: the table shows the last one
     const lastBench = [...allCriteria].reverse().find((c) => c.bench)?.bench;
-    const criteria = allCriteria.filter((c) => !c.bench || c.bench === lastBench);
+    const criteria = allCriteria.filter(
+      (c) => !c.bench || c.bench === lastBench,
+    );
     return (
       <div className="space-y-0.5" title={note || undefined}>
         <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
@@ -196,10 +196,7 @@ export default async function BenchmarkPage() {
         {criteria.length > 0 && (
           <ul className="flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] tabular-nums">
             {criteria.map((c, i) => (
-              <li
-                key={i}
-                className="text-[var(--color-base)]"
-              >
+              <li key={i} className="text-[var(--color-base)]">
                 <span aria-hidden="true">{c.ok ? "✅" : "❌"}</span>{" "}
                 {c.round || c.bench ? (
                   <Link
