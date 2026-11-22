@@ -171,6 +171,15 @@ def held_back(session: str) -> bool:
     return False
 
 
+def _session_cap():
+    """The one cap of every start (session_cap.py); a module that does not load is a brake, as for the others."""
+    mod = _load("session_cap")
+    if mod is not None:
+        return mod
+    import types
+    return types.SimpleNamespace(is_retired=lambda session: False, check=lambda live: "capacity-unreadable")
+
+
 # ── The record ───────────────────────────────────────────────────────────────
 def _read_state() -> dict:
     try:
@@ -236,9 +245,9 @@ def decide(now: float | None = None, write: bool = True) -> dict:
             return finish("cooldown")
         if len(starts) >= DAILY_CAP:
             return finish("daily-cap")
-        if held_back(session):
-            return finish("held-back")
-        reason = brake(now, len(workers))
+        if held_back(session) or _session_cap().is_retired(session):
+            return finish("held-back")      # paused, contained or retired by the Capitano: never brought back by the system
+        reason = brake(now, len(workers)) or _session_cap().check(sessions)
         if reason:
             return finish(reason)
         last[role] = now
