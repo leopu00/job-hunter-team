@@ -141,3 +141,12 @@ def test_the_sentence_on_the_pace_is_drawn_above_the_table_and_on_the_page_of_ev
     # the rounds are short and do not say how long a budget lasts: the page says it where the rounds are read
     assert "{t.paceNote}" in (HERE / "page.tsx").read_text(encoding="utf-8")
     assert "{t.paceNote}" in (HERE / "[round]" / "page.tsx").read_text(encoding="utf-8")
+
+
+def test_the_title_of_a_section_of_the_targets_is_a_title_and_not_a_sentence_in_every_language():
+    # the rule of a section is a sentence and sits in targetRules; the title of the section next to it must stay a title
+    for lang, block in BLOCKS.items():
+        titles = re.search(r"targetSections: \{(.*?)\n    \},", block, re.S).group(1)
+        values = re.findall(r':\s*"([^"]*)",', titles)
+        assert len(values) >= 10, lang
+        assert not [v for v in values if v.endswith(".") or "build" in v.lower()], (lang, values)

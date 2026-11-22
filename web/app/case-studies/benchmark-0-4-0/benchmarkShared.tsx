@@ -365,7 +365,7 @@ export const T: Record<Locale, Copy> = {
       install: "Install by a new user",
       update: "Update with a team and data",
       scout: "Scout bench: does the Scout find ads of the right trade?",
-      brake: "Criteria of the last tries (build 15).",
+      brake: "Spending brake",
       language: "Language",
       doctor: "Doctor and Maintainer",
       services: "Services",
@@ -385,7 +385,7 @@ export const T: Record<Locale, Copy> = {
     targetRules: {
       scout:
         "Only the search of the Scouts, on a server already set up, with four trades outside IT. A trade passes when all 3 criteria are green: at least 70% relevant, 0 duplicates, at least 15 positions.",
-      brake: "Criteria of the last try (build 8); fixed since, to try again.",
+      brake: "Criteria of the last tries (build 15).",
       realUser:
         "A person installs the program from zero, answers the setup and lets the team work alone for 30 minutes. It passes when at least 70% of the positions found are of the person's trade.",
     },
@@ -741,7 +741,7 @@ export const T: Record<Locale, Copy> = {
       install: "Installazione da utente nuovo",
       update: "Aggiornamento con squadra e dati",
       scout: "Banco Scout: lo Scout trova annunci del mestiere giusto?",
-      brake: "Criteri delle ultime prove (build 15).",
+      brake: "Freno della spesa",
       language: "Lingua",
       doctor: "Dottore e Mantenitore",
       services: "Servizi",
@@ -762,7 +762,7 @@ export const T: Record<Locale, Copy> = {
       scout:
         "Solo la ricerca degli Scout, su un server già configurato, con quattro mestieri non IT. Un mestiere passa se tutti e 3 i criteri sono verdi: almeno 70% pertinenti, 0 doppioni, almeno 15 annunci.",
       brake:
-        "Criteri dell'ultima prova (build 8); corretto dopo, da riprovare.",
+        "Criteri delle ultime prove (build 15).",
       realUser:
         "Una persona installa il programma da zero, risponde al setup e lascia lavorare la squadra da sola per 30 minuti. Passa se almeno il 70% degli annunci trovati è del suo mestiere.",
     },
@@ -1121,7 +1121,7 @@ export const T: Record<Locale, Copy> = {
       install: "Installation durch neue Nutzer",
       update: "Update mit Team und Daten",
       scout: "Scout-Bank: findet der Scout Anzeigen des richtigen Berufs?",
-      brake: "Kriterien der letzten Versuche (Build 15).",
+      brake: "Ausgabenbremse",
       language: "Sprache",
       doctor: "Doktor und Wartung",
       services: "Dienste",
@@ -1143,7 +1143,7 @@ export const T: Record<Locale, Copy> = {
       scout:
         "Nur die Suche der Scouts, auf einem schon eingerichteten Server, mit vier Berufen außerhalb der IT. Ein Beruf besteht, wenn alle 3 Kriterien grün sind: mindestens 70 % passend, 0 Duplikate, mindestens 15 Anzeigen.",
       brake:
-        "Kriterien des letzten Versuchs (Build 8); seitdem korrigiert, erneut zu prüfen.",
+        "Kriterien der letzten Versuche (Build 15).",
       realUser:
         "Eine Person installiert das Programm von null, beantwortet das Setup und lässt das Team 30 Minuten allein arbeiten. Bestanden, wenn mindestens 70 % der gefundenen Stellen zum Beruf der Person passen.",
     },
@@ -1503,7 +1503,7 @@ export const T: Record<Locale, Copy> = {
       update: "Actualización con equipo y datos",
       scout:
         "Banco de Scouts: ¿encuentra el Scout anuncios del oficio correcto?",
-      brake: "Criterios de las últimas pruebas (build 15).",
+      brake: "Freno del gasto",
       language: "Idioma",
       doctor: "Doctor y Mantenedor",
       services: "Servicios",
@@ -1525,7 +1525,7 @@ export const T: Record<Locale, Copy> = {
       scout:
         "Solo la búsqueda de los Scouts, en un servidor ya configurado, con cuatro oficios fuera de la informática. Un oficio pasa si los 3 criterios están en verde: al menos 70 % pertinentes, 0 duplicados, al menos 15 anuncios.",
       brake:
-        "Criterios de la última prueba (build 8); corregido después, por volver a probar.",
+        "Criterios de las últimas pruebas (build 15).",
       realUser:
         "Una persona instala el programa desde cero, responde a la configuración y deja trabajar al equipo solo durante 30 minutos. Pasa si al menos el 70 % de los anuncios encontrados son de su oficio.",
     },
@@ -1889,7 +1889,7 @@ export const T: Record<Locale, Copy> = {
       update: "Mise à jour avec équipe et données",
       scout:
         "Banc des Scouts : le Scout trouve-t-il des annonces du bon métier ?",
-      brake: "Critères des derniers essais (build 15).",
+      brake: "Frein des dépenses",
       language: "Langue",
       doctor: "Docteur et Mainteneur",
       services: "Services",
@@ -1911,7 +1911,7 @@ export const T: Record<Locale, Copy> = {
       scout:
         "Seulement la recherche des Scouts, sur un serveur déjà configuré, avec quatre métiers hors informatique. Un métier passe si les 3 critères sont verts : au moins 70 % pertinents, 0 doublon, au moins 15 annonces.",
       brake:
-        "Critères du dernier essai (build 8) ; corrigé depuis, à réessayer.",
+        "Critères des derniers essais (build 15).",
       realUser:
         "Une personne installe le programme à partir de zéro, répond à la configuration et laisse l'équipe travailler seule pendant 30 minutes. C'est réussi si au moins 70 % des annonces trouvées sont de son métier.",
     },
@@ -2269,7 +2269,7 @@ export const T: Record<Locale, Copy> = {
       install: "Instalação por um utilizador novo",
       update: "Atualização com equipa e dados",
       scout: "Bancada de Scouts: o Scout encontra anúncios do ofício certo?",
-      brake: "Critérios das últimas tentativas (build 15).",
+      brake: "Travão da despesa",
       language: "Língua",
       doctor: "Doutor e Mantenedor",
       services: "Serviços",
@@ -2291,7 +2291,7 @@ export const T: Record<Locale, Copy> = {
       scout:
         "Só a pesquisa dos Scouts, num servidor já configurado, com quatro ofícios fora da informática. Um ofício passa se os 3 critérios estiverem verdes: pelo menos 70% pertinentes, 0 duplicados, pelo menos 15 anúncios.",
       brake:
-        "Critérios da última tentativa (build 8); corrigido depois, a voltar a testar.",
+        "Critérios das últimas tentativas (build 15).",
       realUser:
         "Uma pessoa instala o programa do zero, responde à configuração e deixa a equipa trabalhar sozinha durante 30 minutos. Passa se pelo menos 70% dos anúncios encontrados forem do seu ofício.",
     },
@@ -2648,7 +2648,7 @@ export const T: Record<Locale, Copy> = {
       install: "Telepítés új felhasználóként",
       update: "Frissítés csapattal és adatokkal",
       scout: "Scout-pad: a Scout a megfelelő szakma hirdetéseit találja?",
-      brake: "Az utolsó próbák feltételei (15. build).",
+      brake: "Költségfék",
       language: "Nyelv",
       doctor: "Doktor és Karbantartó",
       services: "Szolgáltatások",
@@ -2669,7 +2669,7 @@ export const T: Record<Locale, Copy> = {
       scout:
         "Csak a Scoutok keresése, egy már beállított szerveren, négy nem IT szakmával. Egy szakma sikeres, ha mind a 3 feltétel zöld: legalább 70% releváns, 0 ismétlődés, legalább 15 hirdetés.",
       brake:
-        "Az utolsó próba feltételei (8. build); azóta javítva, újra kipróbálandó.",
+        "Az utolsó próbák feltételei (15. build).",
       realUser:
         "Valaki a nulláról telepíti a programot, kitölti a beállítást, és 30 percig hagyja egyedül dolgozni a csapatot. Sikeres, ha a talált hirdetések legalább 70%-a az ő szakmájába tartozik.",
     },
