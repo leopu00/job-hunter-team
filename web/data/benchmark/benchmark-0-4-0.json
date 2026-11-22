@@ -311,10 +311,10 @@
     {
       "id": "serviceOpenai",
       "section": "services",
-      "status": "pass",
-      "build": 6,
+      "status": "pending",
+      "build": null,
       "proof": [],
-      "note": "openaiRoundMissing",
+      "note": "openaiBuild6Redo",
       "provider": "openai"
     },
     {
@@ -575,7 +575,7 @@
       "relevant": null,
       "bestScore": null,
       "roster": "1/1/1",
-      "outcome": "reservations",
+      "outcome": "unjudged",
       "note": "minimalTeam",
       "lang": "it",
       "criteria": [
@@ -617,7 +617,7 @@
       "relevant": null,
       "bestScore": null,
       "roster": "1/1/1",
-      "outcome": "reservations",
+      "outcome": "unjudged",
       "note": "ceilingReached",
       "lang": "it",
       "criteria": [
@@ -702,7 +702,7 @@
       "relevant": 10,
       "bestScore": 90,
       "roster": "5/3/2",
-      "outcome": "reservations",
+      "outcome": "unjudged",
       "note": "budgetFromSetup",
       "lang": "es",
       "criteria": [
@@ -746,7 +746,7 @@
       "relevant": null,
       "bestScore": 94,
       "roster": "1/1/1",
-      "outcome": "reservations",
+      "outcome": "unjudged",
       "note": "brakeDidNotTrigger",
       "lang": "de",
       "criteria": [
@@ -1511,10 +1511,6 @@
   "services": [
     {
       "id": "glm",
-      "kitEstimate30min": [
-        3.2,
-        5.1
-      ],
       "seen": [
         {
           "cost": 3.41,
@@ -1532,10 +1528,6 @@
     },
     {
       "id": "claude",
-      "kitEstimate30min": [
-        2.2,
-        4.2
-      ],
       "seen": [
         {
           "cost": 2.92,
@@ -1553,10 +1545,6 @@
     },
     {
       "id": "openai",
-      "kitEstimate30min": [
-        3.6,
-        6.3
-      ],
       "seen": [
         {
           "cost": 1.61,
@@ -1570,10 +1558,6 @@
     },
     {
       "id": "kimi",
-      "kitEstimate30min": [
-        10.6,
-        18.7
-      ],
       "seen": [],
       "ratePerMinute": null
     }

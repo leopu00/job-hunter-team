@@ -685,7 +685,7 @@ export default async function BenchmarkPage() {
                             {OS_LABEL[r.os]} · {dayLabel(r)}
                             {buildNo(r)
                               ? ` · ${t.buildLabel.replace("{n}", String(buildNo(r)))}`
-                              : ""}
+                              : ` · ${t.previousBuild}`}
                           </span>
                         </span>
                       </span>
@@ -819,10 +819,6 @@ export default async function BenchmarkPage() {
                         <Mark id={s.id} label={t.services[s.id]} />
                         {t.services[s.id]}
                       </span>
-                    </td>
-                    <td className="px-3 py-2 whitespace-nowrap">
-                      {nf.format(s.kitEstimate30min[0])} –{" "}
-                      {nf.format(s.kitEstimate30min[1])} $
                     </td>
                     <td className="px-3 py-2">
                       {s.seen.length === 0

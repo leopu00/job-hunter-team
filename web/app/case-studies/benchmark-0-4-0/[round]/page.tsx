@@ -146,7 +146,7 @@ export default async function RoundPage({
         </span>
       ),
     },
-    { k: p.build, v: x.buildNo == null ? "—" : String(x.buildNo) },
+    { k: p.build, v: x.buildNo == null ? t.previousBuild : String(x.buildNo) },
     {
       k: p.profile,
       v: `${TRADE_EMOJI[x.profile] ?? "🧑‍💼"} ${profileName(x.profile)}`,

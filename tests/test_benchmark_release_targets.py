@@ -52,9 +52,11 @@ def test_every_target_has_a_status_the_page_draws_and_a_proof_that_exists():
         if "os" in target:
             assert target["os"] in {"windows", "linux", "macos"}, target
         assert set(target["proof"]) <= rounds, target
-        # a target met says on which build
+        # a target met says on which build; one still to try has no build to name
         if target["status"] in {"pass", "fail", "blocked"}:
             assert isinstance(target["build"], int), target
+        else:
+            assert target["build"] is None, target
         # a target without a round below says why, met or not
         assert target["proof"] or target["note"], target
 
@@ -76,9 +78,10 @@ def test_every_word_of_the_targets_and_of_the_rounds_is_there_in_the_seven_langu
     rows = {t["row"] for t in DATA["targets"] if "row" in t}
     profiles = {r["profile"] for r in DATA["rounds"]}
     round_notes = {r["note"] for r in DATA["rounds"]}
-    fields = ["targetsTitle", "targetsLead", "targetsCount", "targetsCols", "targetStatus", "targetSections", "targetRows", "buildsTitle", "buildLabel", "noRound"]
+    outcomes = {r["outcome"] for r in DATA["rounds"]}
+    fields = ["targetsTitle", "targetsLead", "targetsCount", "targetsCols", "targetStatus", "targetSections", "targetRows", "buildsTitle", "buildLabel", "previousBuild", "noRound"]
     for lang, block in BLOCKS.items():
-        missing = [k for k in sorted(keys | notes | sections | rows | profiles | round_notes | set(fields) | STATUSES) if not _has_key(block, k)]
+        missing = [k for k in sorted(keys | notes | sections | rows | profiles | round_notes | outcomes | set(fields) | STATUSES) if not _has_key(block, k)]
         assert missing == [], f"{lang}: {missing}"
         assert "{g}" in re.search(r'targetsCount: "([^"]*)"', block).group(1), lang
         assert "{n}" in re.search(r'buildLabel: "([^"]*)"', block).group(1), lang
@@ -108,3 +111,12 @@ def test_the_page_holds_no_name_of_a_test_person_and_no_machine():
         for word in Path(extra).read_text(encoding="utf-8").split("\n"):
             word = word.strip()
             assert not word or re.search(rf"\b{re.escape(word)}\b", text, re.I) is None, "a word of the private list"
+
+
+def test_a_round_before_the_numbered_builds_says_so_and_no_figure_of_the_page_is_only_an_estimate():
+    # r1-r8 ran before the numbered builds: the table and the page of the round write «earlier build», never a build number
+    assert {r["id"] for r in DATA["rounds"] if r.get("buildNo") is None} == {f"r{i}" for i in range(1, 9)}
+    # the services table shows what the rounds measured: an estimate of the kit is not a measure and is not kept
+    for service in DATA["services"]:
+        assert "kitEstimate30min" not in service, service["id"]
+    assert "kitEstimate30min" not in ALL_FILES

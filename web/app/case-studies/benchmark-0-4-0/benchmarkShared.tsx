@@ -33,7 +33,6 @@ export type Copy = {
   servicesTitle: string;
   servicesCols: {
     service: string;
-    kit: string;
     seen: string;
     rate: string;
   };
@@ -73,6 +72,7 @@ export type Copy = {
   targetRules: Record<string, string>;
   buildsTitle: string;
   buildLabel: string;
+  previousBuild: string;
   noRound: string;
   none: string;
   finder: FinderCopy;
@@ -97,22 +97,21 @@ export const T: Record<Locale, Copy> = {
       note: "What happened",
     },
     colsHint:
-      "«Relevant» = positions whose title matches the trade, checked on a sample.",
+      "«Relevant» = positions whose title matches the trade, checked on a sample; a dash = not judged. «Earlier build» = a round before the numbered builds of the 0.4.0: it does not prove the 0.4.0.",
     chartTitle: "What a scored position costs",
     chartLead:
       "Dollars spent for each position the team scored. Shorter is better. Rounds with no scored position have no bar.",
     chartNone: "none scored",
     chartCaveat:
       "The two Mac rounds were 6 and 10 minutes with a minimal team, and the cost is mostly onboarding and the Captain: not comparable with rounds of 16-42 minutes.",
-    servicesTitle: "Services: what we saw next to the estimates",
+    servicesTitle: "Services: what we saw in the rounds",
     servicesCols: {
       service: "Service",
-      kit: "Estimate for 30 min",
       seen: "Seen in the rounds",
       rate: "Pace seen",
     },
     servicesCaveat:
-      "The estimates come from GLM's volume re-priced, not from measurements on the other services. Claude on Windows spent more than estimated: the Captain and the Scorer weigh 3.05 $ of 5.28 $.",
+      "Only what the rounds measured; a dash means never tried. These numbers come from rounds on builds before the numbered ones of the 0.4.0 (r1–r8): they say what a service costs, not how the 0.4.0 behaves. Claude on Windows spent 5.28 $: the Captain and the Scorer weigh 3.05 $ of it.",
     osTitle: "By system",
     limitsTitle: "What this comparison is worth, and what it is not",
     limitsLead:
@@ -135,6 +134,7 @@ export const T: Record<Locale, Copy> = {
       pass: "pass",
       reservations: "with reservations",
       fail: "fail",
+      unjudged: "not judged",
       running: "running",
     },
     system: {
@@ -308,8 +308,8 @@ export const T: Record<Locale, Copy> = {
         "review before the tag: the verdict comes on the exact version of the tag; the key-on-disk case is closed",
       cleanLinuxRoundMissing:
         "clean install on build 6: its round is not in the table below",
-      openaiRoundMissing:
-        "proved on build 6: its round is not in the table below",
+      openaiBuild6Redo:
+        "tried on build 6 only (1.61 $, 10 minutes): to redo on the 0.4.0",
       redoOnBuild9: "to redo on build 9",
       diskFull: "disk full after the update (fix in progress)",
       neverTried: "never tried",
@@ -392,6 +392,7 @@ export const T: Record<Locale, Copy> = {
     },
     buildsTitle: "Rounds of each build",
     buildLabel: "Build {n}",
+    previousBuild: "earlier build",
     noRound: "no round",
     none: "—",
     finder: {
@@ -467,22 +468,21 @@ export const T: Record<Locale, Copy> = {
       note: "Cosa è successo",
     },
     colsHint:
-      "«Pertinenti» = posizioni il cui titolo corrisponde al mestiere, controllate a campione.",
+      "«Pertinenti» = posizioni il cui titolo corrisponde al mestiere, controllate a campione; un trattino = non giudicato. «Build precedente» = giro anteriore alle build numerate della 0.4.0: non prova la 0.4.0.",
     chartTitle: "Quanto costa una posizione valutata",
     chartLead:
       "Dollari spesi per ogni posizione valutata dalla squadra. Più corta è la barra, meglio è. I giri senza posizioni valutate non hanno barra.",
     chartNone: "nessuna valutata",
     chartCaveat:
       "I due giri del Mac sono durati 6 e 10 minuti con una squadra minima, e il costo è quasi tutto onboarding e Capitano: non sono confrontabili con giri di 16-42 minuti.",
-    servicesTitle: "Servizi: quello che abbiamo visto accanto alle stime",
+    servicesTitle: "Servizi: quello che abbiamo visto nei giri",
     servicesCols: {
       service: "Servizio",
-      kit: "Stima per 30 min",
       seen: "Visto nei giri",
       rate: "Ritmo visto",
     },
     servicesCaveat:
-      "Le stime vengono dal volume di GLM riprezzato, non da misure sugli altri servizi. Claude su Windows ha speso più della stima: Capitano e Scorer pesano 3,05 $ su 5,28 $.",
+      "Solo ciò che i giri hanno misurato; un trattino = mai provato. Questi numeri vengono da giri su build precedenti a quelle numerate della 0.4.0 (r1–r8): dicono quanto costa un servizio, non come si comporta la 0.4.0. Claude su Windows ha speso 5,28 $: Capitano e Scorer ne pesano 3,05 $.",
     osTitle: "Per sistema",
     limitsTitle: "Cosa vale e cosa no di questo confronto",
     limitsLead:
@@ -505,6 +505,7 @@ export const T: Record<Locale, Copy> = {
       pass: "passa",
       reservations: "con riserva",
       fail: "non passa",
+      unjudged: "non giudicato",
       running: "in corso",
     },
     system: {
@@ -679,8 +680,8 @@ export const T: Record<Locale, Copy> = {
         "controllo prima del tag: il verdetto arriva sulla versione esatta del tag; il caso della chiave su disco è chiuso",
       cleanLinuxRoundMissing:
         "installazione vergine sulla build 6: il suo giro non è nella tabella qui sotto",
-      openaiRoundMissing:
-        "provato sulla build 6: il suo giro non è nella tabella qui sotto",
+      openaiBuild6Redo:
+        "provato solo sulla build 6 (1,61 $, 10 minuti): da rifare sulla 0.4.0",
       redoOnBuild9: "da rifare sulla build 9",
       diskFull: "disco pieno dopo l'aggiornamento (correzione in corso)",
       neverTried: "mai provato",
@@ -763,6 +764,7 @@ export const T: Record<Locale, Copy> = {
     },
     buildsTitle: "Giri di ogni build",
     buildLabel: "Build {n}",
+    previousBuild: "build precedente",
     noRound: "nessun giro",
     none: "—",
     finder: {
@@ -838,22 +840,21 @@ export const T: Record<Locale, Copy> = {
       note: "Was passiert ist",
     },
     colsHint:
-      "«Passend» = Stellen, deren Titel zum Beruf passt, stichprobenartig geprüft.",
+      "«Passend» = Stellen, deren Titel zum Beruf passt, stichprobenartig geprüft; ein Strich = nicht bewertet. «Frühere Build» = ein Lauf vor den nummerierten Builds der 0.4.0: er belegt die 0.4.0 nicht.",
     chartTitle: "Was eine bewertete Stelle kostet",
     chartLead:
       "Dollar pro vom Team bewerteter Stelle. Kürzer ist besser. Läufe ohne bewertete Stelle haben keinen Balken.",
     chartNone: "keine bewertet",
     chartCaveat:
       "Die beiden Mac-Läufe dauerten 6 und 10 Minuten mit minimalem Team; die Kosten sind fast nur Onboarding und Capitano: nicht vergleichbar mit Läufen von 16-42 Minuten.",
-    servicesTitle: "Dienste: Beobachtetes neben den Schätzungen",
+    servicesTitle: "Dienste: Beobachtetes in den Läufen",
     servicesCols: {
       service: "Dienst",
-      kit: "Schätzung für 30 Min",
       seen: "In den Läufen gesehen",
       rate: "Beobachtetes Tempo",
     },
     servicesCaveat:
-      "Die Schätzungen stammen aus dem umgerechneten GLM-Volumen, nicht aus Messungen der anderen Dienste. Claude unter Windows gab mehr aus als geschätzt: Capitano und Scorer machen 3,05 $ von 5,28 $ aus.",
+      "Nur, was die Läufe gemessen haben; ein Strich = nie ausprobiert. Diese Zahlen stammen aus Läufen auf Builds vor den nummerierten der 0.4.0 (r1–r8): sie sagen, was ein Dienst kostet, nicht wie sich die 0.4.0 verhält. Claude unter Windows gab 5,28 $ aus: Capitano und Scorer machen davon 3,05 $ aus.",
     osTitle: "Nach System",
     limitsTitle: "Was dieser Vergleich wert ist und was nicht",
     limitsLead:
@@ -876,6 +877,7 @@ export const T: Record<Locale, Copy> = {
       pass: "bestanden",
       reservations: "mit Vorbehalt",
       fail: "nicht bestanden",
+      unjudged: "nicht bewertet",
       running: "läuft",
     },
     system: {
@@ -1050,8 +1052,8 @@ export const T: Record<Locale, Copy> = {
         "Prüfung vor dem Tag: das Urteil kommt auf die genaue Version des Tags; der Fall des Schlüssels auf der Festplatte ist geschlossen",
       cleanLinuxRoundMissing:
         "Neuinstallation auf Build 6: ihr Lauf fehlt in der Tabelle unten",
-      openaiRoundMissing:
-        "auf Build 6 geprüft: der Lauf fehlt in der Tabelle unten",
+      openaiBuild6Redo:
+        "nur auf Build 6 geprüft (1,61 $, 10 Minuten): auf der 0.4.0 zu wiederholen",
       redoOnBuild9: "auf Build 9 zu wiederholen",
       diskFull: "Platte voll nach dem Update (Korrektur in Arbeit)",
       neverTried: "nie geprüft",
@@ -1136,6 +1138,7 @@ export const T: Record<Locale, Copy> = {
     },
     buildsTitle: "Läufe jedes Builds",
     buildLabel: "Build {n}",
+    previousBuild: "frühere Build",
     noRound: "kein Lauf",
     none: "—",
     finder: {
@@ -1211,22 +1214,21 @@ export const T: Record<Locale, Copy> = {
       note: "Qué pasó",
     },
     colsHint:
-      "«Pertinentes» = puestos cuyo título corresponde al oficio, comprobados por muestreo.",
+      "«Pertinentes» = puestos cuyo título corresponde al oficio, comprobados por muestreo; un guion = sin juzgar. «Build anterior» = ronda previa a las builds numeradas de la 0.4.0: no prueba la 0.4.0.",
     chartTitle: "Cuánto cuesta un puesto valorado",
     chartLead:
       "Dólares gastados por cada puesto que el equipo valoró. Más corta es mejor. Las rondas sin puestos valorados no tienen barra.",
     chartNone: "ninguna valorada",
     chartCaveat:
       "Las dos rondas del Mac duraron 6 y 10 minutos con un equipo mínimo, y el coste es casi todo onboarding y Capitán: no son comparables con rondas de 16-42 minutos.",
-    servicesTitle: "Servicios: lo visto junto a las estimaciones",
+    servicesTitle: "Servicios: lo visto en las rondas",
     servicesCols: {
       service: "Servicio",
-      kit: "Estimación para 30 min",
       seen: "Visto en las rondas",
       rate: "Ritmo visto",
     },
     servicesCaveat:
-      "Las estimaciones salen del volumen de GLM reevaluado, no de mediciones en los otros servicios. Claude en Windows gastó más de lo estimado: Capitán y Scorer pesan 3,05 $ de 5,28 $.",
+      "Solo lo que midieron las rondas; un guion = nunca probado. Estas cifras salen de rondas en builds anteriores a las numeradas de la 0.4.0 (r1–r8): dicen cuánto cuesta un servicio, no cómo se comporta la 0.4.0. Claude en Windows gastó 5,28 $: Capitán y Scorer pesan 3,05 $.",
     osTitle: "Por sistema",
     limitsTitle: "Qué vale y qué no vale esta comparación",
     limitsLead:
@@ -1249,6 +1251,7 @@ export const T: Record<Locale, Copy> = {
       pass: "pasa",
       reservations: "con reservas",
       fail: "no pasa",
+      unjudged: "sin juzgar",
       running: "en curso",
     },
     system: {
@@ -1424,8 +1427,8 @@ export const T: Record<Locale, Copy> = {
         "revisión antes del tag: el veredicto llega sobre la versión exacta del tag; el caso de la clave en disco está cerrado",
       cleanLinuxRoundMissing:
         "instalación desde cero en la build 6: su ronda no está en la tabla de abajo",
-      openaiRoundMissing:
-        "probado en la build 6: su ronda no está en la tabla de abajo",
+      openaiBuild6Redo:
+        "probado solo en la build 6 (1,61 $, 10 minutos): por rehacer en la 0.4.0",
       redoOnBuild9: "por repetir en la build 9",
       diskFull: "disco lleno tras la actualización (corrección en curso)",
       neverTried: "nunca probado",
@@ -1512,6 +1515,7 @@ export const T: Record<Locale, Copy> = {
     },
     buildsTitle: "Rondas de cada build",
     buildLabel: "Build {n}",
+    previousBuild: "build anterior",
     noRound: "ninguna ronda",
     none: "—",
     finder: {
@@ -1588,22 +1592,21 @@ export const T: Record<Locale, Copy> = {
       note: "Ce qui s'est passé",
     },
     colsHint:
-      "« Pertinentes » = postes dont l'intitulé correspond au métier, vérifiés par échantillon.",
+      "« Pertinentes » = postes dont l'intitulé correspond au métier, vérifiés par échantillon ; un tiret = non jugé. « Build précédente » = tour antérieur aux builds numérotées de la 0.4.0 : il ne prouve pas la 0.4.0.",
     chartTitle: "Ce que coûte un poste évalué",
     chartLead:
       "Dollars dépensés pour chaque poste évalué par l'équipe. Plus court, c'est mieux. Les tours sans poste évalué n'ont pas de barre.",
     chartNone: "aucune évaluée",
     chartCaveat:
       "Les deux tours du Mac ont duré 6 et 10 minutes avec une équipe minimale, et le coût est presque tout onboarding et Capitaine : pas comparables avec des tours de 16-42 minutes.",
-    servicesTitle: "Services : ce que nous avons vu à côté des estimations",
+    servicesTitle: "Services : ce que nous avons vu dans les tours",
     servicesCols: {
       service: "Service",
-      kit: "Estimation pour 30 min",
       seen: "Vu dans les tours",
       rate: "Rythme observé",
     },
     servicesCaveat:
-      "Les estimations viennent du volume de GLM retarifé, pas de mesures sur les autres services. Claude sous Windows a dépensé plus que prévu : Capitaine et Scorer pèsent 3,05 $ sur 5,28 $.",
+      "Seulement ce que les tours ont mesuré ; un tiret = jamais essayé. Ces chiffres viennent de tours sur des builds antérieures aux builds numérotées de la 0.4.0 (r1–r8) : ils disent ce que coûte un service, pas comment se comporte la 0.4.0. Claude sous Windows a dépensé 5,28 $ : Capitaine et Scorer en pèsent 3,05 $.",
     osTitle: "Par système",
     limitsTitle: "Ce que vaut cette comparaison, et ce qu'elle ne vaut pas",
     limitsLead:
@@ -1626,6 +1629,7 @@ export const T: Record<Locale, Copy> = {
       pass: "réussi",
       reservations: "avec réserves",
       fail: "échec",
+      unjudged: "non jugé",
       running: "en cours",
     },
     system: {
@@ -1802,8 +1806,8 @@ export const T: Record<Locale, Copy> = {
         "revue avant le tag : le verdict porte sur la version exacte du tag ; le cas de la clé sur disque est clos",
       cleanLinuxRoundMissing:
         "installation vierge sur la build 6 : son tour n'est pas dans le tableau ci-dessous",
-      openaiRoundMissing:
-        "vérifié sur la build 6 : son tour n'est pas dans le tableau ci-dessous",
+      openaiBuild6Redo:
+        "essayé seulement sur la build 6 (1,61 $, 10 minutes) : à refaire sur la 0.4.0",
       redoOnBuild9: "à refaire sur la build 9",
       diskFull: "disque plein après la mise à jour (correction en cours)",
       neverTried: "jamais essayé",
@@ -1891,6 +1895,7 @@ export const T: Record<Locale, Copy> = {
     },
     buildsTitle: "Tours de chaque build",
     buildLabel: "Build {n}",
+    previousBuild: "build précédente",
     noRound: "aucun tour",
     none: "—",
     finder: {
@@ -1966,22 +1971,21 @@ export const T: Record<Locale, Copy> = {
       note: "O que aconteceu",
     },
     colsHint:
-      "«Pertinentes» = posições cujo título corresponde ao ofício, verificadas por amostragem.",
+      "«Pertinentes» = posições cujo título corresponde ao ofício, verificadas por amostragem; um traço = não avaliado. «Build anterior» = ronda anterior às builds numeradas da 0.4.0: não prova a 0.4.0.",
     chartTitle: "Quanto custa uma posição avaliada",
     chartLead:
       "Dólares gastos por cada posição avaliada pela equipa. Mais curta é melhor. As rondas sem posições avaliadas não têm barra.",
     chartNone: "nenhuma avaliada",
     chartCaveat:
       "As duas rondas do Mac duraram 6 e 10 minutos com uma equipa mínima, e o custo é quase todo onboarding e Capitano: não são comparáveis com rondas de 16-42 minutos.",
-    servicesTitle: "Serviços: o que vimos ao lado das estimativas",
+    servicesTitle: "Serviços: o que vimos nas rondas",
     servicesCols: {
       service: "Serviço",
-      kit: "Estimativa para 30 min",
       seen: "Visto nas rondas",
       rate: "Ritmo visto",
     },
     servicesCaveat:
-      "As estimativas vêm do volume do GLM reprecificado, não de medições nos outros serviços. O Claude no Windows gastou mais do que o estimado: Capitano e Scorer pesam 3,05 $ de 5,28 $.",
+      "Só o que as rondas mediram; um traço = nunca testado. Estes números vêm de rondas em builds anteriores às numeradas da 0.4.0 (r1–r8): dizem quanto custa um serviço, não como se comporta a 0.4.0. O Claude no Windows gastou 5,28 $: Capitano e Scorer pesam 3,05 $.",
     osTitle: "Por sistema",
     limitsTitle: "O que vale e o que não vale esta comparação",
     limitsLead: "Cada ronda difere das outras em algo que pesa nos números:",
@@ -2003,6 +2007,7 @@ export const T: Record<Locale, Copy> = {
       pass: "passa",
       reservations: "com reservas",
       fail: "falha",
+      unjudged: "não avaliado",
       running: "em curso",
     },
     system: {
@@ -2177,8 +2182,8 @@ export const T: Record<Locale, Copy> = {
         "revisão antes da tag: o veredicto chega sobre a versão exata da tag; o caso da chave no disco está fechado",
       cleanLinuxRoundMissing:
         "instalação de raiz na build 6: a sua ronda não está na tabela abaixo",
-      openaiRoundMissing:
-        "provado na build 6: a sua ronda não está na tabela abaixo",
+      openaiBuild6Redo:
+        "testado só na build 6 (1,61 $, 10 minutos): a refazer na 0.4.0",
       redoOnBuild9: "a repetir na build 9",
       diskFull: "disco cheio após a atualização (correção em curso)",
       neverTried: "nunca testado",
@@ -2264,6 +2269,7 @@ export const T: Record<Locale, Copy> = {
     },
     buildsTitle: "Rondas de cada build",
     buildLabel: "Build {n}",
+    previousBuild: "build anterior",
     noRound: "nenhuma ronda",
     none: "—",
     finder: {
@@ -2339,22 +2345,21 @@ export const T: Record<Locale, Copy> = {
       note: "Mi történt",
     },
     colsHint:
-      "«Releváns» = olyan pozíciók, amelyek címe megfelel a szakmának, mintavétellel ellenőrizve.",
+      "«Releváns» = olyan pozíciók, amelyek címe megfelel a szakmának, mintavétellel ellenőrizve; a kötőjel = nem értékelt. «Korábbi build» = a 0.4.0 számozott buildjei előtti futás: nem bizonyítja a 0.4.0-t.",
     chartTitle: "Mennyibe kerül egy értékelt pozíció",
     chartLead:
       "A csapat által értékelt pozíciónként elköltött dollár. Minél rövidebb, annál jobb. Értékelt pozíció nélküli futásnak nincs oszlopa.",
     chartNone: "nincs értékelt",
     chartCaveat:
       "A két Mac-futás 6 és 10 percig tartott minimális csapattal, a költség szinte csak onboarding és Capitano: nem összevethető a 16–42 perces futásokkal.",
-    servicesTitle: "Szolgáltatások: amit láttunk a becslések mellett",
+    servicesTitle: "Szolgáltatások: amit a futásokban láttunk",
     servicesCols: {
       service: "Szolgáltatás",
-      kit: "Becslés 30 percre",
       seen: "Látott a futásokban",
       rate: "Látott tempó",
     },
     servicesCaveat:
-      "A becslések az újraárazott GLM-volumenből származnak, nem a többi szolgáltatás méréseiből. A Claude Windowson többet költött a becsültnél: a Capitano és a Scorer 3,05 $-t nyom az 5,28 $-ból.",
+      "Csak amit a futások mértek; a kötőjel = soha nem próbáltuk. Ezek a számok a 0.4.0 számozott buildjei előtti buildeken futott körökből származnak (r1–r8): azt mutatják, mennyibe kerül egy szolgáltatás, nem azt, hogyan viselkedik a 0.4.0. A Claude Windowson 5,28 $-t költött: ebből a Capitano és a Scorer 3,05 $-t nyom.",
     osTitle: "Rendszerenként",
     limitsTitle: "Mit ér és mit nem ez az összevetés",
     limitsLead:
@@ -2377,6 +2382,7 @@ export const T: Record<Locale, Copy> = {
       pass: "megfelelt",
       reservations: "fenntartással",
       fail: "megbukott",
+      unjudged: "nem értékelt",
       running: "folyamatban",
     },
     system: {
@@ -2550,8 +2556,8 @@ export const T: Record<Locale, Copy> = {
         "átnézés a tag előtt: az ítélet a tag pontos verziójára születik; a lemezen maradt kulcs ügye lezárva",
       cleanLinuxRoundMissing:
         "tiszta telepítés a 6. buildön: a futása nincs a lenti táblázatban",
-      openaiRoundMissing:
-        "a 6. buildön igazolva: a futása nincs a lenti táblázatban",
+      openaiBuild6Redo:
+        "csak a 6. buildön próbáltuk (1,61 $, 10 perc): a 0.4.0-n újra kell csinálni",
       redoOnBuild9: "a 9. buildön megismétlendő",
       diskFull: "megtelt lemez a frissítés után (javítás folyamatban)",
       neverTried: "sosem próbálták",
@@ -2634,6 +2640,7 @@ export const T: Record<Locale, Copy> = {
     },
     buildsTitle: "Az egyes buildek futásai",
     buildLabel: "{n}. build",
+    previousBuild: "korábbi build",
     noRound: "nincs futás",
     none: "—",
     finder: {
@@ -2781,6 +2788,7 @@ export const OUTCOME_COLOR: Record<string, string> = {
   reservations: "#84CC16",
   fail: "#EF4444",
   running: "#F59E0B",
+  unjudged: "#9CA3AF",
 };
 
 // The sector of each profile of the rounds and of the category of a case study (the finder matches on it when the words differ).
