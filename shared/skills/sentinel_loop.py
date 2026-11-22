@@ -1,5 +1,6 @@
 """One usage-monitoring tick, split by phase; dependencies remain late-bound."""
 
+from datetime import datetime, timezone
 from types import SimpleNamespace
 from sentinel_delivery import notice, reset
 from delivery_status import checked, report
@@ -289,7 +290,27 @@ def _notify(api, run):
     quota_data.clear(run.state)
 
 
+def _record_gap(api, run, declared):
+    """A tick without numbers still leaves a row: a gap in the series must be visible as a gap, never as silence."""
+    writer = getattr(api, "write_noread", None)
+    if writer is None:
+        return
+    try:
+        writer({
+            "ts": datetime.now(timezone.utc).isoformat(),
+            "source": "bridge",
+            "provider": run.provider,
+            "status": "NO-QUOTA" if declared else "NO-READ",
+            "reason": str(run.fail_reason),
+            "fail_streak": int(getattr(run, "fail_streak", 0)) + (0 if declared else 1),
+            "within_hours": bool(run.within_hours),
+        })
+    except Exception as error:  # noqa: BLE001 - the record must never stop the tick
+        print("[bridge V6] WARN no-read record: %s" % error)
+
+
 def _failure(api, run):
+    _record_gap(api, run, str(run.fail_reason).startswith(quota_data.NO_QUOTA_PREFIX))
     if str(run.fail_reason).startswith(quota_data.NO_QUOTA_PREFIX):
         # No quota data exists for this access: a declared mode, not an outage (no fallback, no FATAL, no pause).
         run.fail_streak = 0
