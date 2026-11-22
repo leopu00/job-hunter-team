@@ -28,7 +28,8 @@ import time
 WORKER = re.compile(r"^(SCOUT|ANALISTA|SCORER|SCRITTORE|CLOSER)-(\d+)$")
 IDLE_AFTER_SEC = 240        # told at one look, closed at the next one at the soonest (a look is five minutes)
 RESEND_AFTER_SEC = 2700     # a worker still busy 45 minutes after is told again, once
-BUSY = re.compile(r"esc to interrupt|to interrupt|ctrl\+c to stop|\bworking\b\s*[….]", re.I)
+# Pi draws no «esc to interrupt»: a turn is a braille spinner on the top rule («── ⠹ Working ───», «── ⠼ Retrying (1/3) …»).
+BUSY = re.compile(r"esc to interrupt|to interrupt|ctrl\+c to stop|\bworking\b\s*[….]|[\u2800-\u28ff]\s*(?:working|retrying|thinking)\b", re.I)
 
 CLOSE_TEXT = ("[BRIDGE] [OUT OF HOURS] The working window is closed. Finish the task you are on and save what it produced (write the "
               "result, leave no step half done), then DO NOT start another task and DO NOT loop again: stop and wait. Idle workers "
