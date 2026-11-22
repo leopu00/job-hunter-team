@@ -75,7 +75,7 @@ export default async function BenchmarkPage() {
       <a
         key={id}
         href={testHref(id)}
-        className="underline decoration-dotted hover:decoration-solid whitespace-nowrap"
+        className="underline decoration-dotted hover:decoration-solid"
       >
         {OS_LABEL[r.os]} · {t.profiles[r.profile]} · {dayLabel(r)}
       </a>
@@ -91,9 +91,21 @@ export default async function BenchmarkPage() {
     of?: number;
     trade?: string;
     round?: string;
+    fix?: string;
+  };
+  // where a criterion was measured: the commit of its round, and the correction that came after a red one
+  const criterionWhere = (c: Criterion) => {
+    const commit = c.round ? roundById.get(c.round)?.build : null;
+    return [
+      commit,
+      c.fix ? t.targetCriteria.beforeFix.replace("{fix}", c.fix) : null,
+    ]
+      .filter(Boolean)
+      .join(" · ");
   };
   const criterion = (c: Criterion) =>
-    (t.targetCriteria[c.k] ?? c.k)
+    (
+      (t.targetCriteria[c.k] ?? c.k)
       .replace(
         "{v}",
         c.v == null
@@ -117,7 +129,8 @@ export default async function BenchmarkPage() {
         c.trade
           ? `${TRADE_EMOJI[c.trade] ?? ""} ${t.profiles[c.trade] ?? c.trade}`.trim()
           : "",
-      );
+      )
+    ) + (criterionWhere(c) ? ` · ${criterionWhere(c)}` : "");
   // the test of the Scout bench that proves each bench row of the targets
   const BENCH_TEST: Record<string, string> = {
     scoutBenchCook: "b9-cook",
@@ -177,7 +190,7 @@ export default async function BenchmarkPage() {
             {criteria.map((c, i) => (
               <li
                 key={i}
-                className="whitespace-nowrap text-[var(--color-base)]"
+                className="text-[var(--color-base)]"
               >
                 <span aria-hidden="true">{c.ok ? "✅" : "❌"}</span>{" "}
                 {c.round ? (

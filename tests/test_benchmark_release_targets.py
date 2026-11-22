@@ -150,3 +150,13 @@ def test_the_title_of_a_section_of_the_targets_is_a_title_and_not_a_sentence_in_
         values = re.findall(r':\s*"([^"]*)",', titles)
         assert len(values) >= 10, lang
         assert not [v for v in values if v.endswith(".") or "build" in v.lower()], (lang, values)
+
+
+def test_a_red_mark_under_a_target_that_is_met_says_before_which_correction_it_was_red():
+    for target in DATA["targets"]:
+        if target["status"] != "pass":
+            continue
+        for c in target.get("criteria", []):
+            assert c["ok"] or c.get("fix"), (target["id"], c)
+    for lang, block in BLOCKS.items():
+        assert "{fix}" in re.search(r'beforeFix: "([^"]*)"', block).group(1), lang

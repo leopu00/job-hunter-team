@@ -41,6 +41,8 @@ type Criterion = {
   max?: number;
   of?: number;
   trade?: string;
+  round?: string;
+  fix?: string;
 };
 
 export async function generateMetadata({
@@ -84,8 +86,17 @@ export default async function RoundPage({
     : null;
   const criteria = ((target as { criteria?: Criterion[] } | null)?.criteria ??
     []) as Criterion[];
+  // where a criterion was measured: the commit of its round, and the correction that came after a red one
+  const criterionWhere = (c: Criterion) =>
+    [
+      c.round ? data.rounds.find((r) => r.id === c.round)?.build : null,
+      c.fix ? t.targetCriteria.beforeFix.replace("{fix}", c.fix) : null,
+    ]
+      .filter(Boolean)
+      .join(" · ");
   const criterion = (c: Criterion) =>
-    (t.targetCriteria[c.k] ?? c.k)
+    (
+      (t.targetCriteria[c.k] ?? c.k)
       .replace(
         "{v}",
         c.v == null ? "" : c.k === "underCeiling" ? nf.format(c.v) : String(c.v),
@@ -105,7 +116,8 @@ export default async function RoundPage({
         c.trade
           ? `${TRADE_EMOJI[c.trade] ?? ""} ${profileName(c.trade)}`.trim()
           : "",
-      );
+      )
+    ) + (criterionWhere(c) ? ` · ${criterionWhere(c)}` : "");
   // a criterion of the path of a person, e.g. «2 manual steps (minute 7.7, 10.8)»
   const roundCriterion = (c: RoundCriterion) => {
     const key = c.k === "alone" ? (c.ok ? "alone_ok" : "alone_bad") : c.k;
