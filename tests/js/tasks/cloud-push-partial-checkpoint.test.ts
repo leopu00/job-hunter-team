@@ -16,7 +16,7 @@
  * successivo: la domanda è «cosa riparte al prossimo giro», e a quella
  * risponde solo il secondo giro.
  */
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
@@ -102,6 +102,39 @@ function acknowledged(table: string, rows: Array<{ _receipt_id?: string }>) {
   };
 }
 
+function periodicFixture() {
+  const { home, dbPath } = fixture();
+  const db = new DatabaseSync(dbPath);
+  db.exec(`
+    CREATE TABLE pending_user_messages (
+      id INTEGER PRIMARY KEY, agent TEXT, body TEXT, kind TEXT,
+      related_position_id INTEGER, delivered_via TEXT, delivered_at TEXT,
+      acknowledged_at TEXT, user_reply TEXT, user_reply_at TEXT,
+      agent_seen_reply_at TEXT, created_at TEXT
+    );
+    INSERT INTO pending_user_messages (id, agent, body, kind, created_at)
+    VALUES (1, 'agent', 'Synthetic message', 'notification', '2026-08-15 09:00:00');
+  `);
+  db.close();
+  vi.spyOn(console, "log").mockImplementation(() => {});
+  vi.spyOn(console, "error").mockImplementation(() => {});
+  vi.resetModules();
+
+  const start = Date.UTC(2026, 7, 15, 10);
+  const cycle = async (minute: number) => {
+    const { maybePeriodicPush } = await import("../../../cli/src/commands/cloud.js");
+    return maybePeriodicPush({
+      db: dbPath,
+      now: start + minute * 60_000,
+      limits: { enabled: true, intervalMs: 60_000, retryMs: 60_000, timeoutMs: 120_000 },
+      publishObservation: false,
+      noticeRefusedToken: async () => ({ notified: false }),
+      silent: true,
+    });
+  };
+  return { home, dbPath, cycle };
+}
+
 /**
  * Il cloud come si comporta davvero in O-97: accetta le righe fino a `fino`,
  * e sulla prima oltre risponde 500 senza `rejection_scope`.
@@ -148,6 +181,182 @@ afterEach(() => {
   else process.env.JHT_PUSH_POS_CHUNK = previousChunk;
   for (const dir of dirs.splice(0))
     rmSync(dir, { recursive: true, force: true });
+});
+
+describe("checkpoint del push periodico con quarantena", () => {
+  it("ferma i POST a firma invariata e riprende per dati nuovi o retry dopo il riavvio", async () => {
+    const { dbPath, cycle } = periodicFixture();
+    let rejectPosition = true;
+    let failure: Response | Error | undefined;
+    let failAfterRetry = false;
+    const posts = vi.fn(async (_url: unknown, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body));
+      const table = Object.keys(body)[0];
+      const rows = body[table] as Array<{ id: number; _receipt_id: string }>;
+      if (table === "positions" && rows.some(({ id }) => id === 3) && rejectPosition) {
+        return jsonResponse({ error: "positions_upsert_failed", rejection_scope: "row" }, 500);
+      }
+      if (table === "positions" && rows.some(({ id }) => id === 5) && failure) {
+        if (failure instanceof Error) throw failure;
+        return failure;
+      }
+      if (table === "pending_user_messages" && failAfterRetry) {
+        return jsonResponse({ error: "unavailable" }, 500);
+      }
+      return jsonResponse(acknowledged(table, rows));
+    });
+    vi.stubGlobal("fetch", posts);
+
+    const first = await cycle(0);
+    expect(first).toMatchObject({
+      result: { ok: true, quarantined: 1, quarantinedNew: 1 },
+      state: { status: "partial", quarantined_count: 1, signature: { positions: { n: 4 } } },
+    });
+    const initialPosts = posts.mock.calls.length;
+    expect(initialPosts).toBeGreaterThan(1);
+    await expect(cycle(1)).resolves.toMatchObject({ push: false, reason: "nothing_new" });
+    vi.resetModules();
+    await expect(cycle(2)).resolves.toMatchObject({ push: false, reason: "nothing_new" });
+    expect(posts).toHaveBeenCalledTimes(initialPosts);
+
+    const db = new DatabaseSync(dbPath);
+    db.exec("INSERT INTO positions (id, title, updated_at) VALUES (5, 'New role', '2026-08-15 10:00:00')");
+    db.close();
+    const interruptedBody = jsonResponse({});
+    vi.spyOn(interruptedBody, "json").mockRejectedValue(new DOMException("aborted", "AbortError"));
+    const failures = [
+      { response: jsonResponse({ error: "unavailable" }, 500), status: "failed" },
+      { response: jsonResponse({ receipts: { positions: [] } }), status: "failed" },
+      { response: jsonResponse({}, 401), status: "auth_failed" },
+      { response: new DOMException("timeout", "TimeoutError"), status: "timeout" },
+      { response: interruptedBody, status: "timeout" },
+    ];
+    for (const [index, { response, status }] of failures.entries()) {
+      failure = response;
+      await expect(cycle(3 + index)).resolves.toMatchObject({
+        result: { ok: false },
+        state: { status, quarantined_count: 1, signature: first.state?.signature },
+      });
+    }
+    failure = undefined;
+    const recoveryMinute = 3 + failures.length;
+    await expect(cycle(recoveryMinute)).resolves.toMatchObject({
+      result: { ok: true, quarantined: 1 },
+      state: { status: "partial", consecutive_failures: 0, signature: { positions: { n: 5 } } },
+    });
+
+    const quarantine = await import("../../../cli/src/lib/cloud-push-quarantine.js");
+    const [entry] = quarantine.readCloudPushQuarantine().entries;
+    expect(entry).toMatchObject({ table: "positions", status: "active", attempts: 1 });
+    expect(quarantine.requestQuarantineRetry(entry.identity).changed).toBe(1);
+    rejectPosition = false;
+    failAfterRetry = true;
+    vi.resetModules();
+    posts.mockClear();
+    await expect(cycle(recoveryMinute + 1)).resolves.toMatchObject({
+      result: { ok: false, skipped: 0 },
+      state: { status: "failed", signature: { positions: { n: 5 } } },
+    });
+    expect(posts.mock.calls.some(([, init]) =>
+      JSON.parse(String(init?.body)).positions?.some((row: { id: number }) => row.id === 3),
+    )).toBe(true);
+    expect(quarantine.readCloudPushQuarantine().entries[0].status).toBe("resolved");
+    failAfterRetry = false;
+    vi.resetModules();
+    await expect(cycle(recoveryMinute + 2)).resolves.toMatchObject({
+      result: { ok: true, quarantined: 0 },
+      state: { status: "completed", signature: { positions: { n: 5 } } },
+    });
+    const retryPosts = posts.mock.calls.length;
+    await expect(cycle(recoveryMinute + 3)).resolves.toMatchObject({ push: false, reason: "nothing_new" });
+    expect(posts).toHaveBeenCalledTimes(retryPosts);
+  });
+
+  it("non ripete un retry senza riga e conserva un altro retry accodato durante il push", async () => {
+    const { cycle } = periodicFixture();
+    const quarantine = await import("../../../cli/src/lib/cloud-push-quarantine.js");
+    const isolate = (id: number) => quarantine.quarantineRow({
+      table: "positions", row: { id }, reason: "http_500:positions_upsert_failed",
+    });
+    const missing = isolate(99);
+    const present = isolate(3);
+    let queueDuringPush = false;
+    const posts = vi.fn(async (_url: unknown, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body));
+      const table = Object.keys(body)[0];
+      if (queueDuringPush && table === "pending_user_messages") {
+        queueDuringPush = false;
+        quarantine.requestQuarantineRetry(present);
+      }
+      return jsonResponse(acknowledged(table, body[table]));
+    });
+    vi.stubGlobal("fetch", posts);
+    await cycle(0); // Pubblica il conteggio iniziale.
+    await expect(cycle(1)).resolves.toMatchObject({
+      result: { ok: true, quarantined: 2 },
+    });
+
+    quarantine.requestQuarantineRetry(missing);
+    queueDuringPush = true;
+    await expect(cycle(2)).resolves.toMatchObject({
+      result: { ok: true, quarantined: 2 },
+    });
+    await expect(cycle(3)).resolves.toMatchObject({
+      result: { ok: true, quarantined: 1 },
+    });
+    expect(quarantine.readCloudPushQuarantine().entries).toEqual([
+      expect.objectContaining({ identity: missing, status: "retry" }),
+      expect.objectContaining({ identity: present, status: "resolved" }),
+    ]);
+    const requests = posts.mock.calls.length;
+    vi.resetModules();
+    await expect(cycle(4)).resolves.toMatchObject({ push: false, reason: "nothing_new" });
+    await expect(cycle(5)).resolves.toMatchObject({ push: false, reason: "nothing_new" });
+    expect(posts).toHaveBeenCalledTimes(requests);
+  });
+
+  it("rinvia il profilo già confermato se un push full lo ha messo in quarantena", async () => {
+    const { home, dbPath, cycle } = periodicFixture();
+    const db = new DatabaseSync(dbPath);
+    db.exec("DROP TABLE positions; DROP TABLE pending_user_messages");
+    db.close();
+    mkdirSync(join(home, "profile"));
+    writeFileSync(join(home, "profile", "candidate_profile.yml"), "name: Synthetic candidate\n");
+    const profiles = vi.fn((profile) => {
+      if (profile.force) {
+        return jsonResponse({ error: "profile_rejected", rejection_scope: "row" }, 422);
+      }
+      return jsonResponse(acknowledged("profile", [profile]));
+    });
+    vi.stubGlobal("fetch", vi.fn(async (_url: unknown, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body));
+      const table = Object.keys(body)[0];
+      return table === "profile" ? profiles(body.profile) : jsonResponse(acknowledged(table, body[table]));
+    }));
+    const first = await cycle(0);
+    expect(first).toMatchObject({ result: { ok: true, quarantined: 0 } });
+    const hash = cursor(home)?.profile_hash;
+    expect(hash).toEqual(expect.any(String));
+
+    const { handlePush } = await import("../../../cli/src/commands/cloud.js");
+    const quarantine = await import("../../../cli/src/lib/cloud-push-quarantine.js");
+    await expect(handlePush({ db: dbPath, full: true })).resolves.toMatchObject({
+      ok: true,
+      quarantined: 1,
+    });
+    expect(cursor(home)?.profile_hash).toBe(hash);
+    const [entry] = quarantine.readCloudPushQuarantine().entries;
+    expect(entry).toMatchObject({ table: "profile", status: "active" });
+    quarantine.requestQuarantineRetry(entry.identity);
+    vi.resetModules();
+    await cycle(1); // Registra il conteggio cambiato dal push manuale.
+    await expect(cycle(2)).resolves.toMatchObject({
+      result: { ok: true, quarantined: 0 },
+      state: { signature: first.state?.signature },
+    });
+    expect(profiles).toHaveBeenCalledTimes(3);
+    expect(quarantine.readCloudPushQuarantine().entries[0].status).toBe("resolved");
+  });
 });
 
 describe("O-97 — checkpoint fino all'ultimo chunk confermato", () => {

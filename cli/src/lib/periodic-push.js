@@ -80,7 +80,14 @@ function retryableStatus(status) {
 }
 
 /** Decisione pura: la firma si legge soltanto quando la cadenza è scaduta. */
-export function decidePeriodicPush({ now, state = {}, limits, signature }) {
+export function decidePeriodicPush({
+  now,
+  state = {},
+  limits,
+  signature,
+  quarantineRetries = {},
+  quarantineCorrupt = false,
+}) {
   const no = (reason, extra = {}) => ({
     push: false,
     reason,
@@ -102,7 +109,17 @@ export function decidePeriodicPush({ now, state = {}, limits, signature }) {
   if (signature === null) return no("signature_unavailable", { checked: true });
   if (signatureIsEmpty(signature))
     return no("nothing_local", { checked: true });
-  if (!signaturesDiffer(signature, state.signature ?? null)) {
+  if (quarantineCorrupt || Object.entries(quarantineRetries).some(
+    ([identity, version]) => state.quarantine_retries?.[identity] !== version,
+  )) {
+    return { push: true, reason: "quarantine_retry", needsSignature: false };
+  }
+  // Un retry può partire con la stessa firma SQLite del giro già consegnato.
+  // Se il writer si interrompe dopo averne confermato una parte, il lavoro
+  // rimasto deve restare eleggibile anche quando la richiesta sparisce.
+  const unconfirmedAttempt = state.last_attempt_at &&
+    state.last_attempt_at !== state.last_success_at;
+  if (!unconfirmedAttempt && !signaturesDiffer(signature, state.signature ?? null)) {
     return no("nothing_new", { checked: true });
   }
   return { push: true, reason: "local_changes", needsSignature: false };
@@ -133,39 +150,28 @@ export function nextPeriodicCheckState({ state = {}, now, signature, reason }) {
 }
 
 export function periodicPushResultStatus(result) {
-  const quarantined = Number(result?.quarantined ?? result?.skipped ?? 0);
-  const invalidIdentity = Number(result?.invalidIdentity ?? 0);
-  if (result?.ok === true && quarantined === 0 && invalidIdentity === 0)
-    return "completed";
   if (result?.timedOut === true) return "timeout";
   if (result?.authFailed === true) return "auth_failed";
-  if (quarantined > 0 || (result?.ok === true && invalidIdentity > 0))
-    return "partial";
-  return "failed";
+  if (result?.ok !== true) return "failed";
+  const quarantined = Number(result.quarantined ?? result.skipped ?? 0);
+  const invalidIdentity = Number(result.invalidIdentity ?? 0);
+  return quarantined > 0 || invalidIdentity > 0 ? "partial" : "completed";
 }
 
-/** Il giro periodico avanza la firma soltanto dopo un full-push integro. */
+/** Il writer conferma tutte le righe eleggibili prima di restituire ok. */
 export function nextPeriodicPushState({
   state = {},
   now,
   signature,
   result,
   source,
+  quarantineRetries = {},
 }) {
   const at = new Date(now).toISOString();
   const status = periodicPushResultStatus(result);
-  const completed = status === "completed";
   const quarantineCount = Number(result?.quarantined ?? result?.skipped ?? 0);
   const invalidIdentityCount = Number(result?.invalidIdentity ?? 0);
-  // Righe senza identità escluse da un push per il resto riuscito: riprovare
-  // fra un minuto rileggerebbe le stesse righe e le escluderebbe di nuovo. Le
-  // ripara solo una modifica locale, che cambia la firma e fa ripartire il
-  // push da sola. Quindi la firma avanza: `partial` la ricontrolla al ritmo
-  // del retry, ma senza novita' locali non parte nessun push. Lo stato resta
-  // `partial` e il conteggio resta visibile.
-  const deliveredAllItCould =
-    completed ||
-    (result?.ok === true && quarantineCount === 0 && invalidIdentityCount > 0);
+  const deliveredEligibleRows = status === "completed" || status === "partial";
   const next = {
     ...state,
     status,
@@ -173,14 +179,15 @@ export function nextPeriodicPushState({
     last_check_at: at,
     last_attempt_at: at,
     last_reason: status,
-    consecutive_failures: deliveredAllItCould
+    consecutive_failures: deliveredEligibleRows
       ? 0
       : (Number(state.consecutive_failures) || 0) + 1,
     quarantined_count: quarantineCount,
     invalid_identity_count: invalidIdentityCount,
   };
-  if (deliveredAllItCould) {
+  if (deliveredEligibleRows) {
     next.signature = signature;
+    next.quarantine_retries = quarantineRetries;
     next.last_success_at = at;
   }
   return next;
@@ -276,12 +283,16 @@ export async function runPeriodicPushCycle({
   push,
   save = savePeriodicPushState,
   signal,
+  quarantineRetries = {},
+  quarantineCorrupt = false,
 }) {
   let signature;
   let decision = decidePeriodicPush({ now, state, limits });
   if (decision.needsSignature) {
     signature = await readSignature();
-    decision = decidePeriodicPush({ now, state, limits, signature });
+    decision = decidePeriodicPush({
+      now, state, limits, signature, quarantineRetries, quarantineCorrupt,
+    });
   }
 
   if (!decision.push) {
@@ -314,6 +325,7 @@ export async function runPeriodicPushCycle({
     signature,
     result,
     source: "periodic",
+    quarantineRetries,
   });
   const persisted = await save(nextState);
   return { ...decision, result, state: nextState, persisted };

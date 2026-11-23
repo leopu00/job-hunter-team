@@ -1565,10 +1565,11 @@ async function performPush(options) {
     pendingMessages = partition('pending_user_messages', pendingMessages);
     // Il profilo non ha updated_at SQLite: il suo cursore è l'hash del
     // contenuto raw confermato dal server. Un'apertura del sito che chiede un
-    // push non deve quindi rimandare lo stesso snapshot. `--full` resta la via
-    // esplicita per ricostruire il cloud dopo un intervento esterno.
+    // push non deve quindi rimandare lo stesso snapshot. Un retry esplicito
+    // riapre anche il cursore del profilo, come quelli delle tabelle SQLite.
     const profileChanged = profilePayload &&
-      (options.full || cursor.profile_hash !== profilePayload.source_hash);
+      (options.full || retryingTables.has('profile') ||
+        cursor.profile_hash !== profilePayload.source_hash);
     profilePartition = profileChanged
       ? partitionQuarantinedRows('profile', [{
         ...profilePayload,
@@ -1668,18 +1669,23 @@ async function performPush(options) {
   const ROW_CHUNK = Math.max(1, parseInt(process.env.JHT_PUSH_ROW_CHUNK || '250', 10) || 250);
 
   async function postBatch(payload) {
+    let response;
     try {
-      const r = await fetch(pushUrl, {
+      response = await fetch(pushUrl, {
         method: 'POST',
         headers: authHeaders,
         signal: options.signal,
         body: JSON.stringify(payload),
       });
-      const b = await r.json().catch(() => ({}));
-      return { status: r.status, ok: r.ok, body: b };
+      const body = await response.json();
+      return { status: response.status, ok: response.ok, body };
     } catch (err) {
       const name = String(err?.name || '').toLowerCase();
-      const timedOut = name.includes('timeout') || err?.name === 'AbortError';
+      const timedOut = options.signal?.aborted === true ||
+        name.includes('timeout') || err?.name === 'AbortError';
+      if (response && (!timedOut || response.status === 401 || response.status === 403)) {
+        return { status: response.status, ok: response.ok, body: {} };
+      }
       return { status: 0, ok: false, body: {}, network: true, timedOut };
     }
   }
@@ -4066,9 +4072,17 @@ export async function maybePeriodicPush(options = {}) {
   });
   const save = options.save || ((next) => savePeriodicPushState(next, options.statePath));
   const pushFn = options.pushFn || handlePush;
-  const readQuarantineCount = options.readQuarantineCount || (async () =>
-    activeQuarantineEntries(readCloudPushQuarantine()).length);
-  const quarantineCount = Number(await readQuarantineCount()) || 0;
+  const quarantine = readCloudPushQuarantine();
+  const entries = activeQuarantineEntries(quarantine);
+  const quarantineCount = options.readQuarantineCount
+    ? Number(await options.readQuarantineCount()) || 0
+    : entries.length;
+  // Snapshot prima del writer: un retry accodato durante il push resta da
+  // tentare. Una richiesta già vista per una riga assente non riapre il giro
+  // finché non cambia la firma locale o la richiesta stessa.
+  const quarantineRetries = Object.fromEntries(entries
+    .filter((entry) => entry.status === 'retry')
+    .map((entry) => [entry.identity, `${entry.attempts}:${entry.retry_requested_at ?? ''}`]));
   const previousQuarantineCount = Number(state.quarantined_count) || 0;
   let outcome;
   if (quarantineCount !== previousQuarantineCount) {
@@ -4087,6 +4101,7 @@ export async function maybePeriodicPush(options = {}) {
   } else {
     outcome = await runPeriodicPushCycle({
       now, limits, state, readSignature, save, signal: options.signal,
+      quarantineRetries, quarantineCorrupt: quarantine.corrupt,
       push: async ({ signal }) => {
         const prev = process.exitCode;
         process.exitCode = 0;
