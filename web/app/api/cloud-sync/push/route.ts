@@ -1773,6 +1773,12 @@ export async function POST(req: NextRequest) {
       if ((data?.length ?? 0) > 0) {
         tombstonesApplied++;
         rowReceipts.tombstones.push(wireReceipt("tombstones", t));
+      } else {
+        // Nessuna riga da marcare: lo stato voluto dal tombstone (riga
+        // cancellata) c'e' gia'. Senza ricevuta il client non puo' distinguere
+        // questo caso da una scrittura persa e rifiuta l'intero lotto
+        // (acknowledgement_mismatch), compresi i tombstone sani, a ogni giro.
+        rowReceipts.tombstones.push(wireReceipt("tombstones", t));
       }
     }
     for (const t of byTable.scores) {
@@ -1789,6 +1795,12 @@ export async function POST(req: NextRequest) {
       if ((data?.length ?? 0) > 0) {
         tombstonesApplied++;
         rowReceipts.tombstones.push(wireReceipt("tombstones", t));
+      } else {
+        // Nessuna riga da marcare: lo stato voluto dal tombstone (riga
+        // cancellata) c'e' gia'. Senza ricevuta il client non puo' distinguere
+        // questo caso da una scrittura persa e rifiuta l'intero lotto
+        // (acknowledgement_mismatch), compresi i tombstone sani, a ogni giro.
+        rowReceipts.tombstones.push(wireReceipt("tombstones", t));
       }
     }
     for (const t of byTable.applications) {
@@ -1804,6 +1816,12 @@ export async function POST(req: NextRequest) {
       }
       if ((data?.length ?? 0) > 0) {
         tombstonesApplied++;
+        rowReceipts.tombstones.push(wireReceipt("tombstones", t));
+      } else {
+        // Nessuna riga da marcare: lo stato voluto dal tombstone (riga
+        // cancellata) c'e' gia'. Senza ricevuta il client non puo' distinguere
+        // questo caso da una scrittura persa e rifiuta l'intero lotto
+        // (acknowledgement_mismatch), compresi i tombstone sani, a ogni giro.
         rowReceipts.tombstones.push(wireReceipt("tombstones", t));
       }
     }
