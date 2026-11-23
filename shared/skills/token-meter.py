@@ -318,6 +318,21 @@ def read_kimi_tokens(window_start_ts):
     return totals, agg["by_session"]
 
 
+def _touched_since(path, window_start_ts):
+    """Vero se il file e' stato scritto dopo l'inizio della finestra.
+
+    I jsonl di Claude e i rollout di Codex si scrivono solo in coda: ogni
+    evento ha un timestamp <= mtime del file. Un file con mtime prima della
+    finestra non puo' contenere eventi della finestra, e non va aperto: su una
+    macchina con migliaia di sessioni vecchie leggerle tutte a ogni tick
+    costava decine di secondi di CPU per zero eventi.
+    """
+    try:
+        return path.stat().st_mtime >= window_start_ts
+    except OSError:
+        return False
+
+
 def read_claude_tokens(window_start_ts):
     """Somma usage da tutti i project jsonl di Claude Code nella finestra."""
     out = {
@@ -331,6 +346,8 @@ def read_claude_tokens(window_start_ts):
 
     window_dt = datetime.fromtimestamp(window_start_ts, tz=timezone.utc)
     for proj_jsonl in CLAUDE_PROJECTS.rglob("*.jsonl"):
+        if not _touched_since(proj_jsonl, window_start_ts):
+            continue
         sess = proj_jsonl.stem
         try:
             with proj_jsonl.open() as f:
@@ -378,6 +395,8 @@ def read_codex_tokens(window_start_ts):
 
     window_dt = datetime.fromtimestamp(window_start_ts, tz=timezone.utc)
     for rollout in CODEX_SESSIONS.rglob("rollout-*.jsonl"):
+        if not _touched_since(rollout, window_start_ts):
+            continue
         sess = rollout.stem
         try:
             with rollout.open() as f:
