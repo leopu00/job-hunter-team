@@ -7,6 +7,10 @@
 # a cosa sta per raggiungere il remote, quindi intercetta anche i commit nati
 # con --no-verify, un cherry-pick o un merge da un ramo non protetto.
 #
+# Stesso discorso per i dati privati (IP pubblici, email, token): le regole del
+# pre-commit, in .githooks/private-data.sh, su ogni commit in uscita. Se
+# gitleaks e' installato, gira anche lui sullo stesso intervallo.
+#
 # stdin: <local ref> <local sha> <remote ref> <remote sha>, una riga per ref.
 
 set -euo pipefail
@@ -17,6 +21,16 @@ NC='\033[0m'
 
 ZERO="0000000000000000000000000000000000000000"
 OFFENDING=""
+HOOK_DIR="$(dirname "${BASH_SOURCE[0]}")"
+PRIVATE_DATA="$HOOK_DIR/private-data.sh"
+if [ ! -f "$PRIVATE_DATA" ]; then
+    echo -e "${RED}PUSH BLOCCATO: manca $PRIVATE_DATA (controllo dei dati privati).${NC}"
+    exit 1
+fi
+# Gli SHA in uscita, per il controllo dei dati privati; le basi, per gitleaks.
+OUTGOING=$(mktemp "${TMPDIR:-/tmp}/jht-pre-push.XXXXXX")
+trap 'rm -f "$OUTGOING"' EXIT
+TIPS=""
 
 while read -r _local_ref local_sha _remote_ref remote_sha; do
     # Cancellazione di un ref: niente contenuto da ispezionare.
@@ -30,6 +44,7 @@ while read -r _local_ref local_sha _remote_ref remote_sha; do
     commits=$(git rev-list "$local_sha" --not --remotes || true)
 
     [ -z "$commits" ] && continue
+    TIPS="$TIPS $local_sha"
 
     while IFS= read -r commit; do
         [ -z "$commit" ] && continue
@@ -41,37 +56,51 @@ while read -r _local_ref local_sha _remote_ref remote_sha; do
             done <<< "$hits"
         fi
 
-        # Dati privati: stessi criteri del pre-commit, applicati a cio' che sta
-        # per raggiungere il remote. Serve perche' --no-verify scavalca il
-        # pre-commit, e un IP di VPS pubblicato non si cancella: si revoca.
-        added=$(git diff-tree --no-commit-id -p -r --diff-filter=ACM "$commit" 2>/dev/null | grep -E "^\+" || true)
-        ips=$(printf '%s' "$added" \
-              | grep -vE 'Chrome/[0-9]+(\.[0-9]+){3}|<path[[:space:]][^>]*d=' \
-              | grep -oE '\b([0-9]{1,3}\.){3}[0-9]{1,3}\b' \
-              | awk -F. '{ valid=1; for (i=1; i<=4; i++) if ($i !~ /^(0|[1-9][0-9]*)$/ || $i > 255) valid=0; if (valid) print }' \
-              | grep -vE '^(127\.|0\.|10\.|192\.168\.|169\.254\.|192\.0\.2\.|198\.51\.100\.|203\.0\.113\.|255\.|22[4-9]\.|23[0-9]\.|172\.(1[6-9]|2[0-9]|3[01])\.)' \
-              | sort -u | head -2 || true)
-        [ -n "$ips" ] && OFFENDING="$OFFENDING\n  ${commit:0:9}  IP pubblico: $(echo "$ips" | tr '\n' ' ')"
-
-        mails=$(printf '%s' "$added" \
-              | grep -oE '[a-zA-Z0-9][a-zA-Z0-9._%+-]*@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}' \
-              | grep -vE '^user-runtime-dir@[0-9]+\.service$' \
-              | grep -vE '@(jobhunterteam\.ai|example\.(com|org|net)|[a-z-]+\.invalid|users\.noreply\.github\.com|anthropic\.com)$' \
-              | grep -vE '^(nome|name|nombre|nom|user|utente|tuo|your|your_name|email)[._-]?[a-z]*@' \
-              | grep -vE '^((deinname|nev|oteunome|tunombre|tuonome|votrenom|yourname)\.jht@gmail\.com|nev@gmx\.com|(jobalerts-noreply|jobs-listings)@linkedin\.com)$' \
-              | grep -vE '@(types|supabase|vercel|next|radix-ui|testing-library|eslint|babel|playwright|tailwindcss)/' \
-              | sort -u | head -2 || true)
-        [ -n "$mails" ] && OFFENDING="$OFFENDING\n  ${commit:0:9}  email: $(echo "$mails" | tr '\n' ' ')"
+        printf '%s\n' "$commit" >> "$OUTGOING"
     done <<< "$commits"
 done
 
+BLOCKED=0
+
 if [ -n "$OFFENDING" ]; then
-    echo -e "${RED}PUSH BLOCCATO: file d'identita' o dati privati nei commit.${NC}"
+    echo -e "${RED}PUSH BLOCCATO: file d'identita' agente nei commit.${NC}"
     echo -e "$OFFENDING"
     echo ""
-    echo -e "${YELLOW}Il repo e' pubblico e la storia e' per sempre: IP di VPS, email e${NC}"
-    echo -e "${YELLOW}dati di beta tester non si pubblicano. I file d'identita' sono${NC}"
-    echo -e "${YELLOW}artefatti di runtime: il template nel repo e' la fonte di verita'.${NC}"
+    echo -e "${YELLOW}I file d'identita' sono artefatti di runtime: il template nel repo${NC}"
+    echo -e "${YELLOW}e' la fonte di verita'.${NC}"
+    BLOCKED=1
+fi
+
+# Dati privati: le stesse regole del pre-commit, su ogni commit in uscita.
+# Serve perche' --no-verify scavalca il pre-commit, e un IP di VPS pubblicato
+# non si cancella: si revoca.
+if [ -s "$OUTGOING" ]; then
+    sort -u "$OUTGOING" | bash "$PRIVATE_DATA" --commits || BLOCKED=1
+fi
+
+# gitleaks, se c'e': stesso intervallo (commit non ancora su alcun ref remoto),
+# configurazione del repo (.gitleaks.toml, .gitleaksignore). Fermano solo i
+# segreti trovati (uscita 3); un gitleaks vecchio o rotto avvisa e non blocca,
+# perche' e' un controllo in piu' e non deve fermare i push di tutti.
+if [ -n "$TIPS" ] && command -v gitleaks >/dev/null 2>&1; then
+    TOP=$(git rev-parse --show-toplevel)
+    for tip in $TIPS; do
+        rc=0
+        report=$(cd "$TOP" && gitleaks git --log-opts="$tip --not --remotes" \
+            --redact --no-banner --no-color --exit-code 3 --timeout 120 \
+            --log-level warn -v . 2>&1) || rc=$?
+        if [ "$rc" -eq 3 ]; then
+            echo -e "${RED}PUSH BLOCCATO: gitleaks ha trovato segreti (commit, file, regola).${NC}"
+            printf '%s\n' "$report" | grep -E '^(RuleID|File|Line|Commit|Finding):' | sed 's/^/  /'
+            echo ""
+            BLOCKED=1
+        elif [ "$rc" -ne 0 ]; then
+            echo -e "${YELLOW}Avviso: gitleaks non e' riuscito a controllare ${tip:0:9} (uscita $rc), saltato.${NC}"
+        fi
+    done
+fi
+
+if [ "$BLOCKED" -ne 0 ]; then
     echo -e "${YELLOW}Per toglierli dalla storia che stai pubblicando:${NC}"
     echo -e "${YELLOW}  git rm --cached <file> && git commit --amend    (ultimo commit)${NC}"
     echo -e "${YELLOW}  git rebase -i <base>                            (commit piu' vecchi)${NC}"
