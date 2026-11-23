@@ -9,6 +9,7 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 HOOK = ROOT / ".githooks" / "pre-commit"
 PUSH_HOOK = ROOT / ".githooks" / "pre-push"
+PRIVATE_DATA = ROOT / ".githooks" / "private-data.sh"
 
 
 def bash_executable() -> str:
@@ -82,5 +83,7 @@ def test_systemd_instance_unit_is_not_treated_as_private_email(tmp_path: Path) -
 
     assert result.returncode == 0, result.stdout + result.stderr
     expected_filter = "^user-runtime-dir@[0-9]+\\.service$"
-    assert expected_filter in HOOK.read_text(encoding="utf-8")
-    assert expected_filter in PUSH_HOOK.read_text(encoding="utf-8")
+    # Pre-commit e pre-push prendono le regole dallo stesso script.
+    assert expected_filter in PRIVATE_DATA.read_text(encoding="utf-8")
+    for hook in (HOOK, PUSH_HOOK):
+        assert "private-data.sh" in hook.read_text(encoding="utf-8")
