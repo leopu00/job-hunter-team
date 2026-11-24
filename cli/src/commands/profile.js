@@ -66,6 +66,17 @@ function planDeclared() {
   return r.status === 0 ? 'declared' : r.status === 1 ? 'missing' : 'unknown';
 }
 
+// After a replace: the workers that run close and start again on the new profile, in the background (roster_restore.py renew).
+function renewWorkers() {
+  const r = spawnSync('python3', ['-I', join(dirname(VALIDATOR), 'roster_restore.py'), 'renew', '--detach'],
+    { encoding: 'utf8', timeout: 20_000 });
+  let answer = null;
+  try { answer = JSON.parse(r.stdout); } catch { /* no answer */ }
+  if (!answer || !Array.isArray(answer.renewing)) return { status: 'failed', workers: [] };
+  if (answer.renewing.length === 0) return { status: 'none' };
+  return { status: answer.detached === true ? 'renewing' : 'failed', workers: answer.renewing };
+}
+
 function tellCaptain() {
   const session = resolveSession('capitano');
   if (!session) return { status: 'team_off' };
@@ -180,7 +191,7 @@ function importAction(file, opts) {
   try {
     result = importProfile({
       bytes, replace: opts.replace === true, profileDir: JHT_PROFILE_DIR,
-      validate: validateStrict, reviewPending, notify: tellCaptain, planDeclared,
+      validate: validateStrict, reviewPending, notify: tellCaptain, planDeclared, renew: renewWorkers,
     });
   } catch (err) {
     console.error(`Error: the profile could not be written (${err?.code || 'error'})`);

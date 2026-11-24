@@ -33,6 +33,9 @@ never in the plan (the roster does not count it among the expected ones).
 
   roster_restore.py plan                 what it would start, nothing started
   roster_restore.py start [--detach]     start it (`--detach`: in a session of its own, return at once)
+  roster_restore.py renew [--detach]     the profile was replaced with the team running: close every worker that works on it
+                                         (Scout, Analista, Scorer, Scrittore, Critico) and start the Scouts, Analisti and Scorers
+                                         again, same numbers, on the new profile; the Capitano and the Assistente go on
 
 Prints one JSON object; exit 0 always except a bad command line.
 """
@@ -375,11 +378,114 @@ def start(detach_ok: bool = True) -> dict:
         return {"started": done, "note": "start-agent.sh sends each brief when the REPL is up"}
 
 
+# The workers whose context holds the profile: what they searched, checked, scored or wrote was for the person of that profile.
+RENEW_SESSION = r"(SCOUT|ANALISTA|SCORER|SCRITTORE)-[1-9][0-9]{0,3}|CRITICO|CRITICO-S[1-9][0-9]{0,3}"
+RENEW_WAIT_S = 90.0   # a start of the burst or of the restore that holds the lock ends within its spawns
+
+
+def renew_targets(alive) -> list:
+    """The sessions alive that `renew` closes, sorted. The Capitano and the Assistente are not among them: the import is usually
+    run by the Assistente in the chat with the person, and the Capitano is told of the new profile by the import itself."""
+    import re
+    return sorted(s for s in (str(x).strip().upper() for x in alive) if re.fullmatch(RENEW_SESSION, s))
+
+
+def _renew_brief(role: str, number: int) -> str:
+    burst = _load("burst_roster")
+    base = burst.brief(role, number, None) if burst is not None else f"[@capitano -> @{role}-{number}] [MSG] Start the main loop."
+    return base.replace("Start the main loop.", "The candidate profile was replaced: work only on the new one, never on what you "
+                        "remember of the old one. Resume the main loop.", 1)
+
+
+def _kill(session: str) -> bool:
+    try:
+        return subprocess.run(["tmux", "kill-session", "-t", "=" + session], capture_output=True, text=True, timeout=15,
+                              check=False, stdin=subprocess.DEVNULL).returncode == 0
+    except (OSError, subprocess.SubprocessError):
+        return False
+
+
+def renew(sessions=None) -> dict:
+    """Close the workers of the old profile and start again the ones the system knows how to brief (Scout, Analista, Scorer), under
+    the brakes, each read again before its start. The Scrittori and the Critici are started on demand (the Capitano, the Scrittore,
+    the watchdog's roster: their entries stay `active`), on the new profile. A stop of the person in the middle wins, as for start()."""
+    roster = _load("team_roster")
+    if sessions is None:
+        try:
+            sessions = renew_targets(roster.live_sessions()) if roster is not None else []
+        except Exception:  # noqa: BLE001
+            sessions = []
+    sessions = renew_targets(sessions)
+    if not sessions:
+        return {"closed": [], "started": [], "note": "no worker is running"}
+    burst = _load("burst_roster")
+    if burst is None:
+        return {"closed": [s for s in sessions if _kill(s)], "started": [], "note": "the burst roster module cannot be read"}
+    deadline = time.time() + RENEW_WAIT_S
+    while True:
+        with burst._exclusive() as free:  # noqa: SLF001 — never two runs starting the same worker
+            if free or time.time() >= deadline:
+                closed = [s for s in sessions if _kill(s)]
+                done = []
+                for session in sessions:
+                    role, _, number = session.partition("-")
+                    role = role.lower()
+                    if role not in ROLES or not number.isdigit():
+                        continue
+                    if not free:
+                        done.append({"role": role, "number": int(number), "ok": False, "why": "another run holds the lock"})
+                        continue
+                    held = _brake_now()
+                    if held:
+                        done.append({"role": role, "number": int(number), "ok": False, "why": f"brake: {held}"})
+                        break
+                    env = dict(os.environ, JHT_WORKER_BRIEF=_renew_brief(role, int(number)))
+                    try:
+                        result = subprocess.run(["bash", burst._launcher(), role, number], capture_output=True, text=True,  # noqa: SLF001
+                                                timeout=burst.SPAWN_TIMEOUT_S, check=False, env=env, stdin=subprocess.DEVNULL)
+                        row = {"role": role, "number": int(number), "ok": result.returncode == 0, "rc": result.returncode}
+                        if result.returncode != 0:
+                            row["tail"] = (result.stderr or result.stdout)[-200:]
+                    except (OSError, subprocess.SubprocessError) as exc:
+                        row = {"role": role, "number": int(number), "ok": False, "why": type(exc).__name__}
+                    if row["ok"] and _stopped_by_the_person():
+                        row["closed_by_stop"] = _close_started(session)
+                    done.append(row)
+                    burst._log(dict(row, renew=True))  # noqa: SLF001
+                return {"closed": closed, "started": done, "note": "start-agent.sh sends each brief when the REPL is up"}
+        time.sleep(2)
+
+
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    parser.add_argument("command", choices=["start", "plan"])
+    parser.add_argument("command", choices=["start", "plan", "renew"])
     parser.add_argument("--detach", action="store_true")
+    parser.add_argument("--sessions", nargs="*", default=None, help=argparse.SUPPRESS)
     args = parser.parse_args(argv)
+    if args.command == "renew":
+        if not args.detach:
+            print(json.dumps(renew(args.sessions), indent=1))
+            return 0
+        # the import waits for nothing: the sessions to close are read here, the closing and the starts run on their own
+        roster = _load("team_roster")
+        try:
+            targets = renew_targets(roster.live_sessions()) if roster is not None else None
+        except Exception:  # noqa: BLE001
+            targets = None
+        if targets is None:
+            print(json.dumps({"renewing": None, "detached": False, "why": "the sessions cannot be read"}))
+            return 0
+        if not targets:
+            print(json.dumps({"renewing": [], "detached": False}))
+            return 0
+        try:
+            subprocess.Popen([sys.executable, str(Path(__file__).resolve()), "renew", "--sessions", *targets],
+                             stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                             start_new_session=True, close_fds=True)
+            print(json.dumps({"renewing": targets, "detached": True}))
+        except OSError as exc:
+            print(json.dumps({"renewing": targets, "detached": False, "why": type(exc).__name__}))
+        return 0
     if args.command == "plan":
         print(json.dumps(plan(), indent=1))
         return 0

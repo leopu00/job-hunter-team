@@ -106,3 +106,29 @@ def test_a_stop_during_a_later_start_closes_only_the_one_starting_and_the_rest_n
     assert tr.load()["agents"][order[1].upper()]["stop_by"] == "user"
     assert order[2] not in _lines(team["started"])
     assert not rr._tries(time.time()).get(order[2].upper()), "a worker held by the stop does not spend a try"
+
+
+# ── renew: `jht profile import --replace` with the team running ─────────────────────────────────────────────────────────────
+
+def test_renew_closes_every_worker_of_the_old_profile_and_starts_the_scouts_analisti_and_scorers_again(team, monkeypatch):
+    _launcher(team, monkeypatch, None)
+    alive = sorted(FIXED | {"SCOUT-6", "ANALISTA-1", "SCORER-2", "SCRITTORE-1", "CRITICO-S1", "CRITICO"})
+    assert rr.renew_targets(alive) == ["ANALISTA-1", "CRITICO", "CRITICO-S1", "SCORER-2", "SCOUT-6", "SCRITTORE-1"]
+    out = rr.renew(alive)
+    assert sorted(_tmux(team)) == sorted(f"kill-session -t ={s}" for s in rr.renew_targets(alive)), "the Capitano and the Assistente go on"
+    assert sorted(_lines(team["started"])) == ["analista-1", "scorer-2", "scout-6"], out
+    assert all(row["ok"] for row in out["started"])
+
+
+def test_renew_with_no_worker_running_does_nothing(team, monkeypatch):
+    _launcher(team, monkeypatch, None)
+    assert rr.renew(sorted(FIXED)) == {"closed": [], "started": [], "note": "no worker is running"}
+    assert _tmux(team) == [] and _lines(team["started"]) == []
+
+
+def test_a_stop_during_the_renew_wins_too(team, monkeypatch):
+    _launcher(team, monkeypatch, "analista-1")
+    out = rr.renew(["SCOUT-6", "ANALISTA-1", "SCORER-2", "CAPITANO"])
+    assert _lines(team["started"]) == ["analista-1"], out
+    assert _tmux(team)[-1] == "kill-session -t =ANALISTA-1", "the one started across the stop is closed again"
+    assert out["started"][-1]["why"] == "brake: team-halted"

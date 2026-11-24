@@ -17,6 +17,7 @@ import {
 import { randomBytes } from 'node:crypto';
 import { join } from 'node:path';
 import { readRegularFile } from './secure-config-io.js';
+import { say } from './texts.js';
 
 // The most the app's own import reads (desktop/src-tauri/src/profile_import.rs).
 export const MAX_PROFILE_BYTES = 64 * 1024;
@@ -113,10 +114,14 @@ function utcStamp(now) {
  * @param {()=>{status:'sent'|'team_off'|'failed',detail?:string}} o.notify  tells the Capitano
  * @param {()=>'declared'|'missing'|'unknown'} [o.planDeclared]  the subscription plan, which the Capitano's
  *        first run cannot open without (first_run.py begin-burst refuses to guess a roster)
+ * @param {()=>{status:'renewing'|'none'|'failed',workers?:string[]}} [o.renew]  after a REPLACE: the workers that are running
+ *        have the replaced profile in their context (what they searched, checked and scored was for it), so they are closed
+ *        and started again on the new one (roster_restore.py renew); the Capitano and the Assistente go on
  * @param {()=>Date} [o.now]
  */
 export function importProfile({
-  bytes, replace = false, profileDir, validate, reviewPending, notify, planDeclared = () => 'unknown', now = () => new Date(),
+  bytes, replace = false, profileDir, validate, reviewPending, notify, planDeclared = () => 'unknown',
+  renew = () => ({ status: 'none' }), now = () => new Date(),
 }) {
   if (!Buffer.isBuffer(bytes) || bytes.length === 0) return refuse('profile_empty');
   if (bytes.length > MAX_PROFILE_BYTES) return refuse('profile_too_large');
@@ -167,10 +172,13 @@ export function importProfile({
   const flag = lstatOrNull(flagPath);
   if (!flag || !flag.isFile()) return refuse('ready_flag_missing', { profileWritten: true });
 
+  // Before the Capitano is told: it then hands work to workers that start on the new profile, not to the old ones.
+  const renewed = replacedPrevious ? renew() : { status: 'none' };
   const told = notify();
   return {
     ok: true, profileWritten: true, readyFlag: true, captain: told.status, plan: planDeclared(),
     ...(replacedPrevious ? { previousKept: PREVIOUS_FILE } : {}),
+    ...(renewed.status !== 'none' ? { workers: { status: renewed.status, sessions: renewed.workers ?? [] } } : {}),
     ...(told.detail ? { detail: told.detail } : {}),
   };
 }
@@ -194,6 +202,9 @@ export function importOutcome(result) {
   const kept = result.previousKept
     ? [`The profile it replaced was kept, private, as ${result.previousKept} next to it.`]
     : [];
+  const sessions = (result.workers?.sessions ?? []).join(', ') || '?';
+  const renewed = result.workers?.status === 'renewing' ? [say('profile.workers_renewed', { workers: sessions })] : [];
+  const notRenewed = result.workers?.status === 'failed' ? [say('profile.workers_not_renewed', { workers: sessions })] : [];
   const plan = result.plan === 'missing'
     ? [
         'No subscription plan is declared, and the Capitano does not open the first run without one.',
@@ -201,7 +212,8 @@ export function importOutcome(result) {
       ]
     : [];
   if (result.captain === 'failed') {
-    out.push('Profile saved.', ...kept);
+    out.push('Profile saved.', ...kept, ...renewed);
+    warn.push(...notRenewed);
     // Not «import again»: --replace would move the profile just written to .prev and drop the one kept before.
     const retry = `jht team send capitano "${PROFILE_READY_MESSAGE}"`;
     warn.push(
@@ -217,7 +229,8 @@ export function importOutcome(result) {
       warn,
     };
   }
-  out.push('Profile imported and ready.', ...kept);
+  out.push('Profile imported and ready.', ...kept, ...renewed);
+  warn.push(...notRenewed);
   if (result.captain === 'sent') out.push('The Capitano has been told: the team starts.');
   else if (result.captain === 'team_off') {
     out.push('The team is not running: the Capitano will start it from this profile at its next wake. Start the team with: jht team start');

@@ -223,4 +223,6 @@ export default {
   "help.one_command": "Aide d’une commande : jht <commande> --help",
   "help.essential": "Utilisation : jht [commande]\n\nJob Hunter Team — CLI\n\nCommandes essentielles :\n  setup        Configuration initiale (pas à pas)\n  team         Démarre et arrête les agents (jht team start)\n  status       État du système (conteneur, agents, base de données)\n  agents       Liste les agents et ce qu’ils font\n  doctor       Vérifie la configuration et les dépendances\n\nLa liste complète des commandes :\n  jht help\n",
   "help.long_description": "Affiche toutes les commandes (liste longue)",
+  "profile.workers_renewed": "L'équipe travaillait sur le profil que tu as remplacé : {workers} redémarrent avec le nouveau. Le Capitano et l'Assistente continuent.",
+  "profile.workers_not_renewed": "Les workers en marche ({workers}) n'ont pas pu être redémarrés : ils ont encore l'ancien profil en tête. Redémarre l'équipe avec : jht team stop --all, puis jht team start",
 };
