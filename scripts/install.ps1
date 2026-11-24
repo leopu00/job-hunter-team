@@ -43,6 +43,9 @@
 # ║    -DryRun           Show the actions without running them               ║
 # ║    -Branch <name>    Source branch (default: production)                 ║
 # ║    -PairingToken     Opaque token for VPS pairing (skips the wizard)     ║
+# ║    -CloudSync        on|off. With -PairingToken: off (default) pairs     ║
+# ║                      the device with the sync paused; on starts it       ║
+# ║                      (`jht cloud resume` turns it on later)              ║
 # ║    -SkipOnboard      Noninteractive install; do not launch the wizard    ║
 # ║    -WindowsSupportNoticeOnly  Read the Windows support warning only      ║
 # ║    -SourceSha        Test channel source commit (with next two options)  ║
@@ -60,6 +63,8 @@ param(
   [switch]$DryRun,
   [string]$Branch = $(if ($env:JHT_BRANCH) { $env:JHT_BRANCH } else { 'production' }),
   [string]$PairingToken = '',
+  [ValidateSet('on', 'off')]
+  [string]$CloudSync = 'off',
   [switch]$SkipOnboard,
   [switch]$WindowsSupportNoticeOnly,
   [string]$SourceSha = '',
@@ -1798,6 +1803,7 @@ JHT_USER_TZ=$tz
     $tokenFile = Join-Path $JhtHome '.pairing-token'
     if ($DryRun) {
       Write-Dry "Set-Content $tokenFile (pairing token, ACL owner-only)"
+      if ($CloudSync -ne 'on') { Write-Dry "Set-Content (Join-Path $JhtHome '.pairing-paused') (marker: the pairing starts with the sync paused)" }
     } else {
       # Restrict the ACL to the current user only (drops the inherited Users/Everyone entries), on the temporary and before it
       # takes the place of the file. Best-effort: a failure does not block the install.
@@ -1819,6 +1825,14 @@ JHT_USER_TZ=$tz
       Write-HostFile -Path $tokenFile -Content $PairingToken -Encoding ASCII -NoNewline -Prepare $restrictAcl
 
       Write-Ok "$(Ts 'installer.windows.pairing_token_saved' 'Pairing token saved:') $tokenFile"
+      # The sync with the site is a choice: unless it was asked for (-CloudSync on), the marker tells `jht cloud pair`
+      # to start with the sync paused (the device is paired all the same; `jht cloud resume` turns it on).
+      $pausedMarker = Join-Path $JhtHome '.pairing-paused'
+      if ($CloudSync -eq 'on') {
+        try { [IO.File]::Delete($pausedMarker) } catch { }
+      } else {
+        Write-HostFile -Path $pausedMarker -Content '' -Encoding ASCII -NoNewline -Prepare $restrictAcl
+      }
     }
   }
 }
