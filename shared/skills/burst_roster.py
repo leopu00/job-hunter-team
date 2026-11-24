@@ -15,6 +15,10 @@ waits for the one before it to be briefed.
           i.e. the burst has just opened or every session is gone. A Capitano that stopped a Scout on purpose is
           never answered with a new one.
 `--detach` run in a session of its own and return at once (the start of the Capitano must not wait for ten spawns).
+A stop that comes in the middle wins: before EACH worker the brakes that hold the whole team (the person's stop, the standby,
+the daily and weekly halts) are read again, and a worker whose start ends after `.team-halted.flag` appeared (`jht team stop`
+writes it before it lists the sessions to close, so it may miss that one) is closed at once and marked stopped. The burst
+keeps no other brake of its own: the hours and the capacity are not read here, as before.
 A second call within RECENT_S seconds of the first does nothing (the numbers of the workers are rolled one by one: two
 runs at once would start the same roster twice); `--force` is for a person.
 
@@ -176,11 +180,77 @@ def start(auto: bool, force: bool) -> dict:
         return {"started": _spawn(decision["start"], state), "note": "start-agent.sh sends each brief when the REPL is up"}
 
 
+# the brakes of queue_demand.brake() that hold the whole team: a burst that meets one of them starts nobody else
+STOP_BRAKES = ("team-halted", "team-standby", "daily-halt", "weekly-halt")
+
+
+_SKILLS_LOADED: dict = {}
+
+
+def _skill(name: str):
+    if name not in _SKILLS_LOADED:
+        _SKILLS_LOADED[name] = _load_skill(name)
+    return _SKILLS_LOADED[name]
+
+
+def _load_skill(name: str):
+    try:
+        import importlib.util
+        if str(SKILLS) not in sys.path:
+            sys.path.insert(0, str(SKILLS))
+        spec = importlib.util.spec_from_file_location(name, SKILLS / f"{name}.py")
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        return mod
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def _stop_brake() -> str | None:
+    """The brake that holds the whole team right now, or None. A queue_demand that does not load, or raises, leaves the flag of
+    the stop (the burst did not read the other brakes before: an unreadable one does not hold the first run)."""
+    queue = _skill("queue_demand")
+    if queue is None:
+        return "team-halted" if _stopped_by_the_person() else None
+    try:
+        reason = queue.brake(time.time(), 0)
+    except Exception:  # noqa: BLE001 — the burst never read these brakes: a module that raises leaves the flag of the stop
+        return "team-halted" if _stopped_by_the_person() else None
+    return reason if reason in STOP_BRAKES else None
+
+
+def _stopped_by_the_person() -> bool:
+    try:
+        return (_home() / ".team-halted.flag").exists()
+    except OSError:
+        return True
+
+
+def _close_started(session: str) -> bool:
+    """A worker started across the stop: closed, and the roster says `stopped` by the user, as `jht team stop` would have written."""
+    try:
+        closed = subprocess.run(["tmux", "kill-session", "-t", "=" + session], capture_output=True, text=True, timeout=15,
+                                check=False, stdin=subprocess.DEVNULL).returncode == 0
+    except (OSError, subprocess.SubprocessError):
+        closed = False
+    roster = _skill("team_roster")
+    try:
+        if roster is not None:
+            roster.stop_mark([session], by="user")
+    except Exception:  # noqa: BLE001 — a roster that cannot be written never undoes the close
+        pass
+    return closed
+
+
 def _spawn(roles: list[str], state: dict) -> list[dict]:
     cap = state.get("scout_cap_first_pass")
     cap = cap if isinstance(cap, int) and not isinstance(cap, bool) and cap > 0 else None
     done: list[dict] = []
     for role in roles:
+        held = _stop_brake()
+        if held:   # a stop, a standby or a halt came while the workers before were starting: nobody else starts
+            done.append({"role": role, "ok": False, "why": f"brake: {held}"})
+            break
         number = _number(role)
         if number is None:
             done.append({"role": role, "ok": False, "why": "no free number"})
@@ -194,6 +264,8 @@ def _spawn(roles: list[str], state: dict) -> list[dict]:
                 row["tail"] = (result.stderr or result.stdout)[-200:]
         except (OSError, subprocess.SubprocessError) as exc:
             row = {"role": role, "number": number, "ok": False, "why": type(exc).__name__}
+        if row["ok"] and _stopped_by_the_person():
+            row["closed_by_stop"] = _close_started(f"{role.upper()}-{number}")
         done.append(row)
         _log(row)
     return done

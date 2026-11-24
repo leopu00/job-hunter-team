@@ -375,4 +375,6 @@ export default {
   "agents.ram_guard": "At {at} the computer's memory was nearly full ({free} GiB free of {total}): {n} workers were stopped to protect it. The search goes on with fewer until the memory is back.",
   "agents.quota_wall": "The quota of your subscription is finished: the team is paused and restarts by itself at {at}.",
   "agents.quota_wall_unknown": "The quota of your subscription is finished: the team is paused. It is not known when it comes back: the team checks by itself every {min} minutes and restarts as soon as there is quota again.",
+  "profile.workers_renewed": "The team was working on the profile you replaced: {workers} are restarted on the new one. The Capitano and the Assistente go on.",
+  "profile.workers_not_renewed": "The workers that were running ({workers}) could not be restarted, and still have the previous profile in mind. Restart the team with: jht team stop --all, then jht team start",
 };

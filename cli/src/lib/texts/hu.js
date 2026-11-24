@@ -223,4 +223,6 @@ export default {
   "help.one_command": "Súgó egy parancshoz: jht <parancs> --help",
   "help.essential": "Használat: jht [parancs]\n\nJob Hunter Team — CLI\n\nFő parancsok:\n  setup        Kezdeti beállítás (lépésről lépésre)\n  team         Elindítja és leállítja az ügynököket (jht team start)\n  status       A rendszer állapota (konténer, ügynökök, adatbázis)\n  agents       Felsorolja az ügynököket és azt, amin dolgoznak\n  doctor       Ellenőrzi a beállítást és a függőségeket\n\nA parancsok teljes listája:\n  jht help\n",
   "help.long_description": "Megmutatja az összes parancsot (hosszú lista)",
+  "profile.workers_renewed": "A csapat a lecserélt profilon dolgozott: {workers} újraindul az újjal. A Capitano és az Assistente folytatja.",
+  "profile.workers_not_renewed": "A futó workereket ({workers}) nem sikerült újraindítani, még az előző profil van a fejükben. Indítsd újra a csapatot: jht team stop --all, majd jht team start",
 };

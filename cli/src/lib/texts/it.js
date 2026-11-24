@@ -408,4 +408,6 @@ export default {
   "agents.ram_guard": "Alle {at} la memoria del computer era quasi piena ({free} GiB liberi su {total}): {n} lavoratori sono stati fermati per proteggerla. La ricerca va avanti con meno lavoratori finché la memoria non torna.",
   "agents.quota_wall": "La quota del tuo abbonamento è finita: la squadra è in pausa e riprende da sola alle {at}.",
   "agents.quota_wall_unknown": "La quota del tuo abbonamento è finita: la squadra è in pausa. Non so a che ora torna: controlla da sola ogni {min} minuti e riprende appena c'è di nuovo quota.",
+  "profile.workers_renewed": "La squadra lavorava sul profilo che hai sostituito: {workers} ripartono con quello nuovo. Il Capitano e l'Assistente continuano.",
+  "profile.workers_not_renewed": "Non è stato possibile far ripartire i worker accesi ({workers}): hanno ancora in mente il profilo di prima. Fai ripartire la squadra con: jht team stop --all, poi jht team start",
 };

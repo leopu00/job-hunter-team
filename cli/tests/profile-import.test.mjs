@@ -6,7 +6,7 @@ import {
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import test from 'node:test';
-import { MAX_PROFILE_BYTES, PROFILE_READY_MESSAGE, importProfile } from '../src/lib/profile-import.js';
+import { MAX_PROFILE_BYTES, PROFILE_READY_MESSAGE, importOutcome, importProfile } from '../src/lib/profile-import.js';
 
 const FIXTURE = resolve(import.meta.dirname, 'fixtures/profile-synthetic.yml');
 const PROFILE = readFileSync(FIXTURE);
@@ -245,6 +245,29 @@ test('the Capitano out of reach does not undo the import, and the result says so
   assert.deepEqual(left(dir), ['candidate_profile.yml', 'candidate_profile.yml.prev', 'ready.flag']);
 });
 
+test('a replace restarts the workers of the old profile before the Capitano is told, and a first import does not', () => {
+  const { dir } = folder();
+  const order = [];
+  const over = {
+    renew: () => { order.push('renew'); return { status: 'renewing', workers: ['ANALISTA-1', 'SCOUT-6'] }; },
+    notify: () => { order.push('notify'); return { status: 'sent' }; },
+  };
+  const first = deps(dir, over);
+  assert.equal('workers' in importProfile(first.args), false);
+  assert.deepEqual(order, ['notify'], 'a first import: no profile was replaced, no worker had one in mind');
+  order.length = 0;
+  const second = deps(dir, over);
+  const done = importProfile({ ...second.args, replace: true });
+  assert.deepEqual(order, ['renew', 'notify'], 'the Capitano hands work to workers on the new profile');
+  assert.deepEqual(done.workers, { status: 'renewing', sessions: ['ANALISTA-1', 'SCOUT-6'] });
+  const said = importOutcome(done);
+  assert.equal(said.exitCode, 0);
+  assert.ok(said.out.some((line) => line.includes('ANALISTA-1, SCOUT-6')), said.out.join('\n'));
+  const failed = importOutcome({ ...done, workers: { status: 'failed', sessions: ['SCOUT-6'] } });
+  assert.ok(failed.warn.some((line) => line.includes('SCOUT-6') && line.includes('jht team stop --all')), failed.warn.join('\n'));
+  assert.equal(failed.exitCode, 0, 'the profile is imported: the workers not restarted are a warning with the way out');
+});
+
 // The real command, with the real validator, in a home of its own.
 // (The command alone, as the CLI registers it: the whole program needs packages a test folder may lack.)
 const RUNNER = `
@@ -272,7 +295,13 @@ test('jht profile import: from a file and from stdin, with the real validator', 
   assert.match(readFileSync(join(fromFile.root, 'profile', 'ready.flag'), 'utf8'), /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ\n$/);
   // The same profile again is refused, and --replace takes it.
   assert.equal(run(fromFile.root, ['profile', 'import', FIXTURE]).status, 1);
-  assert.equal(run(fromFile.root, ['profile', 'import', FIXTURE, '--replace']).status, 0);
+  // a replace asks tmux for the workers to restart: a tmux with no session, never the one of the machine
+  const quiet = mkdtempSync(join(tmpdir(), 'jht-stub-bin-'));
+  writeFileSync(join(quiet, 'tmux'), '#!/bin/sh\nexit 0\n');
+  chmodSync(join(quiet, 'tmux'), 0o755);
+  const replaced = run(fromFile.root, ['profile', 'import', FIXTURE, '--replace', '--json'], undefined, { PATH: `${quiet}:${process.env.PATH}` });
+  assert.equal(replaced.status, 0, replaced.stderr);
+  assert.equal('workers' in JSON.parse(replaced.stdout), false, 'no worker running: nothing to restart, nothing said');
 
   const fromStdin = folder();
   const piped = run(fromStdin.root, ['profile', 'import', '--stdin', '--json'], PROFILE);
@@ -460,4 +489,45 @@ test('the module is the only place that writes the profile and the flag', () => 
   const source = readFileSync(resolve(import.meta.dirname, '../src/lib/profile-import.js'), 'utf8');
   assert.ok(!/writeFileSync|appendFileSync|copyFileSync/.test(source), 'staged O_EXCL files and renames only');
   assert.equal(execFileSync('node', ['--check', resolve(import.meta.dirname, '../src/commands/profile.js')]).length, 0);
+});
+
+// With the team running, `jht profile import --replace` closes the workers and starts the Scouts, Analisti and Scorers again on
+// the new profile, in the background; the Capitano and the Assistente go on. Stubs for tmux and start-agent.sh: no real session.
+test('jht profile import --replace with the team running restarts the workers and not the Capitano nor the Assistente', { skip: spawnSync('python3', ['-c', 'import yaml']).status !== 0 }, async () => {
+  const python = execFileSync('sh', ['-c', 'command -v python3'], { encoding: 'utf8' }).trim();
+  const { root } = folder();
+  assert.equal(run(root, ['profile', 'import', FIXTURE]).status, 0);
+  const bin = mkdtempSync(join(tmpdir(), 'jht-stub-bin-'));
+  const kills = join(bin, 'kills.txt');
+  const starts = join(bin, 'starts.txt');
+  writeFileSync(join(bin, 'tmux'), `#!/bin/sh
+case "$1" in
+  kill-session) echo "$3" >> '${kills}' ;;
+  list-sessions) printf '%s\\n' ASSISTENTE CAPITANO MENTOR SENTINELLA SCOUT-6 ANALISTA-1 SCORER-2 SCRITTORE-1 CRITICO-S1 ;;
+esac
+exit 0
+`);
+  chmodSync(join(bin, 'tmux'), 0o755);
+  writeFileSync(join(bin, 'jht-tmux-send'), '#!/bin/sh\nexit 0\n');
+  chmodSync(join(bin, 'jht-tmux-send'), 0o755);
+  writeFileSync(join(bin, 'docker'), '#!/bin/sh\nexit 1\n');
+  chmodSync(join(bin, 'docker'), 0o755);
+  const agent = join(bin, 'start-agent.sh');
+  writeFileSync(agent, `#!/bin/sh\necho "$1-$2 $JHT_WORKER_BRIEF" >> '${starts}'\n`);
+  chmodSync(agent, 0o755);
+  const path = `${bin}:${resolve(python, '..')}:/usr/bin:/bin`;
+  const done = run(root, ['profile', 'import', FIXTURE, '--replace', '--json'], undefined, { PATH: path, JHT_START_AGENT: agent });
+  assert.equal(done.status, 0, done.stderr);
+  const workers = ['ANALISTA-1', 'CRITICO-S1', 'SCORER-2', 'SCOUT-6', 'SCRITTORE-1'];
+  assert.deepEqual(JSON.parse(done.stdout).workers, { status: 'renewing', sessions: workers });
+  const human = run(root, ['profile', 'import', FIXTURE, '--replace'], undefined, { PATH: path, JHT_START_AGENT: agent, JHT_LANG: 'it' });
+  assert.match(human.stdout, /La squadra lavorava sul profilo che hai sostituito: ANALISTA-1, CRITICO-S1, SCORER-2, SCOUT-6, SCRITTORE-1 ripartono/);
+  // the closing and the starts run in the background, twice (two imports): wait for them
+  const lines = (file) => (existsSync(file) ? readFileSync(file, 'utf8').trim().split('\n') : []);
+  for (let i = 0; i < 150 && (lines(kills).length < 10 || lines(starts).length < 6); i += 1) await new Promise((r) => setTimeout(r, 200));
+  assert.deepEqual([...new Set(lines(kills))].sort(), workers.map((s) => `=${s}`), 'every worker closed, the Capitano and the Assistente never');
+  const started = lines(starts);
+  assert.deepEqual([...new Set(started.map((line) => line.split(' ')[0]))].sort(), ['analista-1', 'scorer-2', 'scout-6'],
+    'the Scouts, Analisti and Scorers start again with their numbers; the Scrittore and the Critico on demand');
+  assert.ok(started.every((line) => line.includes('The candidate profile was replaced: work only on the new one')), started.join('\n'));
 });

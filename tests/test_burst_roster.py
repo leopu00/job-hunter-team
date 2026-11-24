@@ -226,3 +226,31 @@ def test_every_language_of_the_skill_tells_the_capitano_the_system_starts_the_ro
     for key in ("burst_roster.py start --auto --detach", "THE SYSTEM IS STARTING THE ROSTER NOW", "roll_worker_number.py",
                 "roster_missing", "burst_roster.py start`"):
         assert key in step, (suffix, key)
+
+
+def test_a_stop_during_the_burst_closes_the_worker_starting_and_starts_no_other(tmp_path: Path):
+    """Collaudo Linux 23/11, the same race as the restore of the roster: `jht team stop --all` writes .team-halted.flag, closes the
+    sessions it lists, and a burst in the middle went on starting the rest. Now the brakes are read again before each worker, and
+    the one whose start ends after the flag is closed and marked stopped."""
+    world = _world(tmp_path)
+    halted, kills = world["home"] / ".team-halted.flag", tmp_path / "kills"
+    tmux = Path(world["env"]["PATH"].split(":")[0]) / "tmux"
+    tmux.write_text(f"#!/bin/sh\n[ \"$1\" = kill-session ] && {{ echo \"$3\" >> '{kills}'; exit 0; }}\ncat '{world['listing']}'\n",
+                    encoding="utf-8")
+    launcher = Path(world["env"]["JHT_START_AGENT"])
+    # the stop of the person comes while the third worker of the order (the first Analista) is starting
+    launcher.write_text(launcher.read_text() + f"[ \"$1\" = analista ] && : > '{halted}'\nexit 0\n", encoding="utf-8")
+    out = _run(world, "start", "--auto")
+    calls = _calls(world)
+    assert [c["role"] for c in calls] == FULL_ORDER[:3], f"after the stop nobody else starts: {out}"
+    session = f"ANALISTA-{calls[2]['n']}"
+    assert kills.read_text(encoding="utf-8").split() == [f"={session}"], "the worker started across the stop is closed"
+    assert [row for row in out["started"] if not row["ok"]] == [{"role": "scorer", "ok": False, "why": "brake: team-halted"}]
+    assert out["started"][2]["closed_by_stop"] is True
+
+
+def test_a_burst_with_the_team_halted_for_the_day_starts_nobody(tmp_path: Path):
+    world = _world(tmp_path)
+    (world["home"] / ".daily-halt.flag").write_text("", encoding="utf-8")
+    out = _run(world, "start", "--auto")
+    assert _calls(world) == [] and out["started"] == [{"role": "scout", "ok": False, "why": "brake: daily-halt"}]
