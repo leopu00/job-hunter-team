@@ -15,6 +15,11 @@ before the stop, in the order of the burst (two Scouts, an Analista, a Scorer, t
     the working window, an agent the person paused or the team contained, the capacity of the machine (the workers started never
     exceed what the machine carries), and the spend gate of the harness is in `start-agent.sh` as for any start;
   * one run per boot: a second call within an hour does nothing.
+  * a stop that comes in the middle wins: the brakes are read again before EACH worker (the plan read them once, and the starts
+    take seconds each), and a worker that was starting while the person stopped the team (`.team-halted.flag` appeared during its
+    start, after `jht team stop` had listed the sessions to close) is closed at once and marked stopped. Collaudo Linux 23/11: the
+    restore started Scout, Analista and Scorer around a `jht team stop --all`, they missed the stop, kept running through the
+    `jht profile import --replace` and the `jht team start`, and worked on the profile of before.
 
 The opening of the working window is the exception to «no worker alive» and to the hour: the workers the close of the hours stopped
 (`stopped` by `hours` in the roster) come back at the opening even when another worker is already up (a queue that started one, a
@@ -289,6 +294,42 @@ def _brief(role: str, number: int) -> str:
     return base.replace("Start the main loop.", "The team was restarted (an update or a stop): resume the main loop.", 1)
 
 
+def _brake_now():
+    """The brake that holds the team at this moment (the capacity aside: the plan already counted it), or None. Unreadable = a brake."""
+    queue = _load("queue_demand")
+    if queue is None:
+        return "brakes-unreadable"
+    try:
+        reason = queue.brake(time.time(), 0)
+    except Exception:  # noqa: BLE001
+        return "brakes-unreadable"
+    return reason if reason and reason != "capacity" else None
+
+
+def _stopped_by_the_person() -> bool:
+    """`jht team stop` writes the flag BEFORE it lists the sessions to close: a worker whose start ends after the flag may be missed."""
+    try:
+        return (_home() / ".team-halted.flag").exists()
+    except OSError:
+        return True
+
+
+def _close_started(session: str) -> bool:
+    """Closes a worker started across the stop, and the roster says `stopped` by the user, as `jht team stop` would have written."""
+    try:
+        closed = subprocess.run(["tmux", "kill-session", "-t", "=" + session], capture_output=True, text=True, timeout=15,
+                                check=False, stdin=subprocess.DEVNULL).returncode == 0
+    except (OSError, subprocess.SubprocessError):
+        closed = False
+    roster = _load("team_roster")
+    try:
+        if roster is not None:
+            roster.stop_mark([session], by="user")
+    except Exception:  # noqa: BLE001 — a roster that cannot be written never undoes the close
+        pass
+    return closed
+
+
 def start(detach_ok: bool = True) -> dict:
     now = time.time()
     decision = plan(now)
@@ -310,6 +351,10 @@ def start(detach_ok: bool = True) -> dict:
                 pass
         done = []
         for role, number in decision["start"]:
+            held = _brake_now()
+            if held:   # a stop, a halt or a standby came while the workers before were starting: nobody else starts
+                done.append({"role": role, "number": number, "ok": False, "why": f"brake: {held}"})
+                break
             env = dict(os.environ, JHT_WORKER_BRIEF=_brief(role, number))
             try:
                 result = subprocess.run(["bash", burst._launcher(), role, str(number)], capture_output=True, text=True,  # noqa: SLF001
@@ -319,6 +364,8 @@ def start(detach_ok: bool = True) -> dict:
                     row["tail"] = (result.stderr or result.stdout)[-200:]
             except (OSError, subprocess.SubprocessError) as exc:
                 row = {"role": role, "number": number, "ok": False, "why": type(exc).__name__}
+            if row["ok"] and _stopped_by_the_person():
+                row["closed_by_stop"] = _close_started("%s-%s" % (role.upper(), number))
             done.append(row)
             burst._log(dict(row, restore=True))  # noqa: SLF001
             if not row["ok"]:   # tried again at the next check of the watchdog, MAX_TRIES times in 12 hours
