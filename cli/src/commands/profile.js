@@ -1,4 +1,4 @@
-import { Command } from 'commander';
+import { Command, Option } from 'commander';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
@@ -222,14 +222,16 @@ export function registerProfileCommand(program) {
     .command('validate [file]')
     .description('Validate the profile against the canonical schema (default: $JHT_HOME/profile/candidate_profile.yml)')
     .option('--strict', 'also treat warnings (legacy lists) as errors')
-    .option('--stdin', 'read the profile from standard input (the host wrapper uses it for a file on the host)')
+    // the way the host wrapper hands over a file of the host: not an option of the person, who gives the path (P3-2)
+    .addOption(new Option('--stdin', 'read the profile from standard input (the host wrapper uses it for a file on the host)').hideHelp())
     .option('--json', 'output JSON {ok, errors, warnings}')
     .action(validateAction);
 
   cmd
     .command('import [file]')
     .description('Give the team its candidate profile: validate it, write it privately and atomically, mark it ready and tell the Capitano')
-    .option('--stdin', 'read the profile from standard input (the host wrapper uses it)')
+    // the way the host wrapper hands over a file of the host: not an option of the person, who gives the path (P3-2)
+    .addOption(new Option('--stdin', 'read the profile from standard input (the host wrapper uses it)').hideHelp())
     .option('--replace', 'replace the profile that already exists (the one replaced is kept as candidate_profile.yml.prev)')
     .option('--json', 'output JSON {ok, code, …}')
     .action(importAction);

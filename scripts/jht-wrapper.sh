@@ -701,6 +701,7 @@ This help starts nothing and downloads nothing.' ;;
     line.script_s_non_ancora_installato) printf '%s' 'script %s is not installed yet: run '\''jht upgrade'\'' (or a '\''jht integration add/remove'\'') and try again' ;;
     line.script_s_non_scaricabile_controlla) printf '%s' 'script %s cannot be downloaded: check the network or run '\''jht upgrade'\''' ;;
     line.serve_un_terminale_l_autorizzazione) printf '%s' 'A terminal is needed: the authorization is confirmed by hand.' ;;
+    line.setup_open_flag_not_written) printf '%s' 'the setup could not mark itself open in %s: until the wizard opens, the team in the container may start on the configuration of before' ;;
     line.status.caller_env) printf '%s' 'In this terminal'\''s environment these are set: %s. The container was created without them: remove the variable (unset) and try again.' ;;
     line.status.provider_said) printf '%s' 'The provider said: %s' ;;
     line.status.unattestable) printf '%s' 'container '\''%s'\'' cannot be verified: there is something that cannot be checked (a configuration different from the expected one, or the engine not answering); it does not mean it is not running.' ;;
@@ -1174,6 +1175,7 @@ Questo aiuto non avvia niente e non scarica niente.' ;;
     line.script_s_non_ancora_installato) printf '%s' 'script %s non ancora installato: '\''jht upgrade'\'' (o un '\''jht integration add/remove'\'') e riprova' ;;
     line.script_s_non_scaricabile_controlla) printf '%s' 'script %s non scaricabile: controlla la rete o fai '\''jht upgrade'\''' ;;
     line.serve_un_terminale_l_autorizzazione) printf '%s' 'Serve un terminale: l'\''autorizzazione si conferma a mano.' ;;
+    line.setup_open_flag_not_written) printf '%s' 'il setup non è riuscito a segnarsi aperto in %s: finché il wizard non si apre, la squadra nel container può partire con la configurazione di prima' ;;
     line.status.caller_env) printf '%s' 'Nell'\''ambiente di questo terminale sono impostate: %s. Il container e'\'' stato creato senza: togli la variabile (unset) e riprova.' ;;
     line.status.provider_said) printf '%s' 'Il provider ha detto: %s' ;;
     line.status.unattestable) printf '%s' 'container '\''%s'\'' non attestabile: c'\''e'\'' qualcosa che non si riesce a verificare (una configurazione diversa dall'\''attesa, o il motore che non risponde); non vuol dire che non giri.' ;;
@@ -1648,6 +1650,7 @@ Ez a súgó semmit nem indít el és semmit nem tölt le.' ;;
     line.script_s_non_ancora_installato) printf '%s' 'a(z) %s szkript még nincs telepítve: '\''jht upgrade'\'' (vagy egy '\''jht integration add/remove'\''), majd próbáld újra' ;;
     line.script_s_non_scaricabile_controlla) printf '%s' 'a(z) %s szkript nem tölthető le: ellenőrizd a hálózatot, vagy futtasd a '\''jht upgrade'\'' parancsot' ;;
     line.serve_un_terminale_l_autorizzazione) printf '%s' 'Terminál kell: az engedélyt kézzel kell megerősíteni.' ;;
+    line.setup_open_flag_not_written) printf '%s' 'a setup nem tudta nyitottnak jelölni magát itt: %s: amíg a varázsló meg nem nyílik, a konténerben lévő csapat az előző beállításokkal indulhat' ;;
     line.status.caller_env) printf '%s' 'Ennek a terminálnak a környezetében be vannak állítva: %s. A konténer nélkülük jött létre: töröld a változót (unset), és próbáld újra.' ;;
     line.status.provider_said) printf '%s' 'A szolgáltató ezt mondta: %s' ;;
     line.status.unattestable) printf '%s' 'a(z) '\''%s'\'' konténer nem igazolható: valamit nem sikerül ellenőrizni (a vártól eltérő beállítást, vagy a motor nem válaszol); ez nem jelenti azt, hogy nem fut.' ;;
@@ -2125,6 +2128,7 @@ Esta ayuda no arranca nada ni descarga nada.' ;;
     line.script_s_non_ancora_installato) printf '%s' 'el script %s aún no está instalado: '\''jht upgrade'\'' (o un '\''jht integration add/remove'\'') y vuelve a intentarlo' ;;
     line.script_s_non_scaricabile_controlla) printf '%s' 'no se puede descargar el script %s: revisa la red o ejecuta '\''jht upgrade'\''' ;;
     line.serve_un_terminale_l_autorizzazione) printf '%s' 'Hace falta un terminal: la autorización se confirma a mano.' ;;
+    line.setup_open_flag_not_written) printf '%s' 'el setup no ha podido marcarse como abierto en %s: hasta que se abra el asistente, el equipo del contenedor puede arrancar con la configuración anterior' ;;
     line.status.caller_env) printf '%s' 'En el entorno de este terminal están definidas: %s. El contenedor se creó sin ellas: quita la variable (unset) y vuelve a intentarlo.' ;;
     line.status.provider_said) printf '%s' 'El proveedor ha dicho: %s' ;;
     line.status.unattestable) printf '%s' 'contenedor '\''%s'\'' no verificable: hay algo que no se consigue verificar (una configuración distinta de la esperada, o el motor que no responde); no quiere decir que no esté en marcha.' ;;
@@ -2598,6 +2602,7 @@ Diese Hilfe startet nichts und lädt nichts herunter.' ;;
     line.script_s_non_ancora_installato) printf '%s' 'Skript %s noch nicht installiert: '\''jht upgrade'\'' (oder ein '\''jht integration add/remove'\'') und versuch es erneut' ;;
     line.script_s_non_scaricabile_controlla) printf '%s' 'Skript %s nicht herunterladbar: Prüfe das Netzwerk oder führe '\''jht upgrade'\'' aus' ;;
     line.serve_un_terminale_l_autorizzazione) printf '%s' 'Ein Terminal ist nötig: Die Autorisierung wird von Hand bestätigt.' ;;
+    line.setup_open_flag_not_written) printf '%s' 'das Setup konnte sich in %s nicht als offen markieren: bis der Assistent sich öffnet, kann das Team im Container mit der vorherigen Konfiguration starten' ;;
     line.status.caller_env) printf '%s' 'In der Umgebung dieses Terminals sind gesetzt: %s. Der Container wurde ohne sie erstellt: Entferne die Variable (unset) und versuch es erneut.' ;;
     line.status.provider_said) printf '%s' 'Der Anbieter hat gesagt: %s' ;;
     line.status.unattestable) printf '%s' 'Container '\''%s'\'' nicht bestätigbar: Etwas lässt sich nicht überprüfen (eine andere als die erwartete Konfiguration oder eine Engine, die nicht antwortet); das heißt nicht, dass er nicht läuft.' ;;
@@ -3071,6 +3076,7 @@ Cette aide ne démarre rien et ne télécharge rien.' ;;
     line.script_s_non_ancora_installato) printf '%s' 'script %s pas encore installé : '\''jht upgrade'\'' (ou un '\''jht integration add/remove'\'') et réessaie' ;;
     line.script_s_non_scaricabile_controlla) printf '%s' 'script %s impossible à télécharger : vérifie le réseau ou fais '\''jht upgrade'\''' ;;
     line.serve_un_terminale_l_autorizzazione) printf '%s' 'Il faut un terminal : l'\''autorisation se confirme à la main.' ;;
+    line.setup_open_flag_not_written) printf '%s' 'le setup n'\''a pas pu se marquer ouvert dans %s : tant que l'\''assistant ne s'\''ouvre pas, l'\''équipe du conteneur peut démarrer avec la configuration d'\''avant' ;;
     line.status.caller_env) printf '%s' 'Dans l'\''environnement de ce terminal sont définies : %s. Le conteneur a été créé sans elles : retire la variable (unset) et réessaie.' ;;
     line.status.provider_said) printf '%s' 'Le fournisseur a dit : %s' ;;
     line.status.unattestable) printf '%s' 'conteneur '\''%s'\'' non attestable : quelque chose ne peut pas être vérifié (une configuration différente de celle attendue, ou le moteur qui ne répond pas) ; ça ne veut pas dire qu'\''il ne tourne pas.' ;;
@@ -3544,6 +3550,7 @@ Esta ajuda não inicia nada nem descarrega nada.' ;;
     line.script_s_non_ancora_installato) printf '%s' 'o script %s ainda não está instalado: '\''jht upgrade'\'' (ou um '\''jht integration add/remove'\'') e tenta de novo' ;;
     line.script_s_non_scaricabile_controlla) printf '%s' 'não é possível descarregar o script %s: verifica a rede ou faz '\''jht upgrade'\''' ;;
     line.serve_un_terminale_l_autorizzazione) printf '%s' 'É preciso um terminal: a autorização confirma-se à mão.' ;;
+    line.setup_open_flag_not_written) printf '%s' 'o setup não conseguiu marcar-se como aberto em %s: até o assistente abrir, a equipa do contentor pode arrancar com a configuração anterior' ;;
     line.status.caller_env) printf '%s' 'No ambiente deste terminal estão definidas: %s. O contentor foi criado sem elas: remove a variável (unset) e tenta de novo.' ;;
     line.status.provider_said) printf '%s' 'O fornecedor disse: %s' ;;
     line.status.unattestable) printf '%s' 'contentor '\''%s'\'' não atestável: há algo que não se consegue verificar (uma configuração diferente da esperada, ou o motor que não responde); não quer dizer que não esteja a correr.' ;;
@@ -3785,9 +3792,14 @@ setup_wizard_args() {
 setup_open_flag_path() { printf '%s' "${JHT_HOME_HOST:-$HOME/.jht}/.setup-open.flag"; }
 setup_open_flag_write() {
   local flag; flag="$(setup_open_flag_path)"
+  # a first installation has no home yet: nothing to mark, and the initial gate of the container holds the team
   [ -d "$(dirname "$flag")" ] || return 0
   rm -f -- "$flag" 2>/dev/null || true
   ( umask 077; set -C; date -u +%Y-%m-%dT%H:%M:%SZ > "$flag" ) 2>/dev/null || true
+  # Said, not skipped in silence (collaudo Linux 23/11: the first round of the watchdog did not see the flag, and nothing told which
+  # way it went): a file, not a link, written just now (an old one that could not be replaced is not a setup that is open now).
+  if [ -f "$flag" ] && [ ! -L "$flag" ] && [ -z "$(find "$flag" -mmin +1 2>/dev/null)" ]; then return 0; fi
+  warn "$(jht_say line.setup_open_flag_not_written "$flag")"
 }
 setup_open_flag_remove() { rm -f -- "$(setup_open_flag_path)" 2>/dev/null || true; }
 

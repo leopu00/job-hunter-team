@@ -160,3 +160,14 @@ test('an agent with no turn recorded yet says so in the model column, not N/D / 
   assert.doesNotMatch(text, /N\/D \/ N\/D/);
   assert.match(text, /nessun turno ancora|no turn yet/);
 });
+
+// P3-3 (collaudo Linux 23/11): after a stop of every agent the status said «no running agents or recorded usage» with 2.44 $ spent.
+// With no agent the screen says that no agent is running, and nothing about the usage, which it does not read here.
+test('with no agent running the status says so and does not claim there was no usage', async () => {
+  const { CATALOGS } = await import('../src/lib/texts.js');
+  for (const [lang, catalog] of Object.entries(CATALOGS)) {
+    assert.ok(!/usage|consum|Verbrauch|fogyaszt/i.test(catalog['observation.empty'] ?? ''), `${lang}: ${catalog['observation.empty']}`);
+  }
+  const text = renderObservation({ ...snapshot(), running: 0, total: 0, agents: [] }, { usage: false, width: 80 });
+  assert.ok(text.includes(CATALOGS.en['observation.empty']) || text.includes(CATALOGS.it['observation.empty']), text);
+});

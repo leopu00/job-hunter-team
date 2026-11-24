@@ -20,6 +20,7 @@ import {
 import pc from 'picocolors';
 import { WizardCancelledError } from './prompts.js';
 import { t } from './i18n.js';
+import { wrapNote } from './note-width.js';
 
 /** «Yes» / «No» in the person's language: clack's own are English. */
 export function answerWord(key) {
@@ -51,7 +52,8 @@ export function createClackPrompter() {
     },
 
     note: async (message, title) => {
-      note(message, title);
+      // wrapped to the terminal: a line wider than it broke the frame of the box (collaudo Linux 23/11)
+      note(wrapNote(message), title);
     },
 
     select: async (params) =>

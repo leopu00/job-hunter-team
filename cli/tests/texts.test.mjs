@@ -98,7 +98,7 @@ test('the every-day screens come out in the language of the person, and in Engli
   const box = sandbox();
   const it = { JHT_LANG: 'it' };
   assert.match(jht(['status'], box, it).out, /Stato[\s\S]*Configurazione\s+non trovata[\s\S]*Configurala con: jht setup/);
-  assert.match(jht(['agents'], box, it).out, /Agenti[\s\S]*Agente\s+Sessione\s+Stato[\s\S]*Nessun agente avviato/);
+  assert.match(jht(['agents'], box, it).out, /Agenti[\s\S]*Agente\s+Sessione\s+Stato[\s\S]*Nessun agente acceso/);
   assert.match(jht(['doctor'], box, it).out, /Controllo ·/);
   assert.match(jht(['help'], box, it).out, /Ogni giorno:[\s\S]*La tua squadra:[\s\S]*Aiuto su un comando/);
   // a language with no texts yet is English, not half of one

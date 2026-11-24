@@ -14,7 +14,7 @@ export default {
   "observation.unknown": "attività ignota",
   "observation.starting": "nessun turno registrato",
   "observation.no_turn_yet": "nessun turno ancora",
-  "observation.empty": "Nessun agente avviato o consumo registrato.",
+  "observation.empty": "Nessun agente acceso.",
   "observation.tokens": "Token pesati, finestra mobile 1h; aggiornati separatamente dalla Sentinella (normalmente ogni 5 min). Non euro, quota rimasta o token/s.",
   "observation.updated": "Consumi aggiornati: {at}; età: {age} s.",
   "observation.identity_limits": "Modello/effort: ultimo dato strutturato della sessione, riletto al massimo ogni 15s; cambi senza nuovi record non osservabili. N/D indica dato assente, mai il predefinito del ruolo.",
