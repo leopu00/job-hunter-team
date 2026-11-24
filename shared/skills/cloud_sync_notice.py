@@ -11,6 +11,9 @@ A second code, `session_lost`, tells that the Supabase session the daemon listen
 is gone (its refresh token was used twice): the box falls back to slower checks until the device is
 paired again.
 
+A sync that is paused or off tells nothing: a box that does not sync on purpose is not «cut off»
+(reason `sync_paused`, nothing written).
+
 A closed code with a fixed sentence in the user's language, under `cloud_sync_notice.<code>` in
 shared/locales/<lang>.json. One notice per token: the key is the token's public prefix, the one the
 website lists, so a new token that is refused in its turn is told again.
@@ -34,6 +37,8 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 import web_action_notice as _shared  # noqa: E402  (language, catalog and notify tool of the box)
 
+import sync_switch  # noqa: E402  (the one answer to «is the website sync on?»)
+
 sys.path.pop(0)
 
 SOURCE_ACTION = "cloud_sync_notice"
@@ -49,12 +54,21 @@ def text_for(code: str, lang: str) -> str:
     return _shared._catalog(lang)[f"cloud_sync_notice.{code}"]
 
 
+def _sync_paused() -> bool:
+    """True when this box's sync is off on purpose (paused, disabled in the file, or JHT_CLOUD_SYNC=0)."""
+    home = os.environ.get("JHT_HOME") or os.path.expanduser("~/.jht")
+    reason = sync_switch.sync_switch(sync_switch.read_config(home))["reason"]
+    return reason in ("env-off", "paused", "disabled")
+
+
 def notify(code: str, key: str, *, lang: str | None = None, run=subprocess.run) -> dict:
     """Tell the user once about `code` for the token `key`; the same key twice is one row."""
     if code not in CODES:
         return {"notified": False, "reason": "code_unknown"}
     if not isinstance(key, str) or not KEY.match(key):
         return {"notified": False, "reason": "key_invalid"}
+    if _sync_paused():
+        return {"notified": False, "reason": "sync_paused"}
     tool = _shared.notify_tool()
     if tool is None:
         return {"notified": False, "reason": "notify_tool_missing"}

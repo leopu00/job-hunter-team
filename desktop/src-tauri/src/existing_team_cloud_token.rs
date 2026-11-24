@@ -16,6 +16,10 @@
 //! process list and in no SSH command line; the request has no `Debug`, so no log can print it.
 //! The script verifies it with the website, keeps it only if it belongs to the account the box is
 //! paired with, and never prints it.
+//!
+//! A sync that is off or paused (`cloud.json` `enabled:false`, or `JHT_CLOUD_SYNC=0`) renews
+//! nothing: the script answers `cloud_sync_paused` to `apply` (before it asks the website anything)
+//! and `state: "paused"` to `check`. The codes pass through as the script says them.
 
 use crate::{
     account_scope::AccountScopeState,
@@ -258,6 +262,18 @@ mod tests {
     }
 
     #[test]
+    fn the_check_of_a_paused_sync_comes_back_as_it_is_and_asks_for_no_connection() {
+        let ran = Cell::new(0);
+        let out = cloud_token_with(json!({"op": "check"}), true, || Ok(KEY.to_owned()), || Err("position_write_read_only"), |request| {
+            ran.set(ran.get() + 1);
+            assert!(request.stdin().is_none());
+            done(r#"{"ok":true,"op":"check","state":"paused","expires_at":null,"days_left":null}"#)
+        });
+        assert_eq!(out, json!({"ok": true, "op": "check", "state": "paused", "expires_at": null, "days_left": null}));
+        assert_eq!(ran.get(), 1);
+    }
+
+    #[test]
     fn another_window_or_another_connection_is_refused_before_anything_runs() {
         let ran = Cell::new(0);
         assert_eq!(drive(apply(), false, Ok(()), &ran)["error"], "cloud_token_window_refused");
@@ -350,7 +366,8 @@ mod tests {
         let run = |code: i32, stdout: &str| {
             cloud_token_with(apply(), true, || Ok(KEY.into()), || Ok(()), |_| Ok(ProcessResult { code, stdout: stdout.as_bytes().to_vec() }))
         };
-        for code in ["token_rejected", "token_other_account", "cloud_unreachable", "cloud_not_configured", "cloud_write_failed"] {
+        // `cloud_sync_paused`: the box's sync is off or paused, and a token is not renewed there.
+        for code in ["token_rejected", "token_other_account", "cloud_unreachable", "cloud_not_configured", "cloud_write_failed", "cloud_sync_paused"] {
             let out = run(1, &format!(r#"{{"ok":false,"op":"apply","code":"{code}"}}"#));
             assert_eq!(out, json!({"ok": false, "error": code}));
             assert!(!out.to_string().contains("SENTINELLA"));

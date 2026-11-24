@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { pickCloudSync, readExistingTeamCloudSync } from "../../lib/existing-team-cloud-sync";
+import { pickCloudSync, readExistingTeamCloudSync, withSyncPaused } from "../../lib/existing-team-cloud-sync";
 import { CLOUD_SYNC_CARD_TEXT } from "./cloud-sync-card.i18n";
 
 // The team page says how the box's push to the website is going (T126): on 23/10 a box had been
@@ -225,5 +225,73 @@ describe("the renewal, in the app", () => {
       expect(text.expiring, locale).toContain("{days}");
       expect(text.openSite.trim() && text.renew.trim() && text.tokenLabel.trim(), locale).toBeTruthy();
     }
+  });
+});
+
+// T335: a sync paused on purpose (cloud.json enabled:false, pairing kept) is «paused»: not the red
+// alarm of the token, and not «this team does not sync». The box's token check says it.
+describe("a sync paused on purpose", () => {
+  const pausedBox = (push: unknown) => ({
+    existing_team_positions_read: synced(push),
+    existing_team_cloud_token: checkReply("paused"),
+  });
+
+  it("is said paused, in the quiet colour, whatever the last push says: no alert, no renewal", async () => {
+    for (const push of [okState("auth_failed", 45012), okState("completed"), okState("timeout", 3), { state: "absent" }, { state: "unreadable" }]) {
+      team(pausedBox(push));
+      const view = render(<CloudSyncCard />);
+      await waitFor(() => expect(screen.getByTestId("cloud-sync-card")).toHaveTextContent(t.paused));
+      const card = screen.getByTestId("cloud-sync-card");
+      expect(screen.queryByRole("alert"), JSON.stringify(push)).toBeNull();
+      expect(screen.queryByTestId("cloud-token-renew")).toBeNull();
+      expect(card).not.toHaveTextContent(t.refused);
+      expect(card).not.toHaveTextContent(t.absent);
+      expect(card.style.borderColor).not.toMatch(/red|yellow|green/);
+      view.unmount();
+    }
+  });
+
+  it("a box not paused keeps saying what it said: the check that is not «paused» changes nothing", async () => {
+    team({ existing_team_positions_read: synced({ state: "absent" }), existing_team_cloud_token: checkReply("none") });
+    render(<CloudSyncCard />);
+    await waitFor(() => expect(screen.getByTestId("cloud-sync-card")).toHaveTextContent(t.absent));
+    expect(screen.getByTestId("cloud-sync-card")).not.toHaveTextContent(t.paused);
+  });
+
+  it("tells «paused» from «absent» in the reading, and only when the push state could be read", () => {
+    const absent = { kind: "read", at: 1, sync: { state: "absent" } } as const;
+    expect(withSyncPaused(absent, { kind: "paused" })).toEqual({ kind: "read", at: 1, sync: { state: "paused" } });
+    expect(withSyncPaused(absent, { kind: "fine" })).toBe(absent);
+    expect(withSyncPaused(absent, { kind: "unknown" })).toBe(absent);
+    const failed = { kind: "error", at: 2, code: "existing_team_unavailable" } as const;
+    expect(withSyncPaused(failed, { kind: "paused" })).toBe(failed);
+    const old = { kind: "unsupported", at: 3 } as const;
+    expect(withSyncPaused(old, { kind: "paused" })).toBe(old);
+  });
+
+  it("says it in every language, with the pause code among the renewal failures", () => {
+    for (const [locale, text] of Object.entries(CLOUD_SYNC_CARD_TEXT)) {
+      expect(text.paused.trim(), locale).toBeTruthy();
+      expect(text.renewFailures.cloud_sync_paused.trim(), locale).toBeTruthy();
+      if (locale !== "en") {
+        expect(text.paused, locale).not.toBe(t.paused);
+        expect(text.renewFailures.cloud_sync_paused, locale).not.toBe(t.renewFailures.cloud_sync_paused);
+      }
+      expect(text.renewFailures.cloud_sync_paused, locale).not.toMatch(/jht cloud|--token/);
+    }
+  });
+
+  it("a renewal that the box refuses as paused is said in the closed text", async () => {
+    team({
+      existing_team_positions_read: synced(okState("auth_failed", 3)),
+      existing_team_cloud_token: (args?: Record<string, unknown>) =>
+        (args?.request as { op: string }).op === "check" ? checkReply("expired") : { ok: false, error: "cloud_sync_paused" },
+      existing_team_position_write_target: IN_FULL,
+    });
+    render(<CloudSyncCard />);
+    fireEvent.change(await screen.findByLabelText(t.tokenLabel), { target: { value: SECRET } });
+    fireEvent.submit(screen.getByTestId("cloud-token-renew"));
+    await waitFor(() => expect(screen.getByTestId("cloud-token-outcome")).toHaveTextContent(t.renewFailures.cloud_sync_paused));
+    expect(document.body.textContent).not.toContain("SENTINELLA");
   });
 });

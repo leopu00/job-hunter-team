@@ -36,6 +36,7 @@ export const RENEW_FAILURES = [
   "cloud_unreachable",
   "cloud_not_configured",
   "cloud_write_failed",
+  "cloud_sync_paused",
   "cloud_token_read_only",
   "existing_team_runtime_outdated",
   "existing_team_runtime_target_changed",
@@ -55,6 +56,8 @@ export type CloudTokenCheck =
   | { kind: "expiring"; expiresAt: string; daysLeft: number }
   /** Accepted, not about to end (or no expiry, or the website does not say). */
   | { kind: "fine" }
+  /** The sync is paused or off on purpose: the box owes the website no token, and none is asked. */
+  | { kind: "paused" }
   /** Not told: an image without the script, an unreachable website, a read that failed. */
   | { kind: "unknown" };
 
@@ -65,6 +68,7 @@ export async function checkCloudToken(
   try {
     const reply = await call({ op: "check" });
     if (!isRecord(reply) || reply.ok !== true) return { kind: "unknown" };
+    if (reply.state === "paused") return { kind: "paused" };
     if (reply.state === "expired") return { kind: "expired" };
     if (reply.state === "expiring") {
       const { expires_at: expiresAt, days_left: daysLeft } = reply;
