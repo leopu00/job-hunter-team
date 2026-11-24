@@ -1327,6 +1327,17 @@ standby_log_tick=0
 config_not_ready_tick=0
 CONFIG_NOT_READY_GRACE_TICKS="${JHT_CONFIG_NOT_READY_GRACE_TICKS:-10}"
 
+# What this watchdog sees of the setup of the person when it starts, in one line (collaudo Linux 23/11: 2 s after the container it
+# started the team on the configuration of before, and the log did not say whether the flag of the setup was there). The flag
+# is written on the host by `jht setup` before it starts the container, and by the wizard when it opens.
+if setup_open; then
+  log "boot: setup open (.setup-open.flag present) — no agent is started until the setup ends"
+elif [ -e "$SETUP_OPEN_FLAG" ]; then
+  log "boot: .setup-open.flag present but older than 2 hours — not a setup that is open"
+else
+  log "boot: no .setup-open.flag — the agents of the configuration are started"
+fi
+
 while true; do
   # Il containment e' un cancello di sicurezza, non una funzione del provider:
   # resta applicabile anche con config incompleta o credenziali non pronte.
