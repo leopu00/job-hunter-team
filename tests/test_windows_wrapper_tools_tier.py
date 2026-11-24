@@ -520,7 +520,10 @@ def test_the_switch_says_it_is_under_way_while_it_stops_and_starts_the_team(box)
     _until(lambda: path.exists() and path.read_text(encoding="utf-8").splitlines() == ["down switching", "up switching"],
            f"the switch did not say it was under way: {path.read_text(encoding='utf-8') if path.exists() else ''}")
     _until(lambda: (box.notice() or {}).get("tier") == "full", f"no notice of the full image: {box.notice()}")
-    assert not tier.exists() and not (box.runtime / ".tools-switching").exists()
+    # the notice is written before the finally of the switch takes .tools-switching away: wait for the end, do not read it once
+    switching = box.runtime / ".tools-switching"
+    _until(lambda: not tier.exists() and not switching.exists(),
+           f"the switch is over and still says it is under way: tier={tier.exists()} switching={switching.exists()}")
 
 
 def _register_function() -> str:
