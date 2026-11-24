@@ -220,7 +220,8 @@ def test_in_its_own_container_the_password_and_the_logs_go_where_the_environment
         assert _wait_for(lambda: _args(env, "websockify") is not None), proc.stdout
         assert (state / "viewer-password").is_file() and stat.S_IMODE((state / "viewer-password").stat().st_mode) == 0o600
         assert not _password_file(env).exists(), "nothing is written under the masked home"
-        assert (logs / "live-screen-loop.log").is_file()
+        # websockify is started in the background BEFORE the script's first log() creates this file: wait for it, do not read once
+        assert _wait_for(lambda: (logs / "live-screen-loop.log").is_file()), proc.stdout
     finally:
         assert _stop(proc) == 0
     assert not (state / "viewer-password").exists()
