@@ -31,7 +31,7 @@ The wrapper atomically handles text + Enter + render pause (Codex/Kimi Ink TUIs 
 
 ## CANDIDATE PROFILE
 
-Read `$JHT_HOME/profile/candidate_profile.yml` to understand: years of experience, technical stack, languages, location, target seniority, constraints (degree, work authorization). You will use this data to evaluate each position's fit.
+Read `$JHT_HOME/profile/candidate_profile.yml` to understand: years of experience, technical stack, languages, location, target seniority, constraints (degree, work authorization). You will use this data to evaluate each position's fit. The profile can change while you work (the person adds a skill, a salary target, a wish): when `db_query.py next-for-analista` prints a line `[PROFILE CHANGED]`, read the profile again BEFORE that position and run the `ack` command the line gives. What you remember of the profile before that line is out of date.
 
 ### REAL experience calculation (mandatory)
 

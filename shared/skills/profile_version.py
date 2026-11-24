@@ -24,6 +24,11 @@ profile itself, whoever wrote it (the Assistente writes the YAML directly), so n
                            circles on the profile as it is now (`first: true`, `changed: false`) and the version is
                            recorded as seen. Every later call says `changed: true` until A has acknowledged.
   ack --agent A            A has read the profile again and rebuilt its circles: the version now is the one it has seen
+  check --agent A --all    the same for the WHOLE profile, not only the fields of the search: the Analista and the Scorer judge a
+                           position on everything (the skills, the experience, the salary target, the blocks), so any change
+                           of the profile is news to them. `db_query.py next-for-analista` / `next-for-scorer` ask it for the
+                           agent of the shell (JHT_AGENT_NAME) and print the line that tells it to read the profile again.
+  ack --agent A [--all]    A has read the profile again: both versions now are the ones it has seen
 
 What it prints is the version, the group names and booleans: never a value of the profile.
 """
@@ -153,7 +158,7 @@ def current(path: Path | None = None) -> dict:
     if data is None:
         return {"version": None, "groups": {}}
     groups = {name: _hash(value) for name, value in groups_of(data).items()}
-    return {"version": _hash(groups), "groups": groups}
+    return {"version": _hash(groups), "groups": groups, "whole": _hash(data)}
 
 
 def _read_json(path: Path):
@@ -195,6 +200,23 @@ def sync(path: Path | None = None) -> dict:
     return now
 
 
+def _seen_now(now: dict) -> dict:
+    return {"version": now["version"], "groups": now["groups"], "whole": now["whole"], "at": time.time()}
+
+
+def check_whole(agent: str, path: Path | None = None) -> dict:
+    """What `agent` has to know about the whole profile: nothing changed, the first look, or a change since it last acknowledged."""
+    now = current(path)
+    if now["version"] is None:
+        return {"ok": True, "whole": None, "changed": False, "first": False, "reason": "the profile cannot be read"}
+    seen = _read_json(seen_path(agent)) or {}
+    if not isinstance(seen.get("whole"), str):
+        # the first look: it read the profile at its start, as it is now
+        _write_json(seen_path(agent), dict(seen, **_seen_now(now)) if seen else _seen_now(now))
+        return {"ok": True, "whole": now["whole"], "changed": False, "first": True}
+    return {"ok": True, "whole": now["whole"], "changed": seen["whole"] != now["whole"], "first": False}
+
+
 def check(agent: str, path: Path | None = None) -> dict:
     """What `agent` has to know: nothing changed, the first look, or the groups that changed since it last acknowledged."""
     now = sync(path)
@@ -202,7 +224,7 @@ def check(agent: str, path: Path | None = None) -> dict:
         return {"ok": True, "version": None, "changed": False, "first": False, "groups": [], "reason": "the profile cannot be read"}
     seen = _read_json(seen_path(agent))
     if not seen or not isinstance(seen.get("version"), str):
-        _write_json(seen_path(agent), {"version": now["version"], "groups": now["groups"], "at": time.time()})
+        _write_json(seen_path(agent), _seen_now(now))
         return {"ok": True, "version": now["version"], "changed": False, "first": True, "groups": []}
     if seen["version"] == now["version"]:
         return {"ok": True, "version": now["version"], "changed": False, "first": False, "groups": []}
@@ -215,7 +237,7 @@ def ack(agent: str, path: Path | None = None) -> dict:
     now = sync(path)
     if now["version"] is None:
         return {"ok": False, "reason": "the profile cannot be read"}
-    if not _write_json(seen_path(agent), {"version": now["version"], "groups": now["groups"], "at": time.time()}):
+    if not _write_json(seen_path(agent), _seen_now(now)):
         return {"ok": False, "reason": "the acknowledgement cannot be written"}
     return {"ok": True, "version": now["version"], "acknowledged": True}
 
@@ -226,7 +248,9 @@ def main(argv=None) -> int:
     sub.add_parser("current")
     sub.add_parser("sync")
     for name in ("check", "ack"):
-        sub.add_parser(name).add_argument("--agent", required=True)
+        one = sub.add_parser(name)
+        one.add_argument("--agent", required=True)
+        one.add_argument("--all", action="store_true", help="the whole profile, not only the fields of the search")
     args = ap.parse_args(argv)
     if args.cmd in ("check", "ack"):
         agent = args.agent.strip().lower()
@@ -238,7 +262,7 @@ def main(argv=None) -> int:
     elif args.cmd == "sync":
         out = sync()
     elif args.cmd == "check":
-        out = check(agent)
+        out = check_whole(agent) if args.all else check(agent)
     else:
         out = ack(agent)
     print(json.dumps(out, sort_keys=True, ensure_ascii=False))

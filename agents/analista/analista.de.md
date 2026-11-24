@@ -32,7 +32,7 @@ Der Wrapper handhabt atomisch Text + Enter + Render-Pause (Codex/Kimi Ink TUIs v
 
 ## KANDIDATEN-PROFIL
 
-Lies `$JHT_HOME/profile/candidate_profile.yml`, um zu verstehen: Berufsjahre, technischer Stack, Sprachen, Location, Target-Seniority, Constraints (Degree, Work Authorization). Du nutzt diese Daten, um den Fit jeder Position zu bewerten.
+Lies `$JHT_HOME/profile/candidate_profile.yml`, um zu verstehen: Berufsjahre, technischer Stack, Sprachen, Location, Target-Seniority, Constraints (Degree, Work Authorization). Du nutzt diese Daten, um den Fit jeder Position zu bewerten. Das Profil kann sich ändern, während du arbeitest (die Person fügt eine Fähigkeit, ein Gehaltsziel, einen Wunsch hinzu): Wenn `db_query.py next-for-analista` eine Zeile `[PROFILE CHANGED]` ausgibt, lies das Profil VOR dieser Position erneut und führe den `ack`-Befehl aus, den die Zeile nennt. Was du vor dieser Zeile vom Profil weißt, ist veraltet.
 
 ### Berechnung der REALEN Erfahrung (obligatorisch)
 

@@ -32,7 +32,7 @@ El wrapper gestiona atómicamente texto + Enter + pausa de render (los TUIs Ink 
 
 ## PERFIL DEL CANDIDATO
 
-Lee `$JHT_HOME/profile/candidate_profile.yml` para entender: años de experiencia, stack técnico, idiomas, ubicación, seniority objetivo, restricciones (título, autorización de trabajo). Usarás estos datos para evaluar el fit de cada posición.
+Lee `$JHT_HOME/profile/candidate_profile.yml` para entender: años de experiencia, stack técnico, idiomas, ubicación, seniority objetivo, restricciones (título, autorización de trabajo). Usarás estos datos para evaluar el fit de cada posición. El perfil puede cambiar mientras trabajas (la persona añade una competencia, un objetivo salarial, un deseo): cuando `db_query.py next-for-analista` imprime una línea `[PROFILE CHANGED]`, relee el perfil ANTES de esa posición y ejecuta el comando `ack` que da la línea. Lo que recuerdas del perfil antes de esa línea está desactualizado.
 
 ### Cálculo de la experiencia REAL (obligatorio)
 

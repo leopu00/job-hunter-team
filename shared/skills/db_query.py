@@ -1260,6 +1260,24 @@ def waiting_user_requests(conn):
     return waiting
 
 
+def profile_news_line(role):
+    """The line that tells the Analista or the Scorer of this shell (JHT_AGENT_NAME) that the candidate profile changed since it
+    last read it, or ''. They judge every position on the whole profile and read it once at their start: a skill, a salary target
+    or a wish added later would otherwise never reach them. Silence (no agent name, no profile, an error) is ''."""
+    agent = (os.environ.get('JHT_AGENT_NAME') or '').strip().lower()
+    if not agent.startswith(role + '-'):
+        return ''
+    try:
+        import profile_version
+        if not profile_version.AGENT.match(agent) or not profile_version.check_whole(agent).get('changed'):
+            return ''
+    except Exception:  # noqa: BLE001 — a question about news never costs the queue
+        return ''
+    return ("[PROFILE CHANGED] The candidate profile changed since you last read it: read "
+            "$JHT_HOME/profile/candidate_profile.yml again before this position, then run "
+            f"python3 /app/shared/skills/profile_version.py ack --agent {agent} --all")
+
+
 def next_for_role(role, min_score=None, older_than_days=None, limit=None,
                   as_json=False):
     conn = get_db()
@@ -1601,7 +1619,10 @@ def next_for_role(role, min_score=None, older_than_days=None, limit=None,
 
     waiting = (waiting_user_requests(conn)
                if role == 'analista' and not rows and not as_json else [])
+    news = profile_news_line(role) if role in ('analista', 'scorer') and rows and not as_json else ''
     _emit_queue(conn, role, label, rows, lim, as_json)
+    if news:
+        print(news)
     if waiting:
         print("User requests waiting — serve them before pausing, one position "
               "per turn: " + ", ".join(f"{q} ({n})" for q, n in waiting) + ".")

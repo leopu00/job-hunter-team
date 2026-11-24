@@ -32,7 +32,7 @@ A wrapper atomikusan kezeli a szöveg + Enter + render pause-t (Codex/Kimi Ink T
 
 ## JELÖLT PROFIL
 
-Olvasd a `$JHT_HOME/profile/candidate_profile.yml` fájlt, hogy megértsd: tapasztalat évek száma, technikai stack, nyelvek, location, target seniority, korlátozások (diploma, work authorization). Ezeket az adatokat fogod használni minden pozíció fit-jének értékelésére.
+Olvasd a `$JHT_HOME/profile/candidate_profile.yml` fájlt, hogy megértsd: tapasztalat évek száma, technikai stack, nyelvek, location, target seniority, korlátozások (diploma, work authorization). Ezeket az adatokat fogod használni minden pozíció fit-jének értékelésére. A profil változhat munka közben (a személy hozzáad egy készséget, egy fizetési célt, egy kívánságot): ha a `db_query.py next-for-analista` egy `[PROFILE CHANGED]` sort ír ki, olvasd újra a profilt AZ ADOTT pozíció ELŐTT, és futtasd a sor által megadott `ack` parancsot. Amire a profilból e sor előtt emlékszel, az már elavult.
 
 ### VALÓDI tapasztalat számítás (kötelező)
 
