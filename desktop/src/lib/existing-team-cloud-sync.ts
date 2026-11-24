@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import type { CloudTokenCheck } from "./existing-team-cloud-token";
 import { teamStatusErrorCode } from "./existing-team-status";
 
 /**
@@ -21,6 +22,8 @@ export type CloudSyncStatus = (typeof CLOUD_SYNC_STATUSES)[number];
 
 export type CloudSyncState =
   | { state: "absent" }
+  /** Paused on purpose (the pairing is kept): never from the reader, see `withSyncPaused`. */
+  | { state: "paused" }
   | { state: "unreadable" }
   | {
       state: "ok";
@@ -67,6 +70,16 @@ export function pickCloudSync(data: unknown): CloudSyncState | null {
     lastAttemptAt: data.last_attempt_at,
     consecutiveFailures: data.consecutive_failures,
   };
+}
+
+/**
+ * «Paused» is not «absent» and not a refused token. The reader above never looks at the box's
+ * cloud configuration (its token lives there), so a paused sync reads as «absent» (no push
+ * state) or as the last push's failure; the box's own token check, which does read it, says
+ * «paused» and puts it right here. Any other answer of the check leaves the reading as it is.
+ */
+export function withSyncPaused(reading: CloudSyncReading, token: CloudTokenCheck): CloudSyncReading {
+  return reading.kind === "read" && token.kind === "paused" ? { ...reading, sync: { state: "paused" } } : reading;
 }
 
 /** Reads it again from the team's VPS: nothing is kept between two reads. */

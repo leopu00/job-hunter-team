@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { appLocale } from "../../lib/app-locale";
-import { readExistingTeamCloudSync, type CloudSyncReading } from "../../lib/existing-team-cloud-sync";
+import { readExistingTeamCloudSync, withSyncPaused, type CloudSyncReading } from "../../lib/existing-team-cloud-sync";
 import {
   checkCloudToken,
   isSyncToken,
@@ -24,7 +24,8 @@ const BUTTON =
 
 /**
  * How the box's push to the website is going, read from the team's VPS at each visit and at
- * «Aggiorna». A token the website refuses is said in red, and one that is about to expire is said
+ * «Aggiorna». A sync paused on purpose is said so, in the quiet colour: no token is asked of the
+ * website and nothing is red. A token the website refuses is said in red, and one that is about to expire is said
  * before it does, each with the way to renew it from here: on 23/10 a box had been refused for 16
  * days and nothing in the app said so, and the way back was a command on the box. The token is
  * minted on the website (the app never does) and handed to the box by the app: the field holds it
@@ -45,9 +46,12 @@ export function CloudSyncCard() {
     if (ticket !== latest.current) return;
     setReading(result);
     // The box's own view of its token, asked only when the push state could be read: a team whose
-    // image has no such reader, or whose website cannot be reached, simply says nothing more.
-    const checked = result.kind === "read" && result.sync.state === "ok" ? await checkCloudToken() : { kind: "unknown" as const };
-    if (ticket === latest.current) setToken(checked);
+    // image has no such reader, or whose website cannot be reached, simply says nothing more. It is
+    // also what tells «paused» (no token asked of the website) from «absent» and from a refusal.
+    const checked = result.kind === "read" ? await checkCloudToken() : { kind: "unknown" as const };
+    if (ticket !== latest.current) return;
+    setToken(checked);
+    setReading(withSyncPaused(result, checked));
   }, []);
 
   useEffect(() => {
@@ -68,7 +72,8 @@ export function CloudSyncCard() {
     lines = [t.failed.replace("{code}", reading.code)];
   } else if (reading?.kind === "read") {
     const sync = reading.sync;
-    if (sync.state === "absent") lines = [t.absent];
+    if (sync.state === "paused") lines = [t.paused];
+    else if (sync.state === "absent") lines = [t.absent];
     else if (sync.state === "unreadable") lines = [t.unreadable];
     else {
       const last = sync.lastSuccessAt ? t.lastSuccess.replace("{time}", stamp(sync.lastSuccessAt)) : t.lastSuccessNever;

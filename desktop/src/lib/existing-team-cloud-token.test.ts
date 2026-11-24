@@ -22,6 +22,7 @@ describe("how long the box's token lasts", () => {
     expect(await ask({ ok: true, state: "expiring", expires_at: "2026-11-01T00:00:00.000Z", days_left: 9 })).toEqual({
       kind: "expiring", expiresAt: "2026-11-01T00:00:00.000Z", daysLeft: 9,
     });
+    expect(await ask({ ok: true, op: "check", state: "paused", expires_at: null, days_left: null })).toEqual({ kind: "paused" });
     for (const state of ["active", "none", "unknown"]) expect(await ask({ ok: true, state })).toEqual({ kind: "fine" });
   });
 
@@ -69,7 +70,7 @@ describe("the renewal", () => {
     expect(await renewCloudToken(SECRET, withTarget({ ok: false, error: "position_write_read_only" }))).toEqual({ ok: false, failure: "cloud_token_read_only" });
     expect(await renewCloudToken(SECRET, withTarget({ ok: false, error: "existing_team_runtime_required" }))).toEqual({ ok: false, failure: "other" });
     const key = { ok: true, connectionKey: "k1" };
-    for (const code of ["token_rejected", "token_other_account", "cloud_unreachable", "cloud_not_configured", "cloud_write_failed", "existing_team_runtime_outdated", "existing_team_runtime_target_changed"]) {
+    for (const code of ["token_rejected", "token_other_account", "cloud_unreachable", "cloud_not_configured", "cloud_write_failed", "cloud_sync_paused", "existing_team_runtime_outdated", "existing_team_runtime_target_changed"]) {
       expect(await renewCloudToken(SECRET, withTarget(key, { ok: false, error: code }))).toEqual({ ok: false, failure: code });
     }
     expect(await renewCloudToken(SECRET, withTarget(key, { ok: false, error: SECRET }))).toEqual({ ok: false, failure: "other" });
