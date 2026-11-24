@@ -60,6 +60,7 @@ HANDLERS = {
     "apply.check": lambda args, _role: notary.check(args["position_id"]),
     "apply.claim": lambda args, _role: notary.claim(args["position_id"], args["destination"]),
     "apply.revoke": lambda args, _role: notary.revoke(args["position_id"], args["instant"]),
+    "web.pause": webauth.pause_sync,
 }
 
 
@@ -138,12 +139,16 @@ def _web_sync_loop(stopping: threading.Event) -> None:
     unavailable route waits longer; the notary remains fail-closed meanwhile."""
     delay = WEB_SYNC_INTERVAL
     while not stopping.wait(delay):
-        if not webauth.configured():
+        # Asked before EVERY call (the pause can arrive with the team running): off means no request and no noise.
+        if not webauth.configured() or not webauth.sync_enabled():
             delay = WEB_SYNC_INTERVAL
             continue
         try:
             webauth.sync()
             delay = WEB_SYNC_INTERVAL
+        except webauth.WebAuthRefusal as err:
+            # A pause that landed between the check and the call is not a failure.
+            delay = WEB_SYNC_INTERVAL if err.code == "web_sync_paused" else WEB_SYNC_ERROR_INTERVAL
         except Exception:  # noqa: BLE001 — a later retry must survive every failed poll
             delay = WEB_SYNC_ERROR_INTERVAL
 

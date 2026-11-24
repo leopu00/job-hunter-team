@@ -309,6 +309,7 @@ def test_web_receipts_are_bound_to_the_host_account_and_consumed_once(broker, mo
     assert admin(broker, "apply", "account", account) == (0, {"ok": True, "account_id": account})
     monkeypatch.setattr(sys, "stdin", type("I", (), {"buffer": io.BytesIO(b"jht_sync_abcdefghijklmnopqrstuvwxyz")})())
     assert admin(broker, "apply", "web-token") == (0, {"ok": True, "token": "stored"})
+    assert admin(broker, "apply", "web-sync", "on") == (0, {"ok": True, "sync": "on"})
 
     payload = {
         "ok": True,
@@ -343,7 +344,7 @@ def test_web_status_reports_the_last_result_for_host_diagnosis(broker):
     account = "11111111-1111-4111-8111-111111111111"
     broker.webauth.set_account(account)
     assert admin(broker, "apply", "web-status") == (0, {
-        "ok": True, "account_id": account, "token": "absent", "last_result": "account_set",
+        "ok": True, "sync": "off", "account_id": account, "token": "absent", "last_result": "account_set",
     })
 
 
@@ -351,6 +352,7 @@ def test_a_legacy_web_token_requires_repair_and_records_no_authorisation(broker,
     account = "11111111-1111-4111-8111-111111111111"
     broker.webauth.set_account(account)
     broker.webauth.set_token(b"jht_sync_abcdefghijklmnopqrstuvwxyz")
+    broker.webauth.set_sync("on")
 
     def repair_required(*_args):
         raise broker.webauth.WebAuthRefusal("web_repair_required")
@@ -366,6 +368,7 @@ def test_web_receipt_for_another_account_records_no_authorisation(broker, monkey
     account = "11111111-1111-4111-8111-111111111111"
     broker.webauth.set_account(account)
     broker.webauth.set_token(b"jht_sync_abcdefghijklmnopqrstuvwxyz")
+    broker.webauth.set_sync("on")
 
     class Reply:
         status = 200
@@ -382,6 +385,7 @@ def test_a_later_web_withdrawal_wins_over_the_same_position(broker, monkeypatch)
     account = "11111111-1111-4111-8111-111111111111"
     broker.webauth.set_account(account)
     broker.webauth.set_token(b"jht_sync_abcdefghijklmnopqrstuvwxyz")
+    broker.webauth.set_sync("on")
     rows = [
         {"id": "22222222-2222-4222-8222-222222222222", "legacy_id": 42, "created_at": T1,
          "summary": "Synthetic role @ Synthetic company", "host": "example.com", "action": "position.apply_authorize", "status": "done"},
@@ -404,6 +408,7 @@ def test_a_stale_web_row_is_marked_used_and_does_not_block_later_rows(broker, mo
     account = "11111111-1111-4111-8111-111111111111"
     broker.webauth.set_account(account)
     broker.webauth.set_token(b"jht_sync_abcdefghijklmnopqrstuvwxyz")
+    broker.webauth.set_sync("on")
     broker.notary.record(42, T2, "user_local", WEB)
     rows = [
         {"id": "22222222-2222-4222-8222-222222222222", "legacy_id": 42, "created_at": T1,
@@ -428,6 +433,7 @@ def test_a_full_web_page_is_followed_without_waiting_for_the_next_poll(broker, m
     account = "11111111-1111-4111-8111-111111111111"
     broker.webauth.set_account(account)
     broker.webauth.set_token(b"jht_sync_abcdefghijklmnopqrstuvwxyz")
+    broker.webauth.set_sync("on")
     pages = iter([
         {"ok": True, "account_id": account, "has_more": True, "cursor": T1, "authorizations": [
             {"id": "22222222-2222-4222-8222-222222222222", "legacy_id": 42, "created_at": T1,
