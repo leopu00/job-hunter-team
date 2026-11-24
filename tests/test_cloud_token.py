@@ -76,6 +76,7 @@ def box(tmp_path, monkeypatch):
         "token_name": "old", "supabase_refresh_token": "KEEP-ME",
     }))
     monkeypatch.setattr(ct, "CLOUD_FILE", str(file))
+    monkeypatch.delenv("JHT_CLOUD_SYNC", raising=False)
     return file
 
 
@@ -153,14 +154,52 @@ def test_apply_writes_the_verified_token_and_keeps_every_other_key(box, capsys):
     assert sorted(p.name for p in box.parent.iterdir()) == ["cloud.json"]  # no temp file left
 
 
-def test_a_sync_the_user_turned_off_stays_off(box, capsys):
+def _pause(box, **extra):
+    config = json.loads(box.read_text())
+    config.update({"enabled": False, "paused_at": "2026-11-24T10:00:00.000Z", **extra})
+    box.write_text(json.dumps(config))
+    box.chmod(0o600)
+    return box.read_bytes()
+
+
+@pytest.mark.parametrize("paused", [True, False], ids=["paused", "disabled-no-mark"])
+def test_a_sync_off_refuses_the_renewal_before_the_website_and_writes_nothing(box, capsys, paused):
     config = json.loads(box.read_text())
     config["enabled"] = False
+    if paused:
+        config["paused_at"] = "2026-11-24T10:00:00.000Z"
     box.write_text(json.dumps(config))
-    code, out, _ = run("apply", stdin=line(NEW), website=Website({NEW: body()}), capsys=capsys)
+    before = box.read_bytes()
+    site = Website({NEW: body()})
+    code, out, raw = run("apply", stdin=line(NEW), website=site, capsys=capsys)
+    assert code == 1 and out == {"ok": False, "op": "apply", "code": "cloud_sync_paused"}
+    assert site.calls == []  # the website is never asked
+    assert box.read_bytes() == before  # token, name and mode untouched
+    assert NEW not in raw
+
+
+def test_the_variable_off_refuses_the_renewal_of_an_enabled_file(box, capsys, monkeypatch):
+    monkeypatch.setenv("JHT_CLOUD_SYNC", "0")
+    before = box.read_bytes()
+    site = Website({NEW: body()})
+    code, out, _ = run("apply", stdin=line(NEW), website=site, capsys=capsys)
+    assert (code, out["code"], site.calls) == (1, "cloud_sync_paused", [])
+    assert box.read_bytes() == before
+
+
+def test_a_paused_sync_is_said_paused_by_check_without_asking_the_website(box, capsys):
+    _pause(box)
+    site = Website({OLD: body()})
+    code, out, _ = run("check", website=site, capsys=capsys)
     assert code == 0
-    written = json.loads(box.read_text())
-    assert written["token"] == NEW and written["enabled"] is False
+    assert out == {"ok": True, "op": "check", "state": "paused", "expires_at": None, "days_left": None}
+    assert site.calls == []
+
+
+def test_an_enabled_sync_still_renews_and_checks(box, capsys):
+    code, out, _ = run("apply", stdin=line(NEW), website=Website({NEW: body()}), capsys=capsys)
+    assert code == 0 and out["ok"] is True
+    assert json.loads(box.read_text())["token"] == NEW
 
 
 @pytest.mark.parametrize("website,reason", [

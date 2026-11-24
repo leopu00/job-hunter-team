@@ -47,6 +47,11 @@ import sys
 import time
 from datetime import datetime, timezone
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import sync_switch  # noqa: E402  (the one answer to «is the website sync on?»)
+
+sys.path.pop(0)
+
 
 def _home():
     return os.environ.get("JHT_HOME") or os.path.expanduser("~/.jht")
@@ -69,16 +74,19 @@ PULL_CURSOR = ".cloud-pull-cursor.json"   # pull desired-state ({since})
 QUARANTINE = ".cloud-push-quarantine.json"  # metadata opaca, mai payload
 
 
+def _cloud_state():
+    """(attiva, motivo) dall'helper unico: stesso predicato di pid1 e di
+    process_health._cloud_daemon_expected, più JHT_CLOUD_SYNC e la pausa.
+    Se la sync non è attesa (disabilitata, in pausa, spenta da env) i segnali
+    di staleness NON sono guasti: nessun falso allarme."""
+    config = sync_switch.read_config(_home())
+    answer = sync_switch.sync_switch(config)
+    on = answer["active"] and (answer["reason"] == "env-on" or isinstance(config.get("token"), str))
+    return on, answer["reason"]
+
+
 def _cloud_enabled():
-    """True se il cloud sync è configurato+abilitato (stesso predicato di pid1 /
-    process_health._cloud_daemon_expected). Se disabilitato, la sync non è
-    attesa → i segnali di staleness sono INFO, non guasti."""
-    try:
-        with open(os.path.join(_home(), "cloud.json"), encoding="utf-8") as f:
-            cfg = json.load(f)
-    except (OSError, ValueError):
-        return False
-    return cfg.get("enabled") is True and isinstance(cfg.get("token"), str)
+    return _cloud_state()[0]
 
 
 def _weekly_halt():
@@ -206,7 +214,7 @@ def _scan_daemon_log():
 
 
 def scan():
-    enabled = _cloud_enabled()
+    enabled, sync_reason = _cloud_state()
     halted = _weekly_halt()
     working = enabled and not halted  # sync attesa solo se il team lavora
 
@@ -298,6 +306,7 @@ def scan():
     high = [p for p in problems if p["severity"] == "HIGH"]
     return {
         "cloud_enabled": enabled,
+        "sync_paused": sync_reason in ("paused", "env-off"),
         "weekly_halt": halted,
         "quarantine": {
             "active": len(quarantine_entries),
@@ -322,6 +331,8 @@ def main():
         state = "HEALTHY" if res["healthy"] else "PROBLEMS"
         print(f"sync-health: {state}  (cloud_enabled={res['cloud_enabled']}, "
               f"team_working={res['team_working']})")
+        if res["sync_paused"]:
+            print("  sync paused : the website sync is paused on purpose: nothing is expected to move")
         pc = res["push_cursor"]
         plc = res["pull_cursor"]
         print(f"  push cursor : positions={pc.get('positions')} "

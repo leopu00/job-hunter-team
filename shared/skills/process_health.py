@@ -26,6 +26,11 @@ import json
 import os
 import sys
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import sync_switch  # noqa: E402  (the one answer to «is the website sync on?»)
+
+sys.path.pop(0)
+
 # Processi attesi long-running. Per ognuno: (nome, marker-cmdline, gruppo).
 #   bridge-suite → un solo `start-agent.sh bridge` li rispawna TUTTI (detached,
 #                  fuori dal respawn di pid1) → riparabile dal Mantenitore.
@@ -146,12 +151,10 @@ def _cloud_daemon_expected():
     cloud.json manca/illeggibile (= nessun pairing → nessun daemon atteso).
     """
     home = os.environ.get("JHT_HOME") or os.path.expanduser("~")
-    try:
-        with open(os.path.join(home, "cloud.json"), encoding="utf-8") as f:
-            cfg = json.load(f)
-    except (FileNotFoundError, json.JSONDecodeError, OSError):
-        return False
-    return cfg.get("enabled") is True and isinstance(cfg.get("token"), str)
+    config = sync_switch.read_config(home)
+    answer = sync_switch.sync_switch(config)
+    # A sync paused on purpose (cloud.json `paused_at`, or JHT_CLOUD_SYNC=0) expects no daemon.
+    return answer["active"] and (answer["reason"] == "env-on" or isinstance(config.get("token"), str))
 
 
 def _telegram_configured():

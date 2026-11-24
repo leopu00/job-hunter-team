@@ -11,8 +11,10 @@ the new token, a secret, travels on stdin as ONE JSON line ({"token": "..."}), n
 so it is in no process list and in no SSH command line. It is never printed, nor logged.
 
   check    asks the website how long the box's CURRENT token lasts (GET /api/cloud-sync/ping)
-           -> {"ok": true, "op": "check", "state": "none|active|expiring|expired|unknown",
+           -> {"ok": true, "op": "check", "state": "none|active|expiring|expired|unknown|paused",
                "expires_at": <ISO text or null>, "days_left": <int or null>}
+           A sync that is off or paused (shared/skills/sync_switch.py) is `paused`, and the
+           website is not asked: a paused box owes it no token.
   apply    verifies the token on stdin against the website, and only if the website accepts it AND
            it belongs to the account this box is paired with, writes it into cloud.json (every
            other key kept, mode 0600, atomic) -> {"ok": true, "op": "apply", "expires_at": ...}
@@ -24,6 +26,7 @@ Refusals are {"ok": false, "op": ..., "code": <closed code>}; exit 0 done, 1 ref
   token_rejected         the website refuses that token (expired, revoked, unknown)
   token_other_account    the token is valid but belongs to another account than the box's
   cloud_write_failed     cloud.json could not be rewritten
+  cloud_sync_paused      the website sync is off or paused: a token is not renewed (apply only)
 """
 
 import argparse
@@ -38,6 +41,11 @@ import urllib.error
 import urllib.request
 from datetime import datetime, timezone
 from urllib.parse import urlsplit
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import sync_switch  # noqa: E402  (the one answer to «is the website sync on?»)
+
+sys.path.pop(0)
 
 JHT_HOME = os.environ.get("JHT_HOME") or "/jht_home"
 CLOUD_FILE = os.path.join(JHT_HOME, "cloud.json")
@@ -163,6 +171,8 @@ def describe(body: dict, now: float) -> dict:
 
 def check(now: float, opener=open_url) -> dict:
     config = read_cloud()
+    if not sync_switch.sync_switch(config)["active"]:
+        return {"ok": True, "op": "check", "state": "paused", "expires_at": None, "days_left": None}
     token = config.get("token")
     if not isinstance(token, str) or not TOKEN.match(token):
         raise Refused("cloud_not_configured")
@@ -215,6 +225,8 @@ def write_cloud(config: dict) -> None:
 
 def apply(token: str, now: float, opener=open_url) -> dict:
     config = read_cloud()
+    if not sync_switch.sync_switch(config)["active"]:
+        raise Refused("cloud_sync_paused")
     owner = config.get("user_id")
     if not isinstance(owner, str) or not owner:
         raise Refused("cloud_not_configured")
@@ -223,7 +235,7 @@ def apply(token: str, now: float, opener=open_url) -> dict:
         raise Refused("token_other_account")
     named = body.get("token")
     name = named.get("name") if isinstance(named, dict) and isinstance(named.get("name"), str) else None
-    # Only the token and its name change: a sync the user turned off stays off.
+    # Only the token and its name change.
     config["token"] = token
     if name is not None:
         config["token_name"] = name[:120]
