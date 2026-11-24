@@ -5,11 +5,13 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
-## [0.4.0] — 2026-11-15
+## [0.4.0] — date to be set
 
-**The agent team runs in a Podman container on your computer (or a VPS), driven from the `jht` CLI, and the
-team runs on Pi with an API key, from GLM (Z.ai), Kimi (Moonshot), OpenAI or Claude (Anthropic).** The desktop app is not in 0.4.0. The release notes say which of
-this was tested on real machines and which was not.
+<!-- To settle before the tag: the date; whether GLM and Kimi are tested for this release (now: no, and the Providers section says so); the ChatGPT subscription, which `jht setup` still offers (shared/runtime/release-providers.js) while these notes do not promise it. Remove this line when settled. -->
+
+**The agent team runs in a Podman container on your computer, driven from the `jht` CLI, with the sync with the website
+off. The team runs on Pi with an API key, and Claude (Anthropic) and OpenAI are the two providers tested for this
+release.** The desktop app is not in 0.4.0. The release notes say which of this was tested on real machines and which was not.
 
 ### Platforms
 
@@ -22,17 +24,34 @@ this was tested on real machines and which was not.
   Windows 11.
 - **The desktop app is not in 0.4.0**; `jht game` and `jht gui` say they were removed.
 
+### Sync with the website: off by default
+
+- **The sync is optional and off on a new installation.** While it is off no step of the sync reaches the website: the
+  daemon, the pollers, the push and the steps of `jht team start` stop at «not enabled». `jht cloud login` turns it on;
+  `jht cloud status` says if it is on, paused or off.
+- **`jht cloud pause` and `jht cloud resume`** (with `--json`) turn it off and on again **without losing the pairing**:
+  the token, the user and the address stay as they were. `jht cloud disable` is the other thing: it deletes the pairing and
+  revokes the token. `jht cloud resume` says when another device holds the team and how to take it (`jht cloud claim --force`).
+- **An installation paired before this version is paused once**, with a notice, the first time a `jht` command runs; the
+  pairing is kept and `jht cloud resume` turns it back on. The installers (`install.sh --pairing-token`, `install.ps1
+  -PairingToken`) pair a VPS with the sync paused, unless you ask for it on with `--cloud-sync on` (`-CloudSync on`).
+- `JHT_CLOUD_SYNC=0` turns it off whatever the file says; `JHT_CLOUD_SYNC=1` turns it on only where a pairing exists.
+- `jht cloud --help` says all of this in the seven languages and lists first what a person uses (status, pause, resume).
+  The website and its web commands stay offline while the sync is off.
+
 ### Providers
 
-- **Pi with OpenAI and a ChatGPT subscription** is offered too, new in this release: `jht setup` asks how Pi signs in (a key or the subscription); with the subscription no key is asked and Pi is opened for its own `/login`; not yet measured; JHT promises nothing about OpenAI's terms for this use or about what a given plan covers.
-- Four ways to power the team: **Pi with GLM (Z.ai)**, **Pi with Kimi (Moonshot)**, **Pi with OpenAI** or **Pi with Claude (Anthropic)**, each with an **API key** that `jht setup` asks for (typed hidden)
-  or takes from a file or from standard input: its cost is yours: set a spending ceiling (`no_quota_cap`, see PROVIDERS) and the team pauses there; without one nothing stops the spending. The
-  services a release offers are one list (`shared/runtime/release-providers.js`); `jht setup`,
-  `jht providers use` and `jht providers harness` refuse the others, and `jht doctor` says a team configured on
-  one of them is not supported in this release. The ChatGPT subscription (Codex) is not offered to new users in
-  0.4.0, but **a team you set up with 0.3.9 on it keeps working**, with one warning (in `jht team start`, `jht doctor`,
-  `jht status` and `jht providers`) that says how to move to an API key; its code stays. `jht providers update` without an id no longer
-  updates Kimi: name it (`jht providers update kimi`).
+- **Tested for 0.4.0: Pi with Claude (Anthropic)** and **Pi with OpenAI**, each with an **API key** that `jht setup`
+  asks for (typed hidden) or takes from a file or from standard input. Its cost is yours: set a spending ceiling
+  (`no_quota_cap`, see PROVIDERS) and the team pauses there; without one nothing stops the spending.
+- **GLM (Z.ai) and Kimi (Moonshot)** are still in `jht setup`, also on Pi with an API key, but **were not tested for this
+  release**.
+- **The ChatGPT subscription** (the Codex CLI, and Pi's own sign-in) is **not part of 0.4.0** and was not tested for it. A
+  team you set up with 0.3.9 on Codex keeps working, with one warning (in `jht team start`, `jht doctor`, `jht status`
+  and `jht providers`) that says how to move to an API key; its code stays.
+- The services a release offers are one list (`shared/runtime/release-providers.js`); `jht setup`, `jht providers use`
+  and `jht providers harness` refuse the others, and `jht doctor` says a team configured on one of them is not supported
+  in this release. `jht providers update` without an id no longer updates Kimi: name it (`jht providers update kimi`).
 - A key the provider refuses, a missing key or credit that has run out are reported by `jht team start`,
   `jht agents` and the chat, with the command that fixes it.
 
@@ -67,8 +86,8 @@ this was tested on real machines and which was not.
 
 ### Known limits
 
-- **What 0.4.0 runs**: only the Pi harness, with an API key from GLM, Kimi, OpenAI or Claude. The Codex CLI and
-  the ChatGPT subscription are not offered to new setups (a team set up with 0.3.9 on them keeps working, with a
+- **What 0.4.0 runs**: only the Pi harness, with an API key; Claude and OpenAI are the two tested providers. The Codex
+  CLI and the ChatGPT subscription are not part of this release (a team set up with 0.3.9 on them keeps working, with a
   warning), and neither is Claude Code as a harness; the desktop app is not in this release either.
 - **The Scouts' tools arrive after the install.** The first download is the core image. At the end of the
   onboarding a background job downloads the Scouts' tools (the full image) and moves the team there. If the move
