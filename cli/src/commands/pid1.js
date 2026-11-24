@@ -38,6 +38,7 @@ import { setupOpen } from '../lib/setup-open.js';
 import { forgetSpawnFailures } from '../lib/spawn-failed.js';
 import { syncSwitch } from '../../../shared/cloud/sync-switch.js';
 import { MIGRATION_NOTICE, migrateSyncChoice } from '../lib/cloud-sync-pause.js';
+import { brokerPauseNote, pauseBrokerWebSync } from '../lib/broker-web-sync.js';
 
 const JHT_ENTRY = '/app/cli/bin/jht.js';
 const JHT_HOME = '/jht_home';
@@ -780,7 +781,13 @@ async function dispatch() {
   // appena mintato. Su local non ha senso (no install.sh con --pairing-token).
   // Una installazione gia' accoppiata prima di questa versione, che non ha mai scelto, passa in pausa (una volta).
   try {
-    if (migrateSyncChoice(CLOUD_JSON_PATH).migrated) pid1Log(MIGRATION_NOTICE);
+    if (migrateSyncChoice(CLOUD_JSON_PATH).migrated) {
+      pid1Log(MIGRATION_NOTICE);
+      // The broker of this install may have been polling the site: it is paused before the host configures it, and the
+      // host (jht up) leaves it paused because cloud.json says so.
+      const brokerNote = brokerPauseNote(await pauseBrokerWebSync());
+      if (brokerNote) pid1Log(brokerNote);
+    }
   } catch (err) {
     pid1Log(`sync migration skipped (${err.message})`);
   }

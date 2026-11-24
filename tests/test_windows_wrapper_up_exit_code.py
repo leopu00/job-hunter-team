@@ -54,14 +54,14 @@ echo "$*" >> "$FAKE_LOG"
 case "$*" in
   "compose up -d"*) exit "${FAKE_COMPOSE_UP:-0}" ;;
   *"legacy.py exists "*) exit 1 ;;
-  *" apply web-status"|*" node -") exit 1 ;;
+  *" apply web-status"|*" apply web-sync "*|*" node -") exit 1 ;;
 esac
 exit 0
 """
 # After the migration the start hands the broker its web authorisations
 # (Initialize-BrokerWebAuthorisations); those native programs answer 1 too, so the
 # last one before the end of the script still leaves a 1 in $LASTEXITCODE.
-ANSWERED_ONE = ("legacy.py exists ", " apply web-status", " node -")
+ANSWERED_ONE = ("legacy.py exists ", " apply web-status", " apply web-sync ", " node -")
 
 
 def _wrapper_under_test(folder: Path) -> Path:

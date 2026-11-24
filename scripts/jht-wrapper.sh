@@ -6105,6 +6105,20 @@ broker_migrate_legacy_once() {
   return 0
 }
 
+# The broker cannot read the box's cloud.json, so the host tells it one word, on or off (the answer of the sync switch of the
+# box, JHT_CLOUD_SYNC and a pairing the migration is about to pause included), and the broker asks it before EVERY call to the site.
+# A box that cannot be read, or an old broker without the operation, leaves it off: no word, no call.  The agents' side can only
+# turn it off (jht cloud pause from inside); turning it on is this function's job, at every start and after jht cloud resume.
+broker_configure_web_sync() {
+  local agent_id="$1" broker_id="$2" mode
+  mode="$(docker exec -u 1001 "$agent_id" node -e '
+    const fs=require("fs"); let c=null; try { c=JSON.parse(fs.readFileSync("/jht_home/cloud.json","utf8")); } catch {}
+    import("/app/cli/src/lib/cloud-sync-pause.js").then((m) => process.stdout.write(m.brokerSyncMode(c)), () => process.stdout.write("off"));
+  ' 2>/dev/null)" || mode=off
+  [ "$mode" = on ] || mode=off
+  docker exec "$broker_id" jht-broker-admin apply web-sync "$mode" >/dev/null 2>&1 || true
+}
+
 # The broker owns the polling credential.  At first pairing only, the account
 # id is read from cloud.json in the box: that file is box-writable, so this is
 # a bootstrap residual.  Once present, the broker account is never replaced
@@ -6118,6 +6132,7 @@ broker_configure_web_authorisations() {
     const fs=require("fs"); try { const c=JSON.parse(fs.readFileSync("/jht_home/cloud.json","utf8"));
       if (typeof c.token === "string") process.stdout.write(c.token); } catch {}
   ' | docker exec -i "$broker_id" jht-broker-admin apply web-token >/dev/null 2>&1 || true
+  broker_configure_web_sync "$agent_id" "$broker_id"
   case "$state" in
     *'"account_id": null'*)
       account="$(docker exec -u 1001 "$agent_id" node -e '
@@ -10461,6 +10476,12 @@ case "$SUB" in
     require_compose_file
     require_docker
     ensure_up
-    docker exec $EXEC_FLAGS -e JHT_HOST_TYPE="$JHT_HOST_TYPE" "$ATTESTED_CONTAINER_ID" node "$NODE_ENTRY" "$@"
+    rc=0
+    docker exec $EXEC_FLAGS -e JHT_HOST_TYPE="$JHT_HOST_TYPE" "$ATTESTED_CONTAINER_ID" node "$NODE_ENTRY" "$@" || rc=$?
+    # The broker follows the switch of the sync: told again after every command that changes it (it is not made here if it is not there).
+    if [ "$rc" -eq 0 ] && [ "${1:-}" = cloud ]; then
+      case "${2:-}" in pause|resume|enable|login|disable) broker_configure_web_authorisations ;; esac
+    fi
+    exit "$rc"
     ;;
 esac

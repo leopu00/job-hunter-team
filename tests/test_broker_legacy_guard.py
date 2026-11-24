@@ -430,6 +430,8 @@ def test_the_broker_takes_no_descriptor_or_exposure_operation():
         # The application notary can only read or narrow a record.  Its
         # authorising write remains the host-only broker-admin operation.
         "apply.check", "apply.claim", "apply.revoke",
+        # And the link to the website can only be paused from here (webauth.py): turning it on is host-only.
+        "web.pause",
     }
     for module in (protocol, server, client):
         source = Path(module.__file__).read_text(encoding="utf-8")

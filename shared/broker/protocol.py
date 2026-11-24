@@ -9,8 +9,8 @@ register), never from the request.
 The admin operations (secrets, authorise, approve, allow, admission, and the
 recording of an authorisation to apply) are not here at all: they exist only in
 `jht-broker-admin`, which the host reaches by `exec` into the broker container.
-From this socket an authorisation can only be checked, claimed once or withdrawn:
-operations that narrow, never one that widens (notary.py).
+From this socket an authorisation can only be checked, claimed once or withdrawn, and the
+broker's link to the website can only be paused: operations that narrow, never one that widens (notary.py, webauth.py).
 """
 
 from __future__ import annotations
@@ -40,6 +40,8 @@ OPERATIONS: dict[str, tuple[dict[str, type], dict[str, type], tuple[str, ...]]] 
     "apply.check": ({"position_id": int}, {}, ANY_ROLE),
     "apply.claim": ({"position_id": int, "destination": str}, {}, ANY_ROLE),
     "apply.revoke": ({"position_id": int, "instant": str}, {}, ANY_ROLE),
+    # Narrows: the broker stops asking the website. Turning it on is a host act (`jht-broker-admin apply web-sync on`).
+    "web.pause": ({}, {}, ANY_ROLE),
 }
 SEND_KINDS = {"application": ("closer",), "chat": ("capitano", "assistente", "mentor")}
 MAX_SUBJECT = 300

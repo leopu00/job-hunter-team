@@ -5,6 +5,16 @@ The agents' socket has no operation in this module: a sync is an admin action,
 and the HTTP target is a constant rather than request input.  A received row is
 bound to the fixed account, used once by its row id, and translated into the
 notary's closed ``web:<host>`` destination.
+
+The sync is OFF until the host says it is on.  The broker cannot read the box's
+cloud.json (its home is an empty tmpfs: it never reads the agents' home), so the
+answer of the sync switch reaches it as one word in its own state: ``on`` or
+``off``.  The host sets it (``jht-broker-admin apply web-sync``) at every start
+of the team and after ``jht cloud pause|resume|enable|login|disable``; the agents'
+socket can only turn it off (``web.pause``), never on.  While it is not ``on``
+no request leaves for the website: ``sync()`` checks it right before the fetch,
+on every call, whoever calls it.  The word lives in the state volume, so a
+broker restarted alone keeps it.
 """
 
 from __future__ import annotations
@@ -24,6 +34,9 @@ MAX_TOKEN_BYTES = 4096
 MAX_USED_IDS = 20_000
 UUID = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", re.I)
 SYNC_TOKEN = re.compile(r"^jht_sync_[A-Za-z0-9_-]{16,2048}$")
+
+
+SYNC_MODES = ("on", "off")
 
 
 class WebAuthRefusal(Exception):
@@ -71,10 +84,32 @@ def set_token(raw: bytes) -> dict:
     return {"ok": True, "token": "stored"}
 
 
+def set_sync(mode: object) -> dict:
+    """Say whether the website sync is on.  Anything but «on» is off."""
+    if mode not in SYNC_MODES:
+        raise WebAuthRefusal("sync_mode_invalid")
+    with store.locked(STATE):
+        state = _read()
+        state["sync"] = mode
+        state["last_result"] = "sync_" + mode
+        _write(state)
+    return {"ok": True, "sync": mode}
+
+
+def pause_sync(_args: object = None, _role: object = None) -> dict:
+    """The agents' socket: it narrows (turns the sync off) and never widens."""
+    return set_sync("off")
+
+
+def sync_enabled() -> bool:
+    return _read().get("sync") == "on"
+
+
 def show() -> dict:
     state = _read()
     return {
         "ok": True,
+        "sync": "on" if state.get("sync") == "on" else "off",
         "account_id": state.get("account_id") if isinstance(state.get("account_id"), str) else None,
         "token": "stored" if isinstance(state.get("token"), str) else "absent",
         "last_result": state.get("last_result") if isinstance(state.get("last_result"), str) else None,
@@ -146,6 +181,9 @@ def sync(_pages: int = 0) -> dict:
         account = state.get("account_id")
         token = state.get("token")
         since = state.get("cursor")
+        # Asked on every call, in the same read as the token: a pause that lands before this point stops the request.
+        if state.get("sync") != "on":
+            raise WebAuthRefusal("web_sync_paused")
     if not isinstance(account, str) or not isinstance(token, str):
         raise WebAuthRefusal("web_not_configured")
 

@@ -71,6 +71,7 @@ import {
 import { ReceiptKeyInvalid } from '../../../shared/cloud/receipt-ids.js';
 import { SYNC_ENV, effectiveConfig, hasToken, syncSwitch } from '../../../shared/cloud/sync-switch.js';
 import { pauseCloud, resumeCloud } from '../lib/cloud-sync-pause.js';
+import { BROKER_RESUME_NOTE, brokerPauseNote, brokerPresent, pauseBrokerWebSync } from '../lib/broker-web-sync.js';
 import { instantKey, noticeWebAction, noticeWebActions } from '../lib/web-action-notice.js';
 import { noticeLostSession, noticeRefusedToken } from '../lib/cloud-sync-notice.js';
 import {
@@ -1175,10 +1176,13 @@ async function handlePause(options = {}) {
   const file = await readCloudFile();
   const note = syncEnvNote(file, false);
   const sw = syncSwitch(file);
+  // The broker polls the site too: it is told in every case, also when the file was already paused (a broker that missed it).
+  const broker = await pauseBrokerWebSync();
   if (options.json) {
     emitJson(options, {
       ok: true, paused: true, changed: result.changed, paused_at: result.config.paused_at,
       paused_by: result.config.paused_by ?? null, active: sw.active, reason: sw.reason,
+      ...(broker.state === 'no-broker' ? {} : { broker: broker.state }),
     });
     return;
   }
@@ -1189,6 +1193,8 @@ async function handlePause(options = {}) {
     console.log(pc.dim('  The site and its web commands stay offline; the terminal, the app and Telegram are not affected.'));
   }
   if (note) console.log(pc.yellow(`  ${note}`));
+  const brokerNote = brokerPauseNote(broker);
+  if (brokerNote) console.log(pc.yellow(`  ${brokerNote}`));
   console.log(pc.dim('  Turn it back on with: ') + pc.bold('jht cloud resume'));
 }
 
@@ -1208,14 +1214,17 @@ async function handleResume(options = {}) {
   const sw = syncSwitch(file);
   // The claim is asked for without force: a device that holds it is told, never evicted.
   const claim = sw.active ? await probeClaim(result.config) : { status: 'skipped' };
+  const brokerHere = brokerPresent();
   if (options.json) {
     emitJson(options, {
       ok: true, resumed: true, changed: result.changed, active: sw.active, reason: sw.reason,
       claim: claim.status, claim_held_by: claim.held_by ?? null,
+      ...(brokerHere ? { broker: 'follows-host' } : {}),
     });
     return;
   }
   console.log(pc.green(result.changed ? '✓ Cloud sync resumed' : '✓ Cloud sync was already on'));
+  if (brokerHere) console.log(pc.dim(`  ${BROKER_RESUME_NOTE}`));
   const note = syncEnvNote(file, true);
   if (note) console.log(pc.yellow(`  ${note}`));
   if (claim.status === 'held') {
@@ -2359,6 +2368,8 @@ async function handleDisable(options = {}) {
   try {
     await unlink(CLOUD_FILE);
     console.log(pc.green('✓ Cloud sync disabled'));
+    const brokerNote = brokerPauseNote(await pauseBrokerWebSync());
+    if (brokerNote) console.log(pc.yellow(`  ${brokerNote}`));
     console.log(pc.dim('  Token removed from the local machine.'));
     if (revoked) {
       console.log(pc.dim('  Token also revoked on the server.'));

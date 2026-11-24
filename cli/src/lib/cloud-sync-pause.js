@@ -13,7 +13,7 @@ import {
   closeSync, constants, fchownSync, existsSync, fstatSync, fsyncSync, ftruncateSync, lstatSync, openSync,
   readFileSync, statSync, writeSync,
 } from 'node:fs';
-import { hasToken } from '../../../shared/cloud/sync-switch.js';
+import { hasToken, syncSwitch } from '../../../shared/cloud/sync-switch.js';
 import { writePrivateJson } from './secure-config-io.js';
 
 export const MIGRATION_PAUSED_BY = 'release-0.4.0';
@@ -116,6 +116,23 @@ export function resumeCloud(file, { io } = {}) {
   return { ok: true, changed: true, config: next };
 }
 
+/** A pairing that is on and has never gone through the choice: the migration below will pause it. */
+export function migrationPending(config) {
+  return config !== null && typeof config === 'object' && !Array.isArray(config)
+    && config.enabled === true && (config.sync_choice === undefined || config.sync_choice === null);
+}
+
+/**
+ * What the host tells the secrets broker («on» or «off») for a cloud.json already parsed (null when absent or odd).
+ * The migration runs in the container a little after it starts, and the host may configure the broker before it has run: a file
+ * that the migration is about to pause is answered as if it had been paused already, so the broker never starts on
+ * for it. The answer of the switch is the one of sync-switch.js (JHT_CLOUD_SYNC included).
+ */
+export function brokerSyncMode(config, env = process.env) {
+  const asMigrated = migrationPending(config) ? { ...config, enabled: false, paused_at: 'pending-migration' } : config;
+  return syncSwitch(asMigrated, env).active ? 'on' : 'off';
+}
+
 /**
  * One-time migration: a pairing that was on before this version and never went through the choice is paused,
  * once. Without a file nothing is created. `resume` (and pause, enable, login) write sync_choice, so the
@@ -125,9 +142,7 @@ export function resumeCloud(file, { io } = {}) {
 export function migrateSyncChoice(file, { now = new Date(), io } = {}) {
   if (!existsSync(file)) return { migrated: false };
   const config = readCloudFile(file);
-  if (!config || config.enabled !== true || (config.sync_choice !== undefined && config.sync_choice !== null)) {
-    return { migrated: false };
-  }
+  if (!migrationPending(config)) return { migrated: false };
   const written = writeCloudFile(file, {
     ...config, enabled: false, paused_at: now.toISOString(), paused_by: MIGRATION_PAUSED_BY, sync_choice: 'migrated',
   }, io);

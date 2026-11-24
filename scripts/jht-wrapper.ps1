@@ -6760,6 +6760,19 @@ const fs=require('fs');try{const c=JSON.parse(fs.readFileSync('/jht_home/cloud.j
   return ((Invoke-NativeWithStdin { & { $ErrorActionPreference = 'Continue'; $script | & docker exec -i -u 1001 $AgentId node - 2>$null } }) -join '')
 }
 
+# The word the host gives the broker for the website sync, on or off: the answer of the sync switch of the box (JHT_CLOUD_SYNC and a
+# pairing that the migration is about to pause included). Anything that cannot be read is off. Same stdin way as Get-AgentCloudField.
+function Get-AgentBrokerSyncMode {
+  param([Parameter(Mandatory)][string]$AgentId)
+  $script = @'
+const fs=require('fs');let c=null;try{c=JSON.parse(fs.readFileSync('/jht_home/cloud.json','utf8'))}catch{}
+import('/app/cli/src/lib/cloud-sync-pause.js').then((m)=>process.stdout.write(m.brokerSyncMode(c)),()=>process.stdout.write('off'));
+'@
+  $mode = ((Invoke-NativeWithStdin { & { $ErrorActionPreference = 'Continue'; $script | & docker exec -i -u 1001 $AgentId node - 2>$null } }) -join '').Trim()
+  if ($mode -ceq 'on') { return 'on' }
+  return 'off'
+}
+
 # First pairing may take user_id from cloud.json in the box, a box-writable
 # file.  This is a bootstrap residual only: once the broker has an account,
 # normal starts refresh its token but never replace that account automatically;
@@ -6774,6 +6787,9 @@ function Initialize-BrokerWebAuthorisations {
   $state = ((& { $ErrorActionPreference = 'Continue'; & docker exec $brokerId jht-broker-admin apply web-status 2>$null }) -join "`n")
   $token = Get-AgentCloudField -AgentId $agentId -Field 'token'
   if ($token) { $null = Invoke-BrokerAdmin -InputText $token -AdminArgs @('apply', 'web-token') }
+  # The broker asks this word before every call to the site (it cannot read cloud.json): on only if the switch of the box says so.
+  $syncMode = Get-AgentBrokerSyncMode -AgentId $agentId
+  $null = (& { $ErrorActionPreference = 'Continue'; & docker exec $brokerId jht-broker-admin apply web-sync $syncMode 2>$null })
   if ($state -match '"account_id": null') {
     $account = Get-AgentCloudField -AgentId $agentId -Field 'user_id'
     # -AdminArgs by name: the first positional word would bind to InputText and be piped as stdin
@@ -8445,6 +8461,8 @@ switch ($Sub) {
     }
     Complete-JhtTeamChatErrors
     if ($Sub -eq 'cloud' -and $Rest.Count -gt 0 -and $Rest[0] -eq 'pair' -and $code -eq 0) { if ((Ensure-Broker) -eq 0) { Initialize-BrokerWebAuthorisations } }
+    # The broker follows the switch of the sync: told again after the commands that change it (not made here if it is not there).
+    if ($Sub -eq 'cloud' -and $Rest.Count -gt 0 -and @('pause', 'resume', 'enable', 'login', 'disable') -contains $Rest[0] -and $code -eq 0) { Initialize-BrokerWebAuthorisations }
     exit $code
     break
   }
