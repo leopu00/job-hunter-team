@@ -38,6 +38,7 @@ import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import pc from 'picocolors';
 import { cloudSyncHeaders } from './client-identity.js';
+import { effectiveConfig } from '../../../shared/cloud/sync-switch.js';
 
 const JHT_HOME = process.env.JHT_HOME || join(process.env.HOME || '/jht_home', '.jht');
 const CLOUD_FILE = join(JHT_HOME, 'cloud.json');
@@ -88,7 +89,7 @@ function log(level, msg, meta) {
 
 async function loadCloudConfig() {
   try {
-    return JSON.parse(await readFile(CLOUD_FILE, 'utf-8'));
+    return effectiveConfig(JSON.parse(await readFile(CLOUD_FILE, 'utf-8')));
   } catch (err) {
     if (err.code !== 'ENOENT') log('error', 'cloud.json read failed', { err: err.message });
     return null;

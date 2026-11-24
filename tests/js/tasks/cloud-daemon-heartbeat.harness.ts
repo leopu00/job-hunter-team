@@ -79,7 +79,7 @@ export function sandbox(baseUrl: string, tmuxScript: string) {
   roots.push(home);
   writeFileSync(
     path.join(home, "cloud.json"),
-    JSON.stringify({ enabled: true, token: "jht_sync_synthetic_heartbeat_test", base_url: baseUrl }),
+    JSON.stringify({ enabled: true, sync_choice: "user", token: "jht_sync_synthetic_heartbeat_test", base_url: baseUrl }),
   );
   const bin = path.join(home, "bin");
   mkdirSync(bin);

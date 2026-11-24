@@ -36,6 +36,8 @@ import { dirname } from 'node:path';
 import { providerSignedIn } from '../lib/provider-signin.js';
 import { setupOpen } from '../lib/setup-open.js';
 import { forgetSpawnFailures } from '../lib/spawn-failed.js';
+import { syncSwitch } from '../../../shared/cloud/sync-switch.js';
+import { MIGRATION_NOTICE, migrateSyncChoice } from '../lib/cloud-sync-pause.js';
 
 const JHT_ENTRY = '/app/cli/bin/jht.js';
 const JHT_HOME = '/jht_home';
@@ -381,11 +383,11 @@ function stopTgBridge() {
  * cloud.json. Lo facciamo qui senza importare cloud.js per evitare side
  * effects di registrazione comandi.
  */
-async function isCloudConfigured() {
+export async function isCloudConfigured(path = CLOUD_JSON_PATH, env = process.env) {
   try {
-    const content = await readFile(CLOUD_JSON_PATH, 'utf-8');
+    const content = await readFile(path, 'utf-8');
     const cfg = JSON.parse(content);
-    return cfg?.enabled === true && typeof cfg?.token === 'string';
+    return syncSwitch(cfg, env).active && typeof cfg?.token === 'string';
   } catch {
     return false;
   }
@@ -776,6 +778,12 @@ async function dispatch() {
   // Pair non-interattivo PRIMA di partire il daemon: cosi' il watcher
   // su cloud.json non scatta a vuoto e il daemon parte subito col token
   // appena mintato. Su local non ha senso (no install.sh con --pairing-token).
+  // Una installazione gia' accoppiata prima di questa versione, che non ha mai scelto, passa in pausa (una volta).
+  try {
+    if (migrateSyncChoice(CLOUD_JSON_PATH).migrated) pid1Log(MIGRATION_NOTICE);
+  } catch (err) {
+    pid1Log(`sync migration skipped (${err.message})`);
+  }
   if (isVps) {
     await maybeRunPairing();
   }

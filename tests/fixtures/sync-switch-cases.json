@@ -1,0 +1,196 @@
+[
+  {
+    "name": "enabled file, no variable",
+    "config": {
+      "enabled": true,
+      "token": "t"
+    },
+    "env": null,
+    "active": true,
+    "reason": "file-enabled"
+  },
+  {
+    "name": "enabled file without token, no variable (the callers check the token)",
+    "config": {
+      "enabled": true
+    },
+    "env": null,
+    "active": true,
+    "reason": "file-enabled"
+  },
+  {
+    "name": "variable 0 beats an enabled file",
+    "config": {
+      "enabled": true,
+      "token": "t"
+    },
+    "env": "0",
+    "active": false,
+    "reason": "env-off"
+  },
+  {
+    "name": "variable 0 with no file",
+    "config": null,
+    "env": "0",
+    "active": false,
+    "reason": "env-off"
+  },
+  {
+    "name": "variable 1 turns a paused file on",
+    "config": {
+      "enabled": false,
+      "token": "t",
+      "paused_at": "2026-11-24T10:00:00.000Z"
+    },
+    "env": "1",
+    "active": true,
+    "reason": "env-on"
+  },
+  {
+    "name": "variable 1 turns a disabled file with a token on",
+    "config": {
+      "enabled": false,
+      "token": "t"
+    },
+    "env": "1",
+    "active": true,
+    "reason": "env-on"
+  },
+  {
+    "name": "variable 1 without a token stays off",
+    "config": {
+      "enabled": true
+    },
+    "env": "1",
+    "active": false,
+    "reason": "env-no-token"
+  },
+  {
+    "name": "variable 1 with a blank token stays off",
+    "config": {
+      "enabled": true,
+      "token": "  "
+    },
+    "env": "1",
+    "active": false,
+    "reason": "env-no-token"
+  },
+  {
+    "name": "variable 1 with no file stays off",
+    "config": null,
+    "env": "1",
+    "active": false,
+    "reason": "env-no-token"
+  },
+  {
+    "name": "variable 1 is trimmed",
+    "config": {
+      "enabled": false,
+      "token": "t"
+    },
+    "env": " 1 ",
+    "active": true,
+    "reason": "env-on"
+  },
+  {
+    "name": "paused file",
+    "config": {
+      "enabled": false,
+      "token": "t",
+      "paused_at": "2026-11-24T10:00:00.000Z"
+    },
+    "env": null,
+    "active": false,
+    "reason": "paused"
+  },
+  {
+    "name": "paused file, empty variable",
+    "config": {
+      "enabled": false,
+      "token": "t",
+      "paused_at": "2026-11-24T10:00:00.000Z"
+    },
+    "env": "",
+    "active": false,
+    "reason": "paused"
+  },
+  {
+    "name": "disabled file without paused_at",
+    "config": {
+      "enabled": false,
+      "token": "t"
+    },
+    "env": "",
+    "active": false,
+    "reason": "disabled"
+  },
+  {
+    "name": "empty paused_at is not a pause",
+    "config": {
+      "enabled": false,
+      "token": "t",
+      "paused_at": ""
+    },
+    "env": null,
+    "active": false,
+    "reason": "disabled"
+  },
+  {
+    "name": "enabled as a string is not enabled; the variable «true» is ignored",
+    "config": {
+      "enabled": "true",
+      "token": "t"
+    },
+    "env": "true",
+    "active": false,
+    "reason": "disabled"
+  },
+  {
+    "name": "enabled as a number is not enabled",
+    "config": {
+      "enabled": 1,
+      "token": "t"
+    },
+    "env": null,
+    "active": false,
+    "reason": "disabled"
+  },
+  {
+    "name": "variable 2 is ignored, the file decides",
+    "config": {
+      "enabled": true,
+      "token": "t"
+    },
+    "env": "2",
+    "active": true,
+    "reason": "file-enabled"
+  },
+  {
+    "name": "no file, no variable",
+    "config": null,
+    "env": null,
+    "active": false,
+    "reason": "absent"
+  },
+  {
+    "name": "a list is not a config",
+    "config": [],
+    "env": null,
+    "active": false,
+    "reason": "absent"
+  },
+  {
+    "name": "a string is not a config",
+    "config": "enabled",
+    "env": null,
+    "active": false,
+    "reason": "absent"
+  },
+  {
+    "name": "empty object",
+    "config": {},
+    "env": null,
+    "active": false,
+    "reason": "disabled"
+  }
+]

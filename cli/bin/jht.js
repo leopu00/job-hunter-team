@@ -80,12 +80,26 @@ process.on('uncaughtException', (err) => {
   if (!isLongRunning) process.exitCode = 1;
 });
 
+/**
+ * A pairing from before the sync became a choice is paused once, with a notice on stderr (stdout stays clean for
+ * --json). Without a cloud.json nothing is created; any failure here is silent, the command goes on.
+ */
+async function migrateSyncOnce() {
+  try {
+    const { join } = await import('node:path');
+    const { JHT_HOME } = await import('../src/jht-paths.js');
+    const { MIGRATION_NOTICE, migrateSyncChoice } = await import('../src/lib/cloud-sync-pause.js');
+    if (migrateSyncChoice(join(JHT_HOME, 'cloud.json')).migrated) console.error(`  ℹ ${MIGRATION_NOTICE}`);
+  } catch { /* best-effort: never in the way of the command */ }
+}
+
 try {
   if (process.argv.length === 2) {
     // a bare `jht`, by a person: the welcome, and exit 0 (it was the short help with exit 1)
     const { renderWelcome } = await import('../src/lib/welcome.js');
     process.stdout.write(`${renderWelcome()}\n`);
   } else {
+    await migrateSyncOnce();
     const { buildProgram } = await import('../src/program.js');
     const program = buildProgram();
     await program.parseAsync(process.argv);

@@ -184,7 +184,7 @@ describe("the daemon", () => {
     roots.push(home);
     writeFileSync(
       path.join(home, "cloud.json"),
-      JSON.stringify({ enabled: true, token: "jht_sync_synthetic_usage", base_url: `http://127.0.0.1:${(server.address() as AddressInfo).port}` }),
+      JSON.stringify({ enabled: true, sync_choice: "user", token: "jht_sync_synthetic_usage", base_url: `http://127.0.0.1:${(server.address() as AddressInfo).port}` }),
     );
     mkdirSync(path.join(home, "logs"));
     const fresh = (m: number) => ({ ...sample(0), ts: new Date(Date.now() - m * 60_000).toISOString() });

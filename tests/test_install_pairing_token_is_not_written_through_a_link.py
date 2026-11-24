@@ -59,7 +59,8 @@ def _assert_token_file(home: Path) -> Path:
     assert not token.is_symlink() and token.is_file()
     assert token.read_text(encoding="utf-8") == TOKEN, "the token is written as it is, with no newline"
     assert stat.S_IMODE(token.stat().st_mode) == 0o600
-    assert sorted(p.name for p in (home / ".jht").iterdir()) == [".pairing-token"]
+    # next to the token goes the marker that tells `jht cloud pair` to start with the sync paused (the default)
+    assert sorted(p.name for p in (home / ".jht").iterdir()) == [".pairing-paused", ".pairing-token"]
     assert [p.name for p in home.iterdir() if p.name.startswith(".jht-host-file.")] == []
     return token
 
@@ -78,6 +79,28 @@ def test_the_token_is_written_as_it_is_with_mode_0600(home: Path):
     done = _save(home)
     assert done.returncode == 0, done.stderr
     _assert_token_file(home)
+
+
+def test_without_asking_for_the_sync_the_pairing_starts_paused(home: Path):
+    marker = home / ".jht" / ".pairing-paused"
+    assert _save(home).returncode == 0 and marker.is_file()
+    assert stat.S_IMODE(marker.stat().st_mode) == 0o600
+
+
+def test_cloud_sync_on_leaves_no_marker(home: Path):
+    marker = home / ".jht" / ".pairing-paused"
+    marker.write_text("", encoding="utf-8")
+    script = (
+        "set -u\nDRY_RUN=0\nOS=macos\nRUNTIME_CHOICE=docker\nCLOUD_SYNC=on\n"
+        f'PAIRING_TOKEN="{TOKEN}"\n'
+        'info() { :; }\nok() { :; }\nwarn() { echo "warn: $*" >&2; }\nrun() { "$@"; }\n'
+        "podman_native_mode() { return 1; }\n" + _functions() + "\nsave_pairing_token\n"
+    )
+    done = subprocess.run(["bash", "-c", script], env={**os.environ, "HOME": str(home)}, capture_output=True, text=True,
+                          timeout=30, check=False, stdin=subprocess.DEVNULL)
+    assert done.returncode == 0, done.stderr
+    assert not marker.exists()
+    assert (home / ".jht" / ".pairing-token").read_text(encoding="utf-8") == TOKEN
 
 
 @pytest.mark.parametrize("target", ("relative", "absolute"))

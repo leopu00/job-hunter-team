@@ -29,6 +29,7 @@ function sandbox({ weeklyHalt }: { weeklyHalt: boolean }) {
     path.join(home, "cloud.json"),
     JSON.stringify({
       enabled: true,
+      sync_choice: "user",
       token: "jht_sync_synthetic_polling_loop_test",
       base_url: "http://127.0.0.1:9",
     }),
