@@ -251,6 +251,7 @@
   "wrapper.line.allineo_owner_di_s_a": "Allineo owner di %s a %s (era uid %s)...",
   "wrapper.line.chown_fallito_su_s": "chown fallito su %s",
   "wrapper.line.sudo_chown_fallito_su_s": "sudo chown fallito su %s (potrebbe servire 'sudo %s up')",
+  "wrapper.line.setup_open_flag_not_written": "il setup non è riuscito a segnarsi aperto in %s: finché il wizard non si apre, la squadra nel container può partire con la configurazione di prima",
   "wrapper.line.mount_repair_failed.s_non_si_puo_rendere": "%s non si puo' rendere scrivibile al container (gira come uid %s) e non e' stato avviato niente. Fai una volta: sudo chown -R %s %s e riesegui 'jht up'.",
   "wrapper.line.data_dir_moved.jht_home_host_s_non": "JHT_HOME_HOST=%s non e' %s. Il team usa sempre %s: lo monta il compose, lo legge l'app, e su macOS e' l'unica cartella dati che la macchina Podman vede. Togli JHT_HOME_HOST, oppure sposta i dati in %s.",
   "wrapper.line.data_dir_moved.jht_user_dir_host_s": "JHT_USER_DIR_HOST=%s non e' %s. Il team usa sempre %s: lo monta il compose, e su macOS e' l'unica cartella documenti che la macchina Podman vede. Togli JHT_USER_DIR_HOST, oppure sposta i documenti in %s.",

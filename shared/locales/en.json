@@ -251,6 +251,7 @@
   "wrapper.line.allineo_owner_di_s_a": "Setting the owner of %s to %s (it was uid %s)...",
   "wrapper.line.chown_fallito_su_s": "chown failed on %s",
   "wrapper.line.sudo_chown_fallito_su_s": "sudo chown failed on %s (you may need 'sudo %s up')",
+  "wrapper.line.setup_open_flag_not_written": "the setup could not mark itself open in %s: until the wizard opens, the team in the container may start on the configuration of before",
   "wrapper.line.mount_repair_failed.s_non_si_puo_rendere": "%s cannot be made writable for the container (it runs as uid %s) and nothing was started. Run once: sudo chown -R %s %s and run 'jht up' again.",
   "wrapper.line.data_dir_moved.jht_home_host_s_non": "JHT_HOME_HOST=%s is not %s. The team always uses %s: the compose file mounts it, the app reads it, and on macOS it is the only data folder the Podman machine sees. Remove JHT_HOME_HOST, or move the data to %s.",
   "wrapper.line.data_dir_moved.jht_user_dir_host_s": "JHT_USER_DIR_HOST=%s is not %s. The team always uses %s: the compose file mounts it, and on macOS it is the only documents folder the Podman machine sees. Remove JHT_USER_DIR_HOST, or move the documents to %s.",

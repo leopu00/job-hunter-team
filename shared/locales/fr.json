@@ -251,6 +251,7 @@
   "wrapper.line.allineo_owner_di_s_a": "J'aligne le propriétaire de %s sur %s (c'était l'uid %s)...",
   "wrapper.line.chown_fallito_su_s": "chown a échoué sur %s",
   "wrapper.line.sudo_chown_fallito_su_s": "sudo chown a échoué sur %s ('sudo %s up' pourrait être nécessaire)",
+  "wrapper.line.setup_open_flag_not_written": "le setup n'a pas pu se marquer ouvert dans %s : tant que l'assistant ne s'ouvre pas, l'équipe du conteneur peut démarrer avec la configuration d'avant",
   "wrapper.line.mount_repair_failed.s_non_si_puo_rendere": "%s ne peut pas être rendu accessible en écriture au conteneur (il tourne en uid %s) et rien n'a été démarré. Fais une fois : sudo chown -R %s %s et relance 'jht up'.",
   "wrapper.line.data_dir_moved.jht_home_host_s_non": "JHT_HOME_HOST=%s n'est pas %s. L'équipe utilise toujours %s : le compose le monte, l'app le lit, et sur macOS c'est le seul dossier de données que la machine Podman voit. Retire JHT_HOME_HOST, ou déplace les données dans %s.",
   "wrapper.line.data_dir_moved.jht_user_dir_host_s": "JHT_USER_DIR_HOST=%s n'est pas %s. L'équipe utilise toujours %s : le compose le monte, et sur macOS c'est le seul dossier de documents que la machine Podman voit. Retire JHT_USER_DIR_HOST, ou déplace les documents dans %s.",

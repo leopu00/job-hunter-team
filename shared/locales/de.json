@@ -251,6 +251,7 @@
   "wrapper.line.allineo_owner_di_s_a": "Gleiche den Besitzer von %s an %s an (war uid %s)...",
   "wrapper.line.chown_fallito_su_s": "chown auf %s fehlgeschlagen",
   "wrapper.line.sudo_chown_fallito_su_s": "sudo chown auf %s fehlgeschlagen (eventuell ist 'sudo %s up' nötig)",
+  "wrapper.line.setup_open_flag_not_written": "das Setup konnte sich in %s nicht als offen markieren: bis der Assistent sich öffnet, kann das Team im Container mit der vorherigen Konfiguration starten",
   "wrapper.line.mount_repair_failed.s_non_si_puo_rendere": "%s lässt sich für den Container (läuft als uid %s) nicht beschreibbar machen, und nichts wurde gestartet. Mach einmal: sudo chown -R %s %s und führe 'jht up' erneut aus.",
   "wrapper.line.data_dir_moved.jht_home_host_s_non": "JHT_HOME_HOST=%s ist nicht %s. Das Team nutzt immer %s: Die Compose-Datei bindet es ein, die App liest es, und unter macOS ist es der einzige Datenordner, den die Podman-Maschine sieht. Entferne JHT_HOME_HOST oder verschiebe die Daten nach %s.",
   "wrapper.line.data_dir_moved.jht_user_dir_host_s": "JHT_USER_DIR_HOST=%s ist nicht %s. Das Team nutzt immer %s: Die Compose-Datei bindet es ein, und unter macOS ist es der einzige Dokumentenordner, den die Podman-Maschine sieht. Entferne JHT_USER_DIR_HOST oder verschiebe die Dokumente nach %s.",
