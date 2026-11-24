@@ -34,7 +34,7 @@ never in the plan (the roster does not count it among the expected ones).
   roster_restore.py plan                 what it would start, nothing started
   roster_restore.py start [--detach]     start it (`--detach`: in a session of its own, return at once)
   roster_restore.py renew [--detach]     the profile was replaced with the team running: close every worker that works on it
-                                         (Scout, Analista, Scorer, Scrittore, Critico) and start the Scouts, Analisti and Scorers
+                                         (Scout, Analista, Scorer, Scrittore, Critico, Closer) and start the Scouts, Analisti and Scorers
                                          again, same numbers, on the new profile; the Capitano and the Assistente go on
 
 Prints one JSON object; exit 0 always except a bad command line.
@@ -379,7 +379,7 @@ def start(detach_ok: bool = True) -> dict:
 
 
 # The workers whose context holds the profile: what they searched, checked, scored or wrote was for the person of that profile.
-RENEW_SESSION = r"(SCOUT|ANALISTA|SCORER|SCRITTORE)-[1-9][0-9]{0,3}|CRITICO|CRITICO-S[1-9][0-9]{0,3}"
+RENEW_SESSION = r"(SCOUT|ANALISTA|SCORER|SCRITTORE|CLOSER)-[1-9][0-9]{0,3}|CRITICO|CRITICO-S[1-9][0-9]{0,3}"
 RENEW_WAIT_S = 90.0   # a start of the burst or of the restore that holds the lock ends within its spawns
 
 
@@ -407,7 +407,7 @@ def _kill(session: str) -> bool:
 
 def renew(sessions=None) -> dict:
     """Close the workers of the old profile and start again the ones the system knows how to brief (Scout, Analista, Scorer), under
-    the brakes, each read again before its start. The Scrittori and the Critici are started on demand (the Capitano, the Scrittore,
+    the brakes, each read again before its start. The Scrittori, the Critici and the Closer are started on demand (the Capitano, the Scrittore,
     the watchdog's roster: their entries stay `active`), on the new profile. A stop of the person in the middle wins, as for start()."""
     roster = _load("team_roster")
     if sessions is None:

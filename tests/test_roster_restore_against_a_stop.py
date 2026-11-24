@@ -112,8 +112,8 @@ def test_a_stop_during_a_later_start_closes_only_the_one_starting_and_the_rest_n
 
 def test_renew_closes_every_worker_of_the_old_profile_and_starts_the_scouts_analisti_and_scorers_again(team, monkeypatch):
     _launcher(team, monkeypatch, None)
-    alive = sorted(FIXED | {"SCOUT-6", "ANALISTA-1", "SCORER-2", "SCRITTORE-1", "CRITICO-S1", "CRITICO"})
-    assert rr.renew_targets(alive) == ["ANALISTA-1", "CRITICO", "CRITICO-S1", "SCORER-2", "SCOUT-6", "SCRITTORE-1"]
+    alive = sorted(FIXED | {"SCOUT-6", "ANALISTA-1", "SCORER-2", "SCRITTORE-1", "CRITICO-S1", "CRITICO", "CLOSER-1"})
+    assert rr.renew_targets(alive) == ["ANALISTA-1", "CLOSER-1", "CRITICO", "CRITICO-S1", "SCORER-2", "SCOUT-6", "SCRITTORE-1"]
     out = rr.renew(alive)
     assert sorted(_tmux(team)) == sorted(f"kill-session -t ={s}" for s in rr.renew_targets(alive)), "the Capitano and the Assistente go on"
     assert sorted(_lines(team["started"])) == ["analista-1", "scorer-2", "scout-6"], out

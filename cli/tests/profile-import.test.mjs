@@ -503,7 +503,7 @@ test('jht profile import --replace with the team running restarts the workers an
   writeFileSync(join(bin, 'tmux'), `#!/bin/sh
 case "$1" in
   kill-session) echo "$3" >> '${kills}' ;;
-  list-sessions) printf '%s\\n' ASSISTENTE CAPITANO MENTOR SENTINELLA SCOUT-6 ANALISTA-1 SCORER-2 SCRITTORE-1 CRITICO-S1 ;;
+  list-sessions) printf '%s\\n' ASSISTENTE CAPITANO MENTOR SENTINELLA SCOUT-6 ANALISTA-1 SCORER-2 SCRITTORE-1 CRITICO-S1 CLOSER-1 ;;
 esac
 exit 0
 `);
@@ -518,16 +518,16 @@ exit 0
   const path = `${bin}:${resolve(python, '..')}:/usr/bin:/bin`;
   const done = run(root, ['profile', 'import', FIXTURE, '--replace', '--json'], undefined, { PATH: path, JHT_START_AGENT: agent });
   assert.equal(done.status, 0, done.stderr);
-  const workers = ['ANALISTA-1', 'CRITICO-S1', 'SCORER-2', 'SCOUT-6', 'SCRITTORE-1'];
+  const workers = ['ANALISTA-1', 'CLOSER-1', 'CRITICO-S1', 'SCORER-2', 'SCOUT-6', 'SCRITTORE-1'];
   assert.deepEqual(JSON.parse(done.stdout).workers, { status: 'renewing', sessions: workers });
   const human = run(root, ['profile', 'import', FIXTURE, '--replace'], undefined, { PATH: path, JHT_START_AGENT: agent, JHT_LANG: 'it' });
-  assert.match(human.stdout, /La squadra lavorava sul profilo che hai sostituito: ANALISTA-1, CRITICO-S1, SCORER-2, SCOUT-6, SCRITTORE-1 ripartono/);
+  assert.match(human.stdout, /La squadra lavorava sul profilo che hai sostituito: ANALISTA-1, CLOSER-1, CRITICO-S1, SCORER-2, SCOUT-6, SCRITTORE-1 ripartono/);
   // the closing and the starts run in the background, twice (two imports): wait for them
   const lines = (file) => (existsSync(file) ? readFileSync(file, 'utf8').trim().split('\n') : []);
-  for (let i = 0; i < 150 && (lines(kills).length < 10 || lines(starts).length < 6); i += 1) await new Promise((r) => setTimeout(r, 200));
+  for (let i = 0; i < 150 && (lines(kills).length < 12 || lines(starts).length < 6); i += 1) await new Promise((r) => setTimeout(r, 200));
   assert.deepEqual([...new Set(lines(kills))].sort(), workers.map((s) => `=${s}`), 'every worker closed, the Capitano and the Assistente never');
   const started = lines(starts);
   assert.deepEqual([...new Set(started.map((line) => line.split(' ')[0]))].sort(), ['analista-1', 'scorer-2', 'scout-6'],
-    'the Scouts, Analisti and Scorers start again with their numbers; the Scrittore and the Critico on demand');
+    'the Scouts, Analisti and Scorers start again with their numbers; the Scrittore, the Critico and the Closer on demand');
   assert.ok(started.every((line) => line.includes('The candidate profile was replaced: work only on the new one')), started.join('\n'));
 });
