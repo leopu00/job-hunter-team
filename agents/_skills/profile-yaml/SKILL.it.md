@@ -1,7 +1,7 @@
 ---
 name: profile-yaml
 description: "Mantieni `$JHT_HOME/profile/candidate_profile.yml` — il dato strutturato del candidato che tutto il team consuma. Il frontend polla questo file ogni ~2s; uno YAML invalido fa andare silenziosamente in bianco il pannello sinistro dell'utente. Responsabilità dell'Assistente. Usa questa skill ad OGNI nuova informazione dall'utente (testo o file caricato): scrivi incrementalmente, valida immediatamente, parla con l'utente solo dopo che il validatore dice VALID_PROFILE. Copre anche `ready.flag` (lo sblocco per il bottone \"Vai alla dashboard\") con il suo rigoroso protocollo a 3 step verifica-poi-annuncia."
-allowed-tools: Bash(jht profile validate *), Bash(python3 *), Bash(mkdir -p *), Bash(date *), Bash(test *), Bash(rm -f *)
+allowed-tools: Bash(jht profile validate *), Bash(jht profile import *), Bash(python3 *), Bash(mkdir -p *), Bash(date *), Bash(test *), Bash(rm -f *)
 ---
 <!-- @translation: it, ai-translated 2026-06-06 -->
 
@@ -141,7 +141,7 @@ sector_details:
 
 Quando la persona indica una retribuzione obiettivo, salva le sue parole esatte in `preferences.salary_annual_eur` nel YAML e aggiorna anche `summaries/preferences.md`. Usa questo solo campo, non una chiave salariale alla radice o un secondo oggetto salariale. Conserva importo, valuta e periodo; non inventarli, annualizzarli o convertirli. Se la persona non ha dato un obiettivo, lascia il campo assente o null. Valida dopo la scrittura.
 
-Le chiavi `preferences.work_mode`, `preferences.relocation`, `preferences.salary_annual_eur` sono lette letteralmente dal frontend per popolare la sezione "Preferenze di lavoro". Nomi alternativi (`work_location`, `flexible`, `remote`) restano scritti ma invisibili all'utente.
+Le chiavi `preferences.work_mode`, `preferences.relocation`, `preferences.salary_annual_eur` sono lette letteralmente dal frontend per popolare la sezione "Preferenze di lavoro". `preferences` contiene solo queste quattro chiavi: qualunque altra chiave lì viene rifiutata da `jht profile validate` (`preferences: unknown field`) e il profilo non si può importare. Tutto il resto va dove lo prevede lo schema (skill `profile-schema`): i luoghi che la persona preferisce in `location_preferences` e permessi e visti in `work_authorization` (entrambi alla radice del file), i ruoli da evitare, il perimetro del ruolo e ogni altro desiderio in un blocco (`key: preferences`, `kind: key_points`).
 
 Schema completo + esempi: `docs/examples/candidate_profile.yml.example` (per documentazione, **NON copiarne i valori** — vedi anti-allucinazione).
 
@@ -245,6 +245,15 @@ E avvisa l'utente: "ho rimesso il bottone in attesa — rivediamo questo punto p
 - mancano (i tre che fanno partire la ricerca): ruolo target, città/zona, lingue (≥1). Gli altri cinque degli otto (nome, email, anni di esperienza, `seniority_target`, skills ≥2) si chiedono subito dopo, mentre il team già lavora: non trattengono il flag.
 
 Esperienze e titoli di studio sono consigliati: non bloccano il flag. Chiedili subito dopo averlo creato.
+
+## Dopo l'onboarding: un cambio della ricerca passa dall'import
+
+Finché `$JHT_HOME/profile/ready.flag` non esiste (l'onboarding), scrivi il profilo direttamente, come sopra. Quando esiste, la squadra lavora sul profilo, e il modo di salvare un cambio dipende da cosa tocca:
+
+- **Il ruolo cercato, i luoghi (località, luoghi preferiti, trasferimento, permessi), le lingue o il modo di lavoro** (i campi su cui è costruita la ricerca): scrivi il profilo INTERO, con il cambio, in `$JHT_AGENT_DIR/profile-next.yml`; lancia `jht profile validate "$JHT_AGENT_DIR/profile-next.yml"` e correggilo fino a `VALID_PROFILE`; poi `jht profile import "$JHT_AGENT_DIR/profile-next.yml" --replace`, e di' alla persona quello che dice la risposta (i worker che ripartono con il profilo nuovo). Dopo l'onboarding questi campi non si scrivono mai direttamente in `candidate_profile.yml`.
+- **Tutto il resto** (una competenza, un'esperienza, l'obiettivo di stipendio, un blocco): scrivilo direttamente in `candidate_profile.yml`, come durante l'onboarding. Gli Analisti e gli Scorer lo sanno dalla loro coda e rileggono il profilo.
+
+In ogni caso la validazione segue subito la scrittura: un profilo che non passa la validazione non resta mai su disco. Correggilo prima di rispondere alla persona o di fare qualunque altra cosa.
 
 ## `onboarding-done.flag` — la fine dell'onboarding
 

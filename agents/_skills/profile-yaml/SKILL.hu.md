@@ -1,7 +1,7 @@
 ---
 name: profile-yaml
 description: "Maintain `$JHT_HOME/profile/candidate_profile.yml` — the structured candidate data the entire team consumes. The frontend polls this file every ~2s; an invalid YAML makes the user's left panel go silently blank. Owned by the Assistente. Use this skill on EVERY new piece of information from the user (text or uploaded file): write incrementally, validate immediately, talk to the user only after the validator says VALID_PROFILE. Also covers `ready.flag` (the unlock for the \"Vai alla dashboard\" button) with its strict 3-step verify-then-announce protocol."
-allowed-tools: Bash(jht profile validate *), Bash(python3 *), Bash(mkdir -p *), Bash(date *), Bash(test *), Bash(rm -f *)
+allowed-tools: Bash(jht profile validate *), Bash(jht profile import *), Bash(python3 *), Bash(mkdir -p *), Bash(date *), Bash(test *), Bash(rm -f *)
 ---
 <!-- @translation: hu, ai-translated 2026-06-06 -->
 
@@ -135,7 +135,7 @@ sector_details:
 
 Ha a személy bércélt ad meg, pontos szavait mentsd a YAML `preferences.salary_annual_eur` mezőjébe, és frissítsd a `summaries/preferences.md` fájlt is. Csak ezt a mezőt használd, ne gyökérszintű bérkulcsot vagy második bérobjektumot. Őrizd meg az összeget, pénznemet és időszakot; ne találj ki, ne évesíts és ne válts át semmit. Ha nincs megadott cél, a mező hiányozzon vagy legyen null. Mentés után validálj.
 
-A `preferences.work_mode`, `preferences.relocation`, `preferences.salary_annual_eur` kulcsokat a frontend szo szerint olvassa, hogy kitoltse a "Munkapreferenciak" szekci. Az alternativ nevek (`work_location`, `flexible`, `remote`) megmaradnak, de lathatatlanok a felhasznalo szamara.
+A `preferences.work_mode`, `preferences.relocation`, `preferences.salary_annual_eur` kulcsokat a frontend szo szerint olvassa, hogy kitoltse a "Munkapreferenciak" szekci. A `preferences` csak ezt a négy kulcsot tartalmazza: bármely más kulcsot ott a `jht profile validate` elutasít (`preferences: unknown field`), és a profil nem importálható. Minden más oda kerül, ahová a séma teszi (`profile-schema` skill): a személy kedvelt helyei a `location_preferences`-be, az engedélyek és vízumok a `work_authorization`-be (mindkettő a fájl gyökerében), a kerülendő szerepek, a szerep kerete és minden más kívánság egy blokkba (`key: preferences`, `kind: key_points`).
 
 Teljes sema + peldak: `docs/examples/candidate_profile.yml.example` a repo gyokereben (dokumentaciohoz, **NE masold az ertekeket** — lasd anti-hallucinacio).
 
@@ -239,6 +239,15 @@ Es ertesitsd a felhasznalot: "visszaallitottam a gombot varakozasra — tekintsu
 - hianyzik (a harom, amelyik elinditja a keresest): celpozicio, varos/terulet, nyelvek (≥1). A nyolcbol a tobbi ot (nev, e-mail, tapasztalati evek, `seniority_target`, kepessegek ≥2) kozvetlenul utana kerul sorra, amikor a csapat mar dolgozik: nem tartjak vissza a flaget.
 
 A tapasztalatok es a vegzettsegek ajanlottak: nem blokkoljak a flag-et. Kerdezd meg oket kozvetlenul a letrehozas utan.
+
+## Az onboarding után: a keresés változása az importon megy át
+
+Amíg a `$JHT_HOME/profile/ready.flag` nem létezik (az onboarding), a profilt közvetlenül írd, ahogy fent. Ha létezik, a csapat a profilon dolgozik, és az, hogyan mented a változást, attól függ, mit érint:
+
+- **A keresett szerep, a helyek (lakóhely, kedvelt helyek, költözés, engedélyek), a nyelvek vagy a munkavégzés módja** (a mezők, amelyekre a keresés épül): írd a TELJES profilt a változással a `$JHT_AGENT_DIR/profile-next.yml` fájlba; futtasd a `jht profile validate "$JHT_AGENT_DIR/profile-next.yml"` parancsot, és javítsd, amíg `VALID_PROFILE` nem lesz; aztán `jht profile import "$JHT_AGENT_DIR/profile-next.yml" --replace`, és mondd el a személynek, amit a válasz mond (a workerek, amelyek az új profillal újraindulnak). Az onboarding után ezeket a mezőket soha nem írod közvetlenül a `candidate_profile.yml`-be.
+- **Minden mást** (egy készség, egy tapasztalat, a fizetési cél, egy blokk) írj közvetlenül a `candidate_profile.yml`-be, ahogy az onboarding alatt. Az Analisti és a Scorer a sorukból tudják meg, és újraolvassák a profilt.
+
+A validálás minden esetben azonnal követi az írást: a validáláson át nem menő profil soha nem marad a lemezen. Javítsd ki, mielőtt válaszolsz a személynek, vagy bármi mást teszel.
 
 ## `onboarding-done.flag` — az onboarding vége
 

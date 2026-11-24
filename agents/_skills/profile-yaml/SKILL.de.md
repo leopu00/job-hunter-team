@@ -1,7 +1,7 @@
 ---
 name: profile-yaml
 description: "Maintain `$JHT_HOME/profile/candidate_profile.yml` — the structured candidate data the entire team consumes. The frontend polls this file every ~2s; an invalid YAML makes the user's left panel go silently blank. Owned by the Assistente. Use this skill on EVERY new piece of information from the user (text or uploaded file): write incrementally, validate immediately, talk to the user only after the validator says VALID_PROFILE. Also covers `ready.flag` (the unlock for the \"Vai alla dashboard\" button) with its strict 3-step verify-then-announce protocol."
-allowed-tools: Bash(jht profile validate *), Bash(python3 *), Bash(mkdir -p *), Bash(date *), Bash(test *), Bash(rm -f *)
+allowed-tools: Bash(jht profile validate *), Bash(jht profile import *), Bash(python3 *), Bash(mkdir -p *), Bash(date *), Bash(test *), Bash(rm -f *)
 ---
 <!-- @translation: de, ai-translated 2026-06-06 -->
 
@@ -135,7 +135,7 @@ sector_details:
 
 Nennt die Person ein Gehaltsziel, speichere ihre genauen Worte unter `preferences.salary_annual_eur` im YAML und aktualisiere auch `summaries/preferences.md`. Verwende nur dieses Feld, keinen Gehaltsschlüssel an der Wurzel und kein zweites Gehaltsobjekt. Betrag, Währung und Zeitraum bleiben erhalten; nichts erfinden, auf Jahreswerte hochrechnen oder umrechnen. Ohne genanntes Ziel bleibt das Feld fehlend oder null. Nach dem Schreiben validieren.
 
-Die Schlüssel `preferences.work_mode`, `preferences.relocation`, `preferences.salary_annual_eur` werden vom Frontend wörtlich gelesen, um den Abschnitt "Arbeitspräferenzen" zu füllen. Alternative Namen (`work_location`, `flexible`, `remote`) bleiben geschrieben, sind aber für den Benutzer unsichtbar.
+Die Schlüssel `preferences.work_mode`, `preferences.relocation`, `preferences.salary_annual_eur` werden vom Frontend wörtlich gelesen, um den Abschnitt "Arbeitspräferenzen" zu füllen. `preferences` enthält nur diese vier Schlüssel: jeder andere Schlüssel dort wird von `jht profile validate` abgelehnt (`preferences: unknown field`), und das Profil lässt sich nicht importieren. Alles andere kommt dorthin, wo das Schema es vorsieht (Skill `profile-schema`): die bevorzugten Orte der Person in `location_preferences`, Genehmigungen und Visa in `work_authorization` (beide auf der obersten Ebene der Datei), zu meidende Rollen, der Zuschnitt der Rolle und jeder andere Wunsch in einen Block (`key: preferences`, `kind: key_points`).
 
 Vollständiges Schema + Beispiele: `docs/examples/candidate_profile.yml.example` (zur Dokumentation, **NICHT die Werte kopieren** — siehe Anti-Halluzination).
 
@@ -239,6 +239,15 @@ Und informieren Sie den Benutzer: "Ich habe den Button wieder auf Warten gesetzt
 - fehlen (die drei, die die Suche starten): Zielrolle, Stadt/Gebiet, Sprachen (≥1). Die anderen fünf der acht (Name, E-Mail, Erfahrungsjahre, `seniority_target`, Fähigkeiten ≥2) werden gleich danach gefragt, während das Team schon arbeitet: sie halten das Flag nicht zurück.
 
 Erfahrungen und Abschlüsse sind empfohlen: Sie blockieren das Flag nicht. Frag direkt danach, wenn du es erstellt hast.
+
+## Nach dem Onboarding: eine Änderung der Suche geht über den Import
+
+Solange `$JHT_HOME/profile/ready.flag` nicht existiert (das Onboarding), schreibst du das Profil direkt, wie oben. Sobald es existiert, arbeitet das Team mit dem Profil, und wie du eine Änderung speicherst, hängt davon ab, was sie berührt:
+
+- **Die gesuchte Rolle, die Orte (Wohnort, bevorzugte Orte, Umzug, Genehmigungen), die Sprachen oder die Arbeitsweise** (die Felder, auf denen die Suche aufbaut): schreibe das GANZE Profil mit der Änderung nach `$JHT_AGENT_DIR/profile-next.yml`; führe `jht profile validate "$JHT_AGENT_DIR/profile-next.yml"` aus und korrigiere es bis `VALID_PROFILE`; dann `jht profile import "$JHT_AGENT_DIR/profile-next.yml" --replace`, und sag der Person, was die Antwort sagt (die Worker, die mit dem neuen Profil neu starten). Nach dem Onboarding werden diese Felder nie direkt in `candidate_profile.yml` geschrieben.
+- **Alles andere** (eine Fähigkeit, eine Erfahrung, das Gehaltsziel, ein Block): schreibe es direkt in `candidate_profile.yml`, wie im Onboarding. Die Analisti und die Scorer erfahren es aus ihrer Warteschlange und lesen das Profil erneut.
+
+In jedem Fall folgt die Validierung sofort auf das Schreiben: ein Profil, das die Validierung nicht besteht, bleibt nie auf der Festplatte. Korrigiere es, bevor du der Person antwortest oder irgendetwas anderes tust.
 
 ## `onboarding-done.flag` — das Ende des Onboardings
 

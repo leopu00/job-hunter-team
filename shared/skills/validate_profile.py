@@ -235,6 +235,11 @@ def validate_target_role_choice(profile):
         err("target_specialty: invalid for target_role_category_id")
 
 
+# The only keys of `preferences` (the frontend reads them literally). What the Assistente writes there is exactly these: the
+# profile-yaml and profile-schema skills list them, and tests/test_profile_skills_match_the_validator.py proves they agree.
+PREFERENCE_KEYS = ("work_mode", "work_mode_flexibility", "relocation", "salary_annual_eur")
+
+
 def validate(profile) -> None:
     if not isinstance(profile, dict):
         err("(root): profile must be a top-level YAML object")
@@ -251,7 +256,7 @@ def validate(profile) -> None:
     if preferences is not None and not isinstance(preferences, dict):
         err("preferences: mapping required when present")
     elif isinstance(preferences, dict):
-        if set(preferences) - {"work_mode", "work_mode_flexibility", "relocation", "salary_annual_eur"}:
+        if set(preferences) - set(PREFERENCE_KEYS):
             err("preferences: unknown field")
         for field in ("work_mode", "work_mode_flexibility"):
             if preferences.get(field) is not None and not isinstance(preferences[field], str):
