@@ -16,10 +16,10 @@
 // GoTrue ruota il refresh_token a ogni uso → va persistito subito su cloud.json
 // (onAuthStateChange), altrimenti al riavvio il token salvato è invalido.
 
-import { readFile, writeFile, mkdir, chmod } from 'node:fs/promises';
+import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { JHT_HOME } from '../jht-paths.js';
-import { writePrivateJson } from './secure-config-io.js';
+import { saveRefreshToken } from './cloud-sync-pause.js';
 
 const CLOUD_FILE = join(JHT_HOME, 'cloud.json');
 
@@ -98,10 +98,10 @@ let writes = Promise.resolve();
 export function persistRefreshToken(newToken, log = () => {}) {
   writes = writes.then(async () => {
     try {
-      const c = JSON.parse(await readFile(CLOUD_FILE, 'utf-8'));
-      c.supabase_refresh_token = newToken;
-      writePrivateJson(CLOUD_FILE, c);
-      await chmod(CLOUD_FILE, 0o600);
+      // only the token field, on what the file holds right before the write: a pause that came in meanwhile stays
+      if (saveRefreshToken(CLOUD_FILE, newToken) !== 'written') {
+        log('warn', 'could not save the rotated refresh token to cloud.json (the file belongs to another user): the next start may need the device paired again');
+      }
     } catch (e) {
       log('warn', `could not save the rotated refresh token to cloud.json (${e.code || e.message}): the next start may need the device paired again`);
     }

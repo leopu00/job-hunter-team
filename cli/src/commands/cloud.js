@@ -1159,10 +1159,13 @@ function emitJson(options, payload) {
   if (options.json) console.log(JSON.stringify(payload, null, 2));
 }
 
+const FOREIGN_OWNER_TEXT = 'cloud.json belongs to another user and cannot be written from here: run the command inside the container (jht cloud ...), as its owner.';
+
 async function handlePause(options = {}) {
   const result = pauseCloud(CLOUD_FILE, { by: 'cli' });
   if (!result.ok) {
     if (options.json) emitJson(options, { ok: false, error: result.reason });
+    else if (result.reason === 'foreign-owner') console.error(pc.red(FOREIGN_OWNER_TEXT));
     else console.error(pc.red('Cloud sync is not paired on this machine: there is nothing to pause.'));
     process.exitCode = 1;
     return;
@@ -1191,6 +1194,7 @@ async function handleResume(options = {}) {
   const result = resumeCloud(CLOUD_FILE);
   if (!result.ok) {
     if (options.json) emitJson(options, { ok: false, error: result.reason });
+    else if (result.reason === 'foreign-owner') console.error(pc.red(FOREIGN_OWNER_TEXT));
     else {
       console.error(pc.red('Cloud sync is not paired on this machine: there is nothing to resume.'));
       console.error(pc.dim('Pair with: ') + pc.bold('jht cloud login'));
