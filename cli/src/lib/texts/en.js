@@ -14,7 +14,7 @@ export default {
   "observation.unknown": "unknown activity",
   "observation.starting": "no turn recorded",
   "observation.no_turn_yet": "no turn yet",
-  "observation.empty": "No running agents or recorded usage.",
+  "observation.empty": "No agent is running.",
   "observation.tokens": "Weighted tokens, rolling 1h; refreshed by Sentinel separately (normally every 5 min). Not euros, remaining quota or tokens/s.",
   "observation.updated": "Usage updated: {at}; age: {age} s.",
   "observation.identity_limits": "Model/effort: last structured session record, refreshed at most every 15s; unrecorded idle changes cannot be observed. N/D means unavailable, never a role default.",

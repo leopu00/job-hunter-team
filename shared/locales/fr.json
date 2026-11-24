@@ -1400,6 +1400,7 @@
   "pi_cap.halt_pace_stays": "⏸️ L'équipe s'arrête : elle a dépensé %s du budget de %s, plus vite que tes horaires ne le permettent, et ce qui reste du budget ne suffit pas à la relancer sans le dépasser. Rien n'est perdu. Elle reste en pause jusqu'à la fin de la période (à %s) ou jusqu'à ce que tu augmentes le budget avec jht setup.",
   "pi_cap.tomorrow": "%s demain",
   "pi_cap.resume_budget": "▶️ Ton budget permet de nouveau de travailler : l'équipe reprend.",
+  "pi_cap.resume_team_stopped": "▶️ Le budget permet de nouveau de travailler, mais l'équipe reste arrêtée comme tu l'as laissée : pour la relancer, jht team start.",
   "service_budget.skipped": "ℹ️ %s saute son tour cette fois : les agents qui s'occupent de l'équipe (Dottore, Mantenitore, Mentor) ont déjà dépensé %s de ton budget de %s, la part de %s qu'ils peuvent prendre, et le reste sert à chercher et à évaluer des postes. Rien n'est perdu : ils reviennent avec un nouveau budget.",
   "integration.label.not_installed": "non installé",
   "integration.label.downloading": "téléchargement en cours",

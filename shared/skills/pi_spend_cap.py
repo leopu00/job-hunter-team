@@ -937,6 +937,13 @@ _AGENT_SESSION = re.compile(r"^[A-Z][A-Z0-9]*(-[A-Z0-9]+)*$")   # the sessions o
 _WORKER_SESSION = re.compile(r"^(SCOUT|ANALISTA|SCORER|SCRITTORE|CRITICO|CLOSER)(-S?\d+)?$")
 
 
+def _stopped_by_the_person(home) -> bool:
+    try:
+        return (Path(home) / ".team-halted.flag").exists()
+    except OSError:
+        return False
+
+
 def home_of(api):
     return api._path("JHT_HOME")
 
@@ -958,6 +965,10 @@ def _resume(api, run, day, notify_user, ctx=None):
     else:
         text = "[BRIDGE INFO] The pi spending ceiling allows work again: the team can resume; ticks are restarting."
         user = i18n.t("pi_cap.resume")
+    if _stopped_by_the_person(home_of(api)):
+        # the person stopped the team (collaudo Linux 23/11: «the team restarts» right after a stop of every agent): nobody is woken
+        # (_wake_the_team), and the person is told the truth, with the way to start it again
+        user = i18n.t("pi_cap.resume_team_stopped")
     # the gate is open (the flag is gone) BEFORE anyone is told to work: the order of the standby too
     stage, names = None, list(flag.get("sessions") or [])
     home, moment = home_of(api), api.time.time()

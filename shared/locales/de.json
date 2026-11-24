@@ -1400,6 +1400,7 @@
   "pi_cap.halt_pace_stays": "⏸️ Das Team pausiert: Es hat %s des Budgets von %s ausgegeben, schneller, als deine Zeiten erlauben, und das restliche Budget reicht nicht, um es wieder zu starten, ohne es zu überschreiten. Es geht nichts verloren. Es bleibt pausiert bis zum Ende des Zeitraums (um %s) oder bis du das Budget mit jht setup erhöhst.",
   "pi_cap.tomorrow": "%s morgen",
   "pi_cap.resume_budget": "▶️ Dein Budget erlaubt wieder zu arbeiten: Das Team macht weiter.",
+  "pi_cap.resume_team_stopped": "▶️ Das Budget erlaubt wieder zu arbeiten, aber das Team bleibt gestoppt, wie du es gelassen hast: um es wieder zu starten, jht team start.",
   "service_budget.skipped": "ℹ️ %s lässt diese Runde aus: Die Agenten, die sich um das Team kümmern (Dottore, Mantenitore, Mentor), haben schon %s deines Budgets von %s ausgegeben, den Anteil von %s, den sie nehmen dürfen. Der Rest geht ins Suchen und Bewerten von Stellen. Es geht nichts verloren: Mit einem neuen Budget sind sie wieder dabei.",
   "integration.label.not_installed": "nicht installiert",
   "integration.label.downloading": "wird heruntergeladen",

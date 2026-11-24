@@ -1763,3 +1763,17 @@ def test_with_the_pace_off_a_team_ahead_of_the_line_goes_on_until_the_budget_or_
     assert cap.decide(off, spent, False, at, cap.team_budget.read(off))["why"] == "budget", "the budget spent stops it"
     spent["budget_cost"] = 1.0
     assert cap.decide(off, spent, False, NOON + 10 * HOUR - 10, cap.team_budget.read(off))["why"] == "period", "and so does the end of the period"
+
+
+def test_a_resume_after_the_person_stopped_the_team_tells_the_truth_and_wakes_nobody(tmp_path):
+    """Collaudo Linux 23/11 (P3-3): right after a stop of every agent the person read «the team is resuming». The budget allows work
+    again, the brake is lifted, nobody is woken (the stop of the person wins) and the notice says the team stays stopped."""
+    bridge, state = _a_stop_that_looks_ahead(tmp_path)
+    (tmp_path / ".team-halted.flag").write_text("user stop\n", encoding="utf-8")
+    bridge.clock["now"] += 600
+    bridge.config = budget(5, bridge.clock["now"], bridge.clock["now"] + 1800)
+    bridge.tick(state=state)
+    assert not bridge.flag.exists() and _woken(bridge) == []
+    said = [text for text, _ in bridge.users]
+    assert said and "jht team start" in said[-1] and "stays stopped" in said[-1], said
+    assert not any("is resuming" in text for text in said), said

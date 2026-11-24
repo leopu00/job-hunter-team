@@ -110,7 +110,7 @@ export default {
   "observation.unknown": "Aktivität unbekannt",
   "observation.starting": "noch kein Durchgang aufgezeichnet",
   "observation.no_turn_yet": "noch kein Durchgang",
-  "observation.empty": "Keine laufenden Agenten und kein aufgezeichneter Verbrauch.",
+  "observation.empty": "Kein Agent läuft.",
   "observation.tokens": "Gewichtete Tokens, gleitende Stunde; von der Sentinella separat aktualisiert (normalerweise alle 5 Min.). Keine Euro, kein Restkontingent, keine Tokens/s.",
   "observation.updated": "Verbrauch aktualisiert: {at}; Alter: {age} s.",
   "observation.identity_limits": "Modell/Aufwand: letzter strukturierter Eintrag der Sitzung, höchstens alle 15 s neu gelesen; Änderungen ohne neuen Eintrag sind nicht sichtbar. k. A. heißt: Angabe fehlt, nie der Standard der Rolle.",
