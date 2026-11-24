@@ -161,8 +161,9 @@ def test_private_config_atomic_rename_tolerates_host_acl_filesystems():
     source = SECURE_CONFIG_IO.read_text(encoding="utf-8")
 
     assert "v9fs/DrvFS" in source
-    assert "try { chmodSync(tmp, PRIVATE_FILE_MODE); } catch" in source
-    assert source.index("try { chmodSync(tmp") < source.index("renameSync(tmp, path)")
+    # the mode is set on the descriptor of the temporary (a path can be swapped for a link), still tolerating the EPERM of such a filesystem
+    assert "try { fchmodSync(fd, PRIVATE_FILE_MODE); } catch" in source
+    assert source.index("try { fchmodSync(fd") < source.index("renameSync(tmp, path)")
 
 
 @pytest.mark.skipif(shutil.which("pwsh") is None, reason="PowerShell is unavailable")

@@ -39,7 +39,7 @@ export function ensurePrivateDir(dir) {
  *  - otherwise the error is thrown with the path and both causes, and no
  *    temp file with the configuration in it is left behind.
  */
-export function writePrivateJson(path, value) {
+export function writePrivateJson(path, value, { onFd } = {}) {
   const dir = dirname(path);
   ensurePrivateDir(dir);
   const tmp = `${path}.tmp-${process.pid}-${Date.now()}`;
@@ -56,14 +56,18 @@ export function writePrivateJson(path, value) {
     }
     pending = true;
     writeFileSync(fd, body, 'utf8');
-    fsyncSync(fd);
-    closeSync(fd);
-    fd = undefined;
     // v9fs/DrvFS bind mounts (rootless Podman on Windows) enforce the host
     // ACL but reject POSIX chmod with EPERM. The file was already created
     // with the private mode above; do not abort the atomic rename when the
     // backing filesystem owns permission enforcement.
-    try { chmodSync(tmp, PRIVATE_FILE_MODE); } catch { /* host ACL is authoritative */ }
+    // On the descriptor, never on a path: the folder may be one an agent writes in, and a path can be swapped for a
+    // link between two calls, while the descriptor stays the file this call created.
+    try { fchmodSync(fd, PRIVATE_FILE_MODE); } catch { /* host ACL is authoritative */ }
+    // What the caller must do to the file before it takes the place (its owner), on the descriptor too.
+    if (onFd) onFd(fd);
+    fsyncSync(fd);
+    closeSync(fd);
+    fd = undefined;
     try {
       renameWithRetry(tmp, path);
       pending = false;
@@ -72,7 +76,8 @@ export function writePrivateJson(path, value) {
       writeInPlace(path, body, err);
       return;
     }
-    try { chmodSync(path, PRIVATE_FILE_MODE); } catch { /* best effort on Windows */ }
+    // No chmod by path after the rename: it would follow a link planted in the place of the file, and the file already
+    // has the private mode from the descriptor above.
   } finally {
     if (fd !== undefined) closeSync(fd);
     if (pending) {
