@@ -132,4 +132,7 @@ def test_a_value_other_than_on_or_off_is_refused_before_anything_runs(shell: str
     )
     assert done.returncode != 0
     assert "CloudSync" in done.stderr + done.stdout
-    assert list(tmp_path.iterdir()) == [], "the installer wrote something before refusing the value"
+    # PowerShell itself makes AppData in the profile it is given; the installer must have made nothing of its own
+    made = sorted(p.name for p in tmp_path.iterdir() if p.name != "AppData")
+    assert made == [], f"the installer wrote something before refusing the value: {made}"
+    assert not (tmp_path / ".jht").exists()
