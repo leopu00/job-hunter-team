@@ -10,7 +10,7 @@
 //   sync_choice  «user» (the person chose, by pause, resume, enable or login), «migrated» (the migration paused it);
 //                absent = an installation that never went through the choice
 import {
-  chmodSync, chownSync, closeSync, constants, existsSync, fstatSync, fsyncSync, ftruncateSync, lstatSync, openSync,
+  closeSync, constants, fchownSync, existsSync, fstatSync, fsyncSync, ftruncateSync, lstatSync, openSync,
   readFileSync, statSync, writeSync,
 } from 'node:fs';
 import { hasToken } from '../../../shared/cloud/sync-switch.js';
@@ -25,14 +25,15 @@ export const MIGRATION_NOTICE =
 const REAL_IO = Object.freeze({
   getuid: () => (typeof process.getuid === 'function' ? process.getuid() : undefined),
   statSync: (file) => statSync(file, { throwIfNoEntry: false }),
-  chownSync,
+  fchownSync,
 });
 
 /**
  * Rewrite cloud.json without changing who owns it. The container runs as its own user and the folder is shared with the host
  * (rootful Docker): a rewrite by another user would leave the file owned by that user, unreadable by the container, and a
- * sync that is off for the wrong reason. Same owner: the atomic rewrite (0600). Root: the atomic rewrite, then the file goes
- * back to its owner. Another user, not root: the file is rewritten IN PLACE (same inode, same owner and mode) when it can be
+ * sync that is off for the wrong reason. Same owner: the atomic rewrite (0600). Root: the atomic rewrite, with the new file given
+ * to its owner on its descriptor BEFORE the rename (never by path after it: a link planted meanwhile would be followed).
+ * Another user, not root: the file is rewritten IN PLACE (same inode, same owner and mode) when it can be
  * written, and not at all when it cannot.
  * @returns {'written'|'foreign-owner'}  `foreign-owner`: nothing was written; the container does it at its own start.
  */
@@ -44,8 +45,9 @@ export function writeCloudFile(file, value, io = REAL_IO) {
     return 'written';
   }
   if (me === 0) {
-    writePrivateJson(file, value);
-    io.chownSync(file, before.uid, before.gid);
+    // The owner is given on the descriptor of the new file BEFORE it takes the place of the old one: by path, after the
+    // rename, it would follow a link that an agent put there in the meantime and give root's file to the agent.
+    writePrivateJson(file, value, { onFd: (fd) => io.fchownSync(fd, before.uid, before.gid) });
     return 'written';
   }
   let fd;

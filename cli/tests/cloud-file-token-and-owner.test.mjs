@@ -2,7 +2,7 @@
 // Offline, invented data; the owners are faked through the `io` the writer takes, because a test cannot give a file away.
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { chmodSync, mkdtempSync, readFileSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
+import { chmodSync, fstatSync, mkdtempSync, readFileSync, readdirSync, renameSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import test from 'node:test';
@@ -29,7 +29,9 @@ const realStat = (file) => statSync(file, { throwIfNoEntry: false });
 const fakeOwner = (me, calls = []) => ({
   getuid: () => me,
   statSync: (file) => { const s = realStat(file); return s && { uid: 1001, gid: 1001, ino: s.ino }; },
-  chownSync: (file, uid, gid) => calls.push([file, uid, gid]),
+  // by path a chown follows links: the writer must never use it
+  chownSync: () => { throw new Error('chown by path'); },
+  fchownSync: (fd, uid, gid) => calls.push([fstatSync(fd).ino, uid, gid]),
 });
 
 test('a) the rotated token is written alone: the rest of the file is what the file holds, not what was read first', () => {
@@ -100,12 +102,45 @@ test('c) a file of another user, written by a user who is not root: rewritten in
   assert.equal(read(file).enabled, false);
 });
 
-test('c) a file of another user, written by root: replaced, and given back to its owner', () => {
+test('c) a file of another user, written by root: replaced, with the new file given to its owner before the rename', () => {
   const { file } = cloudFile();
   const calls = [];
   assert.equal(writeCloudFile(file, { ...PAIRED, enabled: false }, fakeOwner(0, calls)), 'written');
-  assert.deepEqual(calls, [[file, 1001, 1001]]);
+  assert.equal(calls.length, 1);
+  assert.deepEqual(calls[0].slice(1), [1001, 1001]);
+  assert.equal(calls[0][0], realStat(file).ino, 'the owner went to the new file, the one now in place');
   assert.equal(read(file).enabled, false);
+});
+
+test('c) root: a link planted where the file is going to be does not receive the owner (nothing is chowned by path)', () => {
+  const { dir, file } = cloudFile();
+  const victim = join(dir, 'system-file');
+  writeFileSync(victim, 'root only\n', { mode: 0o600 });
+  const victimIno = realStat(victim).ino;
+  const calls = [];
+  const io = {
+    ...fakeOwner(0, calls),
+    // the agent swaps the temporary for a link to the victim while the owner is being given
+    fchownSync: (fd, uid, gid) => {
+      const tmp = readdirSync(dir).find((n) => n.startsWith('cloud.json.tmp-'));
+      assert.ok(tmp, 'the temporary is not there');
+      renameSync(join(dir, tmp), join(dir, 'moved-away'));
+      symlinkSync(victim, join(dir, tmp));
+      calls.push([fstatSync(fd).ino, uid, gid]);
+    },
+  };
+  writeCloudFile(file, { ...PAIRED, enabled: false }, io);
+  assert.notEqual(calls[0][0], victimIno, 'the owner went to the file the link points to');
+  assert.equal(readFileSync(victim, 'utf8'), 'root only\n');
+  assert.equal(realStat(victim).ino, victimIno);
+});
+
+test('c) no chmod by path after the rename: a link put in place of the file is not chmodded', () => {
+  const src = readFileSync(resolve(import.meta.dirname, '../src/lib/secure-config-io.js'), 'utf8');
+  const writer = src.slice(src.indexOf('export function writePrivateJson'), src.indexOf('function renameWithRetry'));
+  assert.doesNotMatch(writer, /chmodSync\(path|chmodSync\(tmp/);
+  assert.match(writer, /fchmodSync\(fd, PRIVATE_FILE_MODE\)/);
+  assert.ok(writer.indexOf('fchmodSync(fd') < writer.indexOf('renameWithRetry(tmp, path)'));
 });
 
 test('c) a file of another user that cannot be written: nothing is written, and the migration says why', { skip: process.getuid?.() === 0 }, () => {

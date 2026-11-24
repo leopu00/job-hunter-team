@@ -530,4 +530,4 @@ def test_keep_id_closes_the_atomic_jht_config_rename_regression():
     assert "fs.renameSync(t,p)" in probe
     assert "stat -c %u /jht_home/jht.config.json" in probe
     assert "test ! -e /jht_home/.jht.config.tmp" in probe
-    assert secure_io.index("chmodSync(tmp") < secure_io.index("renameSync(tmp, path)")
+    assert secure_io.index("fchmodSync(fd, PRIVATE_FILE_MODE)") < secure_io.index("renameSync(tmp, path)")
