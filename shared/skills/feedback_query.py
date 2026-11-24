@@ -72,6 +72,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from feedback_reasons import LABELS, safe_reason
+import sync_switch  # the one answer to «is the website sync on?»
 
 
 NO_SIGNAL_CLOUD_DISABLED = "no-signal:cloud-disabled"
@@ -132,7 +133,8 @@ def api_request(method: str, path: str, body=None, timeout: float = 10.0):
     fra le due direzioni.
     """
     cfg = _load_cloud_config()
-    if not cfg or not cfg.get("enabled"):
+    # Paused, disabled or JHT_CLOUD_SYNC=0: no request leaves the box (sync_switch.py is the one rule).
+    if not isinstance(cfg, dict) or not sync_switch.sync_switch(cfg)["active"]:
         return False, "cloud-disabled"
     base_url = (cfg.get("base_url") or "").rstrip("/")
     token = cfg.get("token")
