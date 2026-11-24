@@ -531,3 +531,15 @@ exit 0
     'the Scouts, Analisti and Scorers start again with their numbers; the Scrittore, the Critico and the Closer on demand');
   assert.ok(started.every((line) => line.includes('The candidate profile was replaced: work only on the new one')), started.join('\n'));
 });
+
+// P3-2 (collaudo Linux 23/11): the help showed --stdin, and the wrapper of the host refused it. It is the way the wrapper hands a
+// file of the host to the CLI of the container, not an option of the person: the help does not show it, and it still works.
+test('the help of import and validate does not offer --stdin, which stays the way of the wrapper', () => {
+  const { root } = folder();
+  for (const command of ['import', 'validate']) {
+    const help = run(root, ['profile', command, '--help']);
+    assert.equal(help.status, 0, help.stderr);
+    assert.ok(!help.stdout.includes('--stdin'), help.stdout);
+    assert.ok(help.stdout.includes('--json'), help.stdout);
+  }
+});
