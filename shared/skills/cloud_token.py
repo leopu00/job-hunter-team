@@ -235,7 +235,13 @@ def apply(token: str, now: float, opener=open_url) -> dict:
         raise Refused("token_other_account")
     named = body.get("token")
     name = named.get("name") if isinstance(named, dict) and isinstance(named.get("name"), str) else None
-    # Only the token and its name change.
+    # Only the token and its name change, on the file as it is NOW: the website took its time to
+    # answer, and a sync paused (or an account changed) in the meantime must not be put back by
+    # writing the dict read before the wait. Nothing locks the file between processes: what is left
+    # is the instant between this read and the rename.
+    config = read_cloud()
+    if config.get("user_id") != owner:
+        raise Refused("token_other_account")
     config["token"] = token
     if name is not None:
         config["token_name"] = name[:120]

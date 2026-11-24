@@ -196,6 +196,49 @@ def test_a_paused_sync_is_said_paused_by_check_without_asking_the_website(box, c
     assert site.calls == []
 
 
+class PausesTheBoxWhileTheWebsiteAnswers(Website):
+    """The website takes its time: the sync is paused (by `jht cloud pause`) between the first read and the write."""
+
+    def __init__(self, file, accepts, **extra):
+        super().__init__(accepts)
+        self.file, self.extra = file, extra
+
+    def __call__(self, request, timeout=None):
+        config = json.loads(self.file.read_text())
+        config.update({"enabled": False, "paused_at": "2026-11-24T10:00:00.000Z", "paused_by": "cli", "sync_choice": "user", **self.extra})
+        self.file.write_text(json.dumps(config))
+        return super().__call__(request, timeout)
+
+
+def test_a_pause_made_while_the_website_answers_is_kept_and_the_new_token_is_saved(box, capsys):
+    code, out, _ = run("apply", stdin=line(NEW), website=PausesTheBoxWhileTheWebsiteAnswers(box, {NEW: body()}), capsys=capsys)
+    assert code == 0 and out["ok"] is True
+    written = json.loads(box.read_text())
+    assert written["token"] == NEW and written["token_name"] == "vps"
+    assert written["enabled"] is False
+    assert (written["paused_at"], written["paused_by"], written["sync_choice"]) == ("2026-11-24T10:00:00.000Z", "cli", "user")
+    assert written["supabase_refresh_token"] == "KEEP-ME" and written["user_id"] == OWNER
+    assert stat.S_IMODE(box.stat().st_mode) == 0o600
+    assert sorted(p.name for p in box.parent.iterdir()) == ["cloud.json"]
+
+
+def test_counter_check_writing_the_dict_read_at_the_start_loses_the_pause(box):
+    first = ct.read_cloud()  # what the renewal used to keep through the website's answer
+    paused = {**first, "enabled": False, "paused_at": "2026-11-24T10:00:00.000Z", "paused_by": "cli"}
+    box.write_text(json.dumps(paused))
+    first["token"] = NEW
+    ct.write_cloud(first)
+    written = json.loads(box.read_text())
+    assert written["enabled"] is True and "paused_at" not in written  # the pause is gone: the bug this guards
+
+
+def test_an_account_changed_while_the_website_answers_is_not_written_over(box, capsys):
+    other = "00000000-0000-4000-8000-0000000000aa"
+    code, out, _ = run("apply", stdin=line(NEW), website=PausesTheBoxWhileTheWebsiteAnswers(box, {NEW: body()}, user_id=other), capsys=capsys)
+    assert (code, out["code"]) == (1, "token_other_account")
+    assert json.loads(box.read_text())["token"] == OLD
+
+
 def test_an_enabled_sync_still_renews_and_checks(box, capsys):
     code, out, _ = run("apply", stdin=line(NEW), website=Website({NEW: body()}), capsys=capsys)
     assert code == 0 and out["ok"] is True
