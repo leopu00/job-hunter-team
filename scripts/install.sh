@@ -50,6 +50,9 @@
 # ║                            media, playwright). Pinned like the image     ║
 # ║                            above; it is NOT downloaded here: `jht screen ║
 # ║                            on` pulls it, by this digest, when asked.     ║
+# ║    --cloud-sync on|off     With --pairing-token: off (default)           ║
+# ║                            pairs the device with the sync paused;        ║
+# ║                            on starts it. `jht cloud resume` later.       ║
 # ║    --branch <name>         Source branch for wrapper+compose             ║
 # ║                            (same as JHT_BRANCH=<name>, default           ║
 # ║                            production). Example to test dev-1:           ║
@@ -125,6 +128,8 @@ MIN_NODE_MAJOR=22
 USE_DOCKER=1
 DRY_RUN=0
 PAIRING_TOKEN=""
+# The sync with the site is a choice: a device paired by --pairing-token starts paused unless this is "on".
+CLOUD_SYNC="off"
 PUBLISH_RUNTIME_BUNDLE=0
 EXPECTED_INSTALLER_SHA256=""
 EXPECTED_WRAPPER_SHA256=""
@@ -236,6 +241,14 @@ while [ $# -gt 0 ]; do
       shift 2
       ;;
     --pairing-token=*) PAIRING_TOKEN="${1#*=}"; shift ;;
+    --cloud-sync)
+      case "${2:-}" in on|off) CLOUD_SYNC="$2" ;; *) printf "%s requires on or off\n" "$1" >&2; exit 2 ;; esac
+      shift 2
+      ;;
+    --cloud-sync=*)
+      case "${1#*=}" in on|off) CLOUD_SYNC="${1#*=}" ;; *) printf "--cloud-sync requires on or off\n" >&2; exit 2 ;; esac
+      shift
+      ;;
     --pairing-token-env)
       # Same token, taken from $JHT_PAIRING_TOKEN instead of the command line:
       # the arguments of a process are readable by every user of the server
@@ -3315,6 +3328,15 @@ save_pairing_token() {
   # the two steps stops mattering. `jht cloud pair` deletes it after consumption (cli/src/commands/cloud.js
   # handlePair). (Nor on the Mac: see align_bind_ownership.)
   ok "$(tsf installer.pairing_token_saved 'Pairing token saved to %s (mode 0600)' "$token_file")"
+  # The sync with the site is a choice: unless it was asked for (--cloud-sync on), the marker tells `jht cloud pair`
+  # to leave the sync paused (the device is paired all the same, `jht cloud resume` turns it on). A re-install
+  # without the flag does not undo a sync the person turned on: the marker only matters at the pairing.
+  local marker="$jht_home/.pairing-paused"
+  if [ "${CLOUD_SYNC:-off}" = "on" ]; then
+    rm -f "$marker"
+  else
+    : | write_file_in_home "$marker" 600 "$token_owner" || return 1
+  fi
 }
 
 # The container runs as uid 1001 (`jht`), and ~/.jht plus the documents

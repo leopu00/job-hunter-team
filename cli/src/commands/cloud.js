@@ -67,6 +67,8 @@ import {
   saveAwaitingApplication,
 } from '../lib/cloud-push-awaiting.js';
 import { ReceiptKeyInvalid } from '../../../shared/cloud/receipt-ids.js';
+import { SYNC_ENV, effectiveConfig, hasToken, syncSwitch } from '../../../shared/cloud/sync-switch.js';
+import { pauseCloud, resumeCloud } from '../lib/cloud-sync-pause.js';
 import { instantKey, noticeWebAction, noticeWebActions } from '../lib/web-action-notice.js';
 import { noticeLostSession, noticeRefusedToken } from '../lib/cloud-sync-notice.js';
 import {
@@ -101,6 +103,8 @@ import {
 
 const CLOUD_FILE = join(JHT_HOME, 'cloud.json');
 const PAIRING_TOKEN_FILE = join(JHT_HOME, '.pairing-token');
+// Left by install.sh next to the pairing token when the sync was not asked for: the pair starts paused.
+const PAIRING_PAUSED_MARKER = join(JHT_HOME, '.pairing-paused');
 const PROFILE_DIR = join(JHT_HOME, 'profile');
 const PROFILE_YAML_PATH = join(PROFILE_DIR, 'candidate_profile.yml');
 const PROFILE_SUMMARIES_DIR = join(PROFILE_DIR, 'summaries');
@@ -176,13 +180,28 @@ function readProfilePayload() {
   return { yaml: yamlRaw, summaries: orderedSummaries, source_hash: sourceHash };
 }
 
-async function loadCloudConfig() {
+/** What to do after «not enabled»: resume when a pause is what keeps it off, the variable when it is, else the way to pair. */
+function enableHint(command, suffix = '') {
+  let reason = 'absent';
+  try { reason = syncSwitch(JSON.parse(readFileSync(CLOUD_FILE, 'utf-8'))).reason; } catch { /* no file: not paired */ }
+  if (reason === 'paused') return pc.dim('Paused, pairing kept. Turn it back on with: ') + pc.bold('jht cloud resume');
+  if (reason === 'env-off') return pc.dim(`${SYNC_ENV}=0 keeps it off: unset the variable to follow cloud.json again.`);
+  return pc.dim('Enable with: ') + pc.bold(command) + (suffix ? pc.dim(suffix) : '');
+}
+
+/** cloud.json as the file has it (what pause and resume edit, and what status shows). */
+async function readCloudFile() {
   try {
     const raw = await readFile(CLOUD_FILE, 'utf-8');
     return JSON.parse(raw);
   } catch {
     return null;
   }
+}
+
+/** cloud.json as the readers must see it: `enabled` is the answer of the sync switch (file and JHT_CLOUD_SYNC). */
+async function loadCloudConfig() {
+  return effectiveConfig(await readCloudFile());
 }
 
 async function saveCloudConfig(config) {
@@ -238,6 +257,7 @@ async function handleEnable(options) {
     user_id: body.user_id,
     token_name: body.token?.name ?? null,
     enabled_at: new Date().toISOString(),
+    sync_choice: 'user',
   });
 
   console.log(pc.green('✓ Cloud sync enabled'));
@@ -745,6 +765,12 @@ async function invalidateCloudOwnershipCursors() {
   return { removed, failed };
 }
 
+function claimDeviceLabel(config) {
+  return process.env.JHT_DEVICE_LABEL ||
+    config.token_name ||
+    (process.env.IS_CONTAINER === '1' ? 'container' : 'cli');
+}
+
 /**
  * Claim esplicito del team per questo token. Senza --force conserva il lock
  * fresco di un altro device; con --force il server effettua atomicamente il
@@ -759,10 +785,7 @@ export async function handleClaim(options = {}) {
   }
 
   const baseUrl = String(config.base_url).replace(/\/+$/, '');
-  const deviceLabel =
-    process.env.JHT_DEVICE_LABEL ||
-    config.token_name ||
-    (process.env.IS_CONTAINER === '1' ? 'container' : 'cli');
+  const deviceLabel = claimDeviceLabel(config);
 
   let res;
   let body;
@@ -989,6 +1012,7 @@ export async function handleLogin(options = {}) {
     user_id: approved.user_id,
     token_name: approved.token_name ?? null,
     enabled_at: new Date().toISOString(),
+    sync_choice: 'user',
   });
   emitCloudLoginUi(options, 'paired', {
     token_name: approved.token_name ?? null,
@@ -1065,11 +1089,28 @@ export async function handleLogin(options = {}) {
 }
 
 async function handleStatus() {
-  const config = await loadCloudConfig();
+  const file = await readCloudFile();
+  const sw = syncSwitch(file);
+  const config = effectiveConfig(file);
+  if (sw.reason === 'env-off') {
+    console.log(pc.dim('Cloud sync: ') + pc.yellow(`off (${SYNC_ENV}=0 in the environment)`));
+    if (hasToken(file)) console.log(pc.dim('  The pairing is kept; unset the variable to follow cloud.json again.'));
+    return;
+  }
+  if (sw.reason === 'paused') {
+    console.log(pc.dim('Cloud sync: ') + pc.yellow('paused, pairing kept'));
+    console.log(pc.dim('Paused at:  ') + file.paused_at + (file.paused_by ? pc.dim(` (${file.paused_by})`) : ''));
+    if (file.base_url) console.log(pc.dim('Base URL:   ') + file.base_url);
+    console.log(pc.dim('Turn it back on with: ') + pc.bold('jht cloud resume'));
+    return;
+  }
   if (!config || !config.enabled) {
     console.log(pc.dim('Cloud sync: ') + pc.yellow('disabled'));
-    console.log(pc.dim('Enable with: ') + pc.bold('jht cloud enable --token jht_sync_xxx'));
+    console.log(enableHint('jht cloud enable --token jht_sync_xxx'));
     return;
+  }
+  if (sw.reason === 'env-on' && file?.enabled !== true) {
+    console.log(pc.yellow(`  ${SYNC_ENV}=1 keeps the sync on although cloud.json has it off.`));
   }
   console.log(pc.dim('Cloud sync: ') + pc.green('enabled'));
   console.log(pc.dim('Base URL:   ') + config.base_url);
@@ -1102,6 +1143,100 @@ async function handleStatus() {
         `  ${periodic.consecutive_failures} consecutive failure(s); the daemon retries automatically.`,
       ),
     );
+  }
+}
+
+/** The line that says what the environment does to the answer, or null when it does nothing. */
+function syncEnvNote(file, wanted) {
+  const sw = syncSwitch(file);
+  if (sw.active === wanted) return null;
+  return wanted
+    ? `${SYNC_ENV}=0 in the environment still keeps the sync off; unset it.`
+    : `${SYNC_ENV}=1 in the environment still keeps the sync on; unset it.`;
+}
+
+function emitJson(options, payload) {
+  if (options.json) console.log(JSON.stringify(payload, null, 2));
+}
+
+async function handlePause(options = {}) {
+  const result = pauseCloud(CLOUD_FILE, { by: 'cli' });
+  if (!result.ok) {
+    if (options.json) emitJson(options, { ok: false, error: result.reason });
+    else console.error(pc.red('Cloud sync is not paired on this machine: there is nothing to pause.'));
+    process.exitCode = 1;
+    return;
+  }
+  const file = await readCloudFile();
+  const note = syncEnvNote(file, false);
+  const sw = syncSwitch(file);
+  if (options.json) {
+    emitJson(options, {
+      ok: true, paused: true, changed: result.changed, paused_at: result.config.paused_at,
+      paused_by: result.config.paused_by ?? null, active: sw.active, reason: sw.reason,
+    });
+    return;
+  }
+  if (!result.changed) console.log(pc.dim('Cloud sync is already paused (pairing kept).'));
+  else {
+    console.log(pc.green('✓ Cloud sync paused'));
+    console.log(pc.dim('  The pairing is kept (token, user, base URL): nothing is revoked or deleted.'));
+    console.log(pc.dim('  The site and its web commands stay offline; the terminal, the app and Telegram are not affected.'));
+  }
+  if (note) console.log(pc.yellow(`  ${note}`));
+  console.log(pc.dim('  Turn it back on with: ') + pc.bold('jht cloud resume'));
+}
+
+async function handleResume(options = {}) {
+  const result = resumeCloud(CLOUD_FILE);
+  if (!result.ok) {
+    if (options.json) emitJson(options, { ok: false, error: result.reason });
+    else {
+      console.error(pc.red('Cloud sync is not paired on this machine: there is nothing to resume.'));
+      console.error(pc.dim('Pair with: ') + pc.bold('jht cloud login'));
+    }
+    process.exitCode = 1;
+    return;
+  }
+  const file = await readCloudFile();
+  const sw = syncSwitch(file);
+  // The claim is asked for without force: a device that holds it is told, never evicted.
+  const claim = sw.active ? await probeClaim(result.config) : { status: 'skipped' };
+  if (options.json) {
+    emitJson(options, {
+      ok: true, resumed: true, changed: result.changed, active: sw.active, reason: sw.reason,
+      claim: claim.status, claim_held_by: claim.held_by ?? null,
+    });
+    return;
+  }
+  console.log(pc.green(result.changed ? '✓ Cloud sync resumed' : '✓ Cloud sync was already on'));
+  const note = syncEnvNote(file, true);
+  if (note) console.log(pc.yellow(`  ${note}`));
+  if (claim.status === 'held') {
+    console.log(pc.yellow(`  Another device holds the team claim${claim.held_by ? ` (${claim.held_by})` : ''}.`));
+    console.log(pc.dim('  To take control from this device: ') + pc.bold('jht cloud claim --force'));
+  } else if (claim.status === 'unreachable' || claim.status === 'error') {
+    console.log(pc.dim('  The cloud could not be asked for the team claim now; the daemon will ask again. Check with: jht cloud status'));
+  }
+}
+
+/** One non-forcing claim after a resume: acquired, held by another device, or not reachable. */
+async function probeClaim(config) {
+  if (!config.base_url || !config.token) return { status: 'skipped' };
+  try {
+    const res = await fetch(`${String(config.base_url).replace(/\/+$/, '')}/api/team-state/claim`, {
+      method: 'POST',
+      headers: cloudSyncHeaders(config.token, { 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ force: false, device_label: claimDeviceLabel(config) }),
+    });
+    const body = await res.json().catch(() => ({}));
+    if (res.ok) return { status: 'acquired' };
+    if (res.status === 409 && body.error === 'device_already_claimed') {
+      return { status: 'held', held_by: typeof body.current_device_id === 'string' ? body.current_device_id.slice(0, 12) : null };
+    }
+    return { status: 'error' };
+  } catch {
+    return { status: 'unreachable' };
   }
 }
 
@@ -1235,7 +1370,7 @@ async function performPush(options) {
   const config = await loadCloudConfig();
   if (!config || !config.enabled) {
     console.error(pc.red('Cloud sync is not enabled.'));
-    console.error(pc.dim('Enable with: ') + pc.bold('jht cloud enable --token jht_sync_xxx'));
+    console.error(enableHint('jht cloud enable --token jht_sync_xxx'));
     process.exitCode = 1;
     return { ok: false, authFailed: false, skipped: 0 };
   }
@@ -2138,17 +2273,24 @@ async function handlePair(options) {
   // per autenticarsi con Supabase direttamente (auth.setSession +
   // auto-refresh dell'access_token via SDK). Senza questi, il
   // subscriber dovrebbe fare un endpoint custom roundtrip.
+  // The installer leaves a marker when the sync was not asked for (--cloud-sync on is the only way to skip it):
+  // the device is registered all the same, so that `jht cloud resume` is one step, but it starts paused.
+  const startPaused = existsSync(PAIRING_PAUSED_MARKER);
+  const pairedAt = new Date().toISOString();
   await saveCloudConfig({
-    enabled: true,
+    enabled: !startPaused,
     base_url: baseUrl,
     token: body.token,
     user_id: body.user_id,
     token_name: body.token_name ?? deviceName,
-    enabled_at: new Date().toISOString(),
+    enabled_at: pairedAt,
     paired_via: 'desktop-pairing-token',
     supabase_url: payload.supabase_url || null,
     supabase_refresh_token: payload.refresh_token || null,
+    ...(startPaused ? { paused_at: pairedAt, paused_by: 'installer' } : {}),
+    sync_choice: 'user',
   });
+  try { await unlink(PAIRING_PAUSED_MARKER); } catch { /* none, or already gone */ }
 
   // Cancella .pairing-token (one-shot): non ci serve piu' e non vogliamo
   // lasciare un refresh_token sul disco.
@@ -2160,6 +2302,11 @@ async function handlePair(options) {
   console.log(pc.dim(`  User ID:    ${body.user_id}`));
   console.log(pc.dim(`  File:       ${CLOUD_FILE} (0600)`));
   console.log(pc.dim('  Pairing token deleted after use.'));
+
+  if (startPaused) {
+    console.log(pc.dim('  Cloud sync is paused (the pairing is kept). Turn it on with: jht cloud resume'));
+    return;
+  }
 
   // Single-team preflight: warn se un altro device ha già il claim active.
   const conflict = await checkActiveDeviceConflict(baseUrl, body.token);
@@ -2366,7 +2513,7 @@ async function handlePullDesiredState(options = {}) {
   if (!config || !config.enabled) {
     if (!silent) {
       console.error(pc.red('Cloud sync is not enabled.'));
-      console.error(pc.dim('Enable with: ') + pc.bold('jht cloud enable --token jht_sync_xxx'));
+      console.error(enableHint('jht cloud enable --token jht_sync_xxx'));
     }
     // At boot (--silent) a machine without a cloud has nothing to sync: that is not a failure, and an exit code
     // other than 0 made `jht team start` print «not applied» for it. By hand the message and the code stay.
@@ -2910,7 +3057,7 @@ async function handleTicketSync(options = {}) {
   if (!config || !config.enabled) {
     if (!silent) {
       console.error(pc.red('Cloud sync is not enabled.'));
-      console.error(pc.dim('Enable with: ') + pc.bold('jht cloud login'));
+      console.error(enableHint('jht cloud login'));
     }
     // At boot (--silent) a machine without a cloud has nothing to sync: that is not a failure, and an exit code
     // other than 0 made `jht team start` print «not applied» for it. By hand the message and the code stay.
@@ -3187,7 +3334,7 @@ async function handleDirectiveSync(options = {}) {
   if (!config || !config.enabled) {
     if (!silent) {
       console.error(pc.red('Cloud sync is not enabled.'));
-      console.error(pc.dim('Enable with: ') + pc.bold('jht cloud login'));
+      console.error(enableHint('jht cloud login'));
     }
     // At boot (--silent) a machine without a cloud has nothing to sync: that is not a failure, and an exit code
     // other than 0 made `jht team start` print «not applied» for it. By hand the message and the code stay.
@@ -4236,7 +4383,7 @@ async function handleDaemon(options) {
   const config = await loadCloudConfig();
   if (!config || !config.enabled) {
     console.error(pc.red('Cloud sync is not enabled; the daemon cannot start.'));
-    console.error(pc.dim('Enable with: ') + pc.bold('jht cloud login') + pc.dim(' (pairing browser)'));
+    console.error(enableHint('jht cloud login', ' (pairing browser)'));
     process.exitCode = 1;
     return;
   }
@@ -4850,7 +4997,7 @@ async function handlePullProfile(options = {}) {
 export function registerCloudCommand(program) {
   const cloud = program
     .command('cloud')
-    .description('Manage optional cloud sync: enable, status, disable');
+    .description('Manage the optional cloud sync (off unless you turn it on): enable, status, pause, resume, disable');
 
   cloud
     .command('login')
@@ -4885,6 +5032,18 @@ export function registerCloudCommand(program) {
     .command('status')
     .description('Show cloud sync status')
     .action(handleStatus);
+
+  cloud
+    .command('pause')
+    .description('Stop the sync and keep the pairing (token, user, base URL): resume turns it back on')
+    .option('--json', 'Print the result as JSON')
+    .action(handlePause);
+
+  cloud
+    .command('resume')
+    .description('Turn the sync back on after a pause, with the pairing that was kept')
+    .option('--json', 'Print the result as JSON')
+    .action(handleResume);
 
   cloud
     .command('claim')
@@ -4994,7 +5153,7 @@ export function registerCloudCommand(program) {
 
   cloud
     .command('disable')
-    .description('Stop sync, revoke the cloud token, and remove it from this device')
+    .description('Delete the pairing: revoke the cloud token and remove it from this device (to stop and keep the pairing, use pause)')
     .option('--local-only', 'remove the token from this device without revoking it on the server')
     .action(handleDisable);
 
