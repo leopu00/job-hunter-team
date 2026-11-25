@@ -31,8 +31,8 @@ function sandbox() {
   mkdirSync(bin, { recursive: true });
   mkdirSync(home, { recursive: true });
   mkdirSync(state, { recursive: true });
-  // a host start needs the CLI of the provider the team chose: there is no default one; this release offers GLM on pi
-  writeFileSync(path.join(home, "jht.config.json"), '{"active_provider":"glm","harness":"pi","providers":{"glm":{"name":"glm","auth_method":"api_key","api_key_ref":{"type":"ref","source":"env","id":"ZAI_API_KEY"}}}}', "utf-8");
+  // a host start needs the CLI of the provider the team chose: there is no default one; this release offers Claude on pi
+  writeFileSync(path.join(home, "jht.config.json"), '{"active_provider":"claude","harness":"pi","providers":{"claude":{"name":"claude","auth_method":"api_key","api_key_ref":{"type":"ref","source":"env","id":"ANTHROPIC_API_KEY"}}}}', "utf-8");
   writeExecutable(
     path.join(bin, "docker"),
     String.raw`
@@ -76,12 +76,12 @@ if (command[0] === "test" && command.join(" ") === "test ! -e /jht_home/.team-ha
 if (command[0] === "bash" && command[1] === "-c" && command[2].includes("providers check-key")) {
   // the provider refuses the key (a 401): the CLI of the container says so on stderr and exits 3
   if (process.env.FAKE_KEY_CHECK === "rejected") {
-    console.error("GLM (Z.ai) rejected the API key (HTTP 401: wrong, expired or revoked). Put the right one in its file and run: jht setup");
+    console.error("Claude (Anthropic) rejected the API key (HTTP 401: wrong, expired or revoked). Put the right one in its file and run: jht setup");
     process.exit(3);
   }
   // the same refusal, with control characters in the line (bell, backspace, a color): none of them may reach the terminal
   if (process.env.FAKE_KEY_CHECK === "control") {
-    console.error("\x1b[31mGLM (Z.ai)\x07 rejected\x08 the API key (HTTP 401).\x1b[0m");
+    console.error("\x1b[31mClaude (Anthropic)\x07 rejected\x08 the API key (HTTP 401).\x1b[0m");
     process.exit(3);
   }
   // a CLI that does not know the command, a crash: exit 1, and it is no verdict on the key
@@ -123,7 +123,7 @@ process.exit(0);
 `,
   );
   writeExecutable(path.join(bin, "codex"), "process.exit(0);");
-  writeExecutable(path.join(bin, "pi"), "process.exit(0);"); // the CLI of this release (GLM on pi): on a runner it is not installed
+  writeExecutable(path.join(bin, "pi"), "process.exit(0);"); // the CLI of this release (Claude on pi): on a runner it is not installed
   return {
     nodeOptions: fakeDiskNodeOptions(root),
     root,
@@ -231,7 +231,7 @@ describe("team halt gate — CLI host verso runtime container", () => {
     const result = run(sb, ["start"], { FAKE_KEY_CHECK: "rejected", FAKE_START_SUCCESS_ROLES: "*" });
 
     expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(1);
-    expect(result.stderr).toContain("GLM (Z.ai) rejected the API key (HTTP 401");
+    expect(result.stderr).toContain("Claude (Anthropic) rejected the API key (HTTP 401");
     expect(result.stderr).toContain("jht setup");
     expect(result.stdout).not.toMatch(/\d+ started/);
     expect(result.stdout).not.toContain("Team on:");
@@ -272,7 +272,7 @@ describe("team halt gate — CLI host verso runtime container", () => {
     // control characters of the line the container wrote never reach the terminal
     const control = run(sb, ["start"], { FAKE_KEY_CHECK: "control", FAKE_START_SUCCESS_ROLES: "*" });
     expect(control.status).toBe(1);
-    expect(control.stderr).toContain("GLM (Z.ai) rejected the API key (HTTP 401).");
+    expect(control.stderr).toContain("Claude (Anthropic) rejected the API key (HTTP 401).");
     expect(control.stderr).not.toMatch(/[\x00-\x08\x0b-\x1a\x1c-\x1f\x7f]/);
   }, 90_000);
 

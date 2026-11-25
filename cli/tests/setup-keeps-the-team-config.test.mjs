@@ -1,4 +1,4 @@
-// `jht setup --non-interactive --provider glm|kimi --harness pi --api-key-stdin` for a team that is already on that provider: the new key
+// `jht setup --non-interactive --provider claude|kimi --harness pi --api-key-stdin` for a team that is already on that provider: the new key
 // replaces the old one and nothing else of the config is lost (the channels, the model chosen, the other fields). Made-up homes and keys.
 import assert from 'node:assert/strict';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -26,7 +26,7 @@ async function setup(opts, status = 200) {
   console.log = (...a) => out.push(a.join(' ')); console.error = (...a) => out.push(a.join(' '));
   globalThis.fetch = async () => ({ status, ok: status >= 200 && status < 300 });
   process.exitCode = 0;
-  try { await runNonInteractiveSetup({ language: 'en', authMethod: 'api_key', harness: 'pi', provider: 'glm', apiKeyStdin: true, stdin: piped(`${KEY}\n`), ...opts }); }
+  try { await runNonInteractiveSetup({ language: 'en', authMethod: 'api_key', harness: 'pi', provider: 'claude', apiKeyStdin: true, stdin: piped(`${KEY}\n`), ...opts }); }
   finally { console.log = log; console.error = error; globalThis.fetch = realFetch; }
   const code = process.exitCode; process.exitCode = 0;
   return { code, text: out.join('\n') };
@@ -35,8 +35,8 @@ const read = () => JSON.parse(readFileSync(CONFIG, 'utf8'));
 const TELEGRAM = { telegram: { bots: { capitano: { token_ref: { type: 'ref', source: 'env', id: 'TG_CAPITANO' } } } } };
 const before = (over = {}) => ({
   version: 1,
-  active_provider: 'glm',
-  providers: { glm: { name: 'glm', auth_method: 'api_key', model: 'glm-chosen-before', api_key_ref: { type: 'ref', source: 'file', path: '/opt/jht-deps/keys/glm.key' } } },
+  active_provider: 'claude',
+  providers: { claude: { name: 'claude', auth_method: 'api_key', model: 'claude-chosen-before', api_key_ref: { type: 'ref', source: 'file', path: '/opt/jht-deps/keys/claude.key' } } },
   channels: TELEGRAM,
   harness: 'pi',
   work_hours: { start: '09:00', end: '18:00' },
@@ -50,22 +50,22 @@ test('a new key for the team that is already on that provider keeps the channels
   assert.equal(code, 0, text);
   const saved = read();
   assert.deepEqual(saved.channels, TELEGRAM, 'the Telegram bots are still there');
-  assert.equal(saved.providers.glm.model, 'glm-chosen-before', 'the model chosen before is kept when none is given');
+  assert.equal(saved.providers.claude.model, 'claude-chosen-before', 'the model chosen before is kept when none is given');
   assert.deepEqual(saved.work_hours, { start: '09:00', end: '18:00' });
-  assert.equal(saved.active_provider, 'glm');
+  assert.equal(saved.active_provider, 'claude');
   assert.equal(saved.harness, 'pi');
-  assert.equal(saved.providers.glm.auth_method, 'api_key');
-  assert.deepEqual(saved.providers.glm.api_key_ref, { type: 'ref', source: 'file', path: join(DEPS, 'keys', 'glm.key') });
-  assert.equal(readFileSync(join(DEPS, 'keys', 'glm.key'), 'utf8'), `${KEY}\n`);
+  assert.equal(saved.providers.claude.auth_method, 'api_key');
+  assert.deepEqual(saved.providers.claude.api_key_ref, { type: 'ref', source: 'file', path: join(DEPS, 'keys', 'claude.key') });
+  assert.equal(readFileSync(join(DEPS, 'keys', 'claude.key'), 'utf8'), `${KEY}\n`);
   assert.ok(!readFileSync(CONFIG, 'utf8').includes(KEY));
 });
 
 test('a model given now replaces the one chosen before; a plaintext key or a subscription of the old entry does not survive', async () => {
-  put(before({ providers: { glm: { name: 'glm', auth_method: 'api_key', model: 'glm-chosen-before', api_key: 'old-plaintext', subscription: { email: 'user@example.com' } } } }));
-  const { code, text } = await setup({ model: 'glm-new' });
+  put(before({ providers: { claude: { name: 'claude', auth_method: 'api_key', model: 'claude-chosen-before', api_key: 'old-plaintext', subscription: { email: 'user@example.com' } } } }));
+  const { code, text } = await setup({ model: 'claude-new' });
   assert.equal(code, 0, text);
-  const entry = read().providers.glm;
-  assert.equal(entry.model, 'glm-new');
+  const entry = read().providers.claude;
+  assert.equal(entry.model, 'claude-new');
   assert.equal(entry.api_key, undefined);
   assert.equal(entry.subscription, undefined);
   assert.ok(entry.api_key_ref);
@@ -75,7 +75,7 @@ test('a config that says moonshot is the team of kimi: kept, and the entry moves
   put({
     version: 1,
     active_provider: 'moonshot',
-    providers: { moonshot: { name: 'moonshot', auth_method: 'api_key', model: 'kimi-chosen-before', api_key: 'old-plaintext' }, glm: { name: 'glm', auth_method: 'api_key', model: 'glm-other', api_key_ref: { type: 'ref', source: 'env', id: 'ZAI_API_KEY' } } },
+    providers: { moonshot: { name: 'moonshot', auth_method: 'api_key', model: 'kimi-chosen-before', api_key: 'old-plaintext' }, claude: { name: 'claude', auth_method: 'api_key', model: 'claude-other', api_key_ref: { type: 'ref', source: 'env', id: 'ANTHROPIC_API_KEY' } } },
     channels: TELEGRAM,
     harness: 'pi',
   });
@@ -87,7 +87,7 @@ test('a config that says moonshot is the team of kimi: kept, and the entry moves
   assert.equal(saved.providers.kimi.model, 'kimi-chosen-before');
   assert.equal(saved.providers.kimi.api_key, undefined);
   assert.equal(saved.providers.moonshot, undefined, 'no entry left under the old name');
-  assert.equal(saved.providers.glm.model, 'glm-other', 'the other providers keep their entries');
+  assert.equal(saved.providers.claude.model, 'claude-other', 'the other providers keep their entries');
   assert.equal(sameTeamConfig({ active_provider: 'kimi', harness: 'pi', providers: { kimi: {} } }, 'moonshot', 'pi'), null, 'the setup names kimi');
 });
 
@@ -98,8 +98,8 @@ test('another provider or another harness starts a new config, as before', { ski
   assert.deepEqual(read().channels, {});
   assert.equal(read().active_provider, 'kimi');
   assert.equal(read().work_hours, undefined);
-  put(before({ harness: undefined }));   // no harness = codex: glm cannot be that, but the rule is about the harness of the team
-  assert.equal(sameTeamConfig(JSON.parse(readFileSync(CONFIG, 'utf8')), 'glm', 'pi'), null);
+  put(before({ harness: undefined }));   // no harness = codex: claude cannot be that, but the rule is about the harness of the team
+  assert.equal(sameTeamConfig(JSON.parse(readFileSync(CONFIG, 'utf8')), 'claude', 'pi'), null);
 });
 
 test('a key the provider refuses leaves the config as it was, and the exit says so (3)', async () => {
@@ -120,7 +120,7 @@ test('no config yet, or one that cannot be read, is a new config', async () => {
   writeFileSync(CONFIG, '{not json');
   assert.equal((await setup({})).code, 0);
   assert.deepEqual(read().channels, {});
-  for (const bad of [null, [], 'x', { active_provider: 'glm' }, { active_provider: 'glm', providers: { glm: 3 } }]) {
-    assert.equal(sameTeamConfig(bad, 'glm', 'pi'), null);
+  for (const bad of [null, [], 'x', { active_provider: 'claude' }, { active_provider: 'claude', providers: { claude: 3 } }]) {
+    assert.equal(sameTeamConfig(bad, 'claude', 'pi'), null);
   }
 });

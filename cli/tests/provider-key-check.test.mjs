@@ -104,7 +104,7 @@ const saved = () => existsSync(join(HOME, 'jht.config.json')) ? JSON.parse(readF
 
 test('setup with a key the provider refuses: exit 3 (like check-key), a clear sentence, nothing saved, the key nowhere', async () => {
   writeFileSync(join(HOME, 'setup.key'), `${KEY}\n`);
-  for (const provider of ['glm', 'kimi'].filter((p) => offeredInRelease(p))) {
+  for (const provider of ['glm', 'kimi', 'claude', 'openai'].filter((p) => offeredInRelease(p))) {
     const { code, text } = await setup({ provider }, 401);
     assert.equal(code, 3, text);
     assert.match(text, /rejected the API key \(HTTP 401/);
@@ -116,19 +116,19 @@ test('setup with a key the provider refuses: exit 3 (like check-key), a clear se
 
 test('setup with a key the provider accepts, or that could not be tried: saved (the second says so); --skip-health asks nothing', async () => {
   writeFileSync(join(HOME, 'setup.key'), `${KEY}\n`);
-  const ok = await setup({ provider: 'glm' }, 200);
+  const ok = await setup({ provider: 'claude' }, 200);
   assert.equal(ok.code, 0, ok.text);
   assert.match(ok.text, /the API key is accepted/);
-  assert.equal(saved().active_provider, 'glm');
+  assert.equal(saved().active_provider, 'claude');
 
-  const offline = await setup({ provider: 'glm' }, 'offline');
+  const offline = await setup({ provider: 'claude' }, 'offline');
   assert.equal(offline.code, 0, offline.text);
-  assert.match(offline.text, /Could not check the API key with GLM \(Z\.ai\)/);
-  assert.equal(saved().active_provider, 'glm');
+  assert.match(offline.text, /Could not check the API key with Claude \(Anthropic\)/);
+  assert.equal(saved().active_provider, 'claude');
 
-  const skipped = await setup({ provider: 'glm', skipHealth: true }, 401);
+  const skipped = await setup({ provider: 'claude', skipHealth: true }, 401);
   assert.equal(skipped.code, 0, skipped.text);
-  assert.equal(saved().active_provider, 'glm');
+  assert.equal(saved().active_provider, 'claude');
 });
 
 test('the way out of a false refusal: the flag or JHT_SKIP_KEY_CHECK, nothing else', () => {

@@ -100,7 +100,7 @@ test('the wizard draws no box and no cyan: the banner is gone, the title is one 
 });
 
 function setupNonInteractive(args, box) {
-  const result = spawnSync(process.execPath, [entry, 'setup', '--non-interactive', '--provider', 'glm', '--skip-health', ...args], {
+  const result = spawnSync(process.execPath, [entry, 'setup', '--non-interactive', '--provider', 'claude', '--skip-health', ...args], {
     env: { PATH: `${dirname(process.execPath)}:/usr/bin:/bin`, HOME: box.root, JHT_HOME: box.home, JHT_DEPS_PREFIX: join(box.root, 'deps'), LANG: 'en_US.UTF-8' },
     encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: 30_000,
   });
@@ -117,9 +117,9 @@ test('--api-key-file reads the key from a file, so it is not on the command line
   assert.equal(ok.status ?? 0, 0, ok.out);
   const config = JSON.parse(readFileSync(join(box.home, 'jht.config.json'), 'utf8'));
   // the key goes to the key store (0600), the config holds only where it is
-  assert.equal(config.providers.glm.api_key, undefined);
-  assert.equal(readFileSync(config.providers.glm.api_key_ref.path, 'utf8'), `${fake}\n`);
-  assert.equal((statSync(config.providers.glm.api_key_ref.path).mode & 0o077), 0, 'the file holding a key is private');
+  assert.equal(config.providers.claude.api_key, undefined);
+  assert.equal(readFileSync(config.providers.claude.api_key_ref.path, 'utf8'), `${fake}\n`);
+  assert.equal((statSync(config.providers.claude.api_key_ref.path).mode & 0o077), 0, 'the file holding a key is private');
 
   const empty = sandbox();
   writeFileSync(join(empty.root, 'empty.txt'), '\n');

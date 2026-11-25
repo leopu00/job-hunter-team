@@ -400,4 +400,7 @@ export default {
   "agents.quota_wall_unknown": "The quota of your subscription is finished: the team is paused. It is not known when it comes back: the team checks by itself every {min} minutes and restarts as soon as there is quota again.",
   "profile.workers_renewed": "The team was working on the profile you replaced: {workers} are restarted on the new one. The Capitano and the Assistente go on.",
   "profile.workers_not_renewed": "The workers that were running ({workers}) could not be restarted, and still have the previous profile in mind. Restart the team with: jht team stop --all, then jht team start",
+  'providers.help.description': "AI providers on Pi: Claude or OpenAI API key, or ChatGPT subscription; list, show and switch",
+  'providers.help.update': "Check Pi or install a provider CLI at the release pin. Omitted id: the CLIs of the offered services and existing Codex teams.",
+  'providers.help.check_key': "Ask the active provider whether it accepts the API key on Pi. Exit 3 only when the key is refused.",
 };

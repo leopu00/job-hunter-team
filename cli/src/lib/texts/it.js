@@ -433,4 +433,7 @@ export default {
   "agents.quota_wall_unknown": "La quota del tuo abbonamento è finita: la squadra è in pausa. Non so a che ora torna: controlla da sola ogni {min} minuti e riprende appena c'è di nuovo quota.",
   "profile.workers_renewed": "La squadra lavorava sul profilo che hai sostituito: {workers} ripartono con quello nuovo. Il Capitano e l'Assistente continuano.",
   "profile.workers_not_renewed": "Non è stato possibile far ripartire i worker accesi ({workers}): hanno ancora in mente il profilo di prima. Fai ripartire la squadra con: jht team stop --all, poi jht team start",
+  'providers.help.description': "Provider AI su Pi: chiave API Claude o OpenAI, oppure abbonamento ChatGPT; elenca, mostra e cambia",
+  'providers.help.update': "Controlla Pi o installa la CLI del provider alla versione della release. Senza id: le CLI dei servizi offerti e delle squadre Codex esistenti.",
+  'providers.help.check_key': "Chiede al provider attivo se accetta la chiave API su Pi. Esce con 3 solo se la chiave è rifiutata.",
 };

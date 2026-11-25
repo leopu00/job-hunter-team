@@ -15,13 +15,13 @@ const JHT = fileURLToPath(new URL('../bin/jht.js', import.meta.url));
 const ZAI_1113 = '429 {"error":{"code":"1113","message":"Insufficient balance or no resource package. Please recharge."}}';
 const KEY = ['synthetic', 'key', '0123456789', 'abcdef'].join('-');
 
-function home(rows = []) {
+function home(rows = [], provider = 'zai') {
   const root = mkdtempSync(join(tmpdir(), 'jht-credit-'));
   const folder = join(root, '.pi', 'agent', 'sessions', '--jht_home-agents-assistente--');
   mkdirSync(folder, { recursive: true });
   const lines = [{ type: 'session', id: 's-1', cwd: '/jht_home/agents/assistente' },
     ...rows.map(([offsetS, stopReason, errorMessage]) => ({ type: 'message', timestamp: new Date(Date.now() + offsetS * 1000).toISOString(),
-      message: { role: 'assistant', provider: 'zai', model: 'glm-5.3', stopReason, ...(errorMessage ? { errorMessage } : {}),
+      message: { role: 'assistant', provider, model: provider === 'zai' ? 'glm-5.3' : 'gpt-5.6-sol', stopReason, ...(errorMessage ? { errorMessage } : {}),
         usage: stopReason === 'stop' ? { input: 100, output: 20, cacheRead: 0, cacheWrite: 0, cost: { total: 0.001 } }
           : { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: { total: 0 } } } }))];
   writeFileSync(join(folder, '2026-11-12T00-00-00-000Z_synthetic.jsonl'), lines.map((l) => JSON.stringify(l)).join('\n') + '\n');
@@ -47,11 +47,11 @@ test('a call that went through after it, a plain rate limit, an empty home and a
 });
 
 test('jht doctor says the credit is gone, with the provider and the top-up, where it used to say nothing', () => {
-  const root = home([[-60, 'error', ZAI_1113]]);
+  const root = home([[-60, 'error', '429 insufficient_quota']], 'openai');
   const keyFile = join(root, 'glm.key');
   writeFileSync(keyFile, `${KEY}\n`, { mode: 0o600 });
-  writeFileSync(join(root, 'jht.config.json'), JSON.stringify({ version: 4, active_provider: 'glm', harness: 'pi',
-    providers: { glm: { auth_method: 'api_key', model: 'glm-5.3', api_key_ref: { source: 'file', path: keyFile } } } }));
+  writeFileSync(join(root, 'jht.config.json'), JSON.stringify({ version: 4, active_provider: 'openai', harness: 'pi',
+    providers: { openai: { auth_method: 'api_key', model: 'gpt-5.6-sol', api_key_ref: { source: 'file', path: keyFile } } } }));
   // the setup came before the refusal: a refusal older than jht.config.json is of an old service and does not count
   const before = new Date(Date.now() - 3_600_000);
   utimesSync(join(root, 'jht.config.json'), before, before);
@@ -61,13 +61,13 @@ test('jht doctor says the credit is gone, with the provider and the top-up, wher
     return `${r.stdout}${r.stderr}`.replace(/\x1b\[[0-9;]*m/g, '').replace(/\s+/g, ' ');
   };
   const out = doctor();
-  assert.match(out, /Provider: glm \(glm-5\.3\) — the credit on GLM \(Z\.ai\) is used up: the agents get no answer/);
+  assert.match(out, /Provider: openai \(gpt-5\.6-sol\) — the credit on OpenAI is used up: the agents get no answer/);
   assert.match(out, /Top it up on the provider's site/);
   assert.equal(out.includes(KEY), false);
   // the same home after a call that passed: the ordinary line again
   writeFileSync(join(root, '.pi/agent/sessions/--jht_home-agents-assistente--/2026-11-12T00-00-00-000Z_synthetic.jsonl'),
     [{ type: 'session', id: 's-1', cwd: '/jht_home/agents/assistente' }, { type: 'message', timestamp: new Date().toISOString(),
-      message: { role: 'assistant', provider: 'zai', model: 'glm-5.3', stopReason: 'stop',
+      message: { role: 'assistant', provider: 'openai', model: 'gpt-5.6-sol', stopReason: 'stop',
         usage: { input: 100, output: 20, cacheRead: 0, cacheWrite: 0, cost: { total: 0.001 } } } }].map((l) => JSON.stringify(l)).join('\n') + '\n');
   assert.doesNotMatch(doctor(), /credit/);
 });

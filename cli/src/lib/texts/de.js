@@ -248,4 +248,7 @@ export default {
   "help.long_description": "Zeigt alle Befehle (lange Liste)",
   "profile.workers_renewed": "Das Team arbeitete mit dem Profil, das du ersetzt hast: {workers} starten mit dem neuen neu. Capitano und Assistente arbeiten weiter.",
   "profile.workers_not_renewed": "Die laufenden Worker ({workers}) konnten nicht neu gestartet werden und haben noch das vorherige Profil im Kopf. Starte das Team neu mit: jht team stop --all, dann jht team start",
+  'providers.help.description': "KI-Anbieter auf Pi: Claude- oder OpenAI-API-Schlüssel oder ChatGPT-Abo; auflisten, anzeigen und wechseln",
+  'providers.help.update': "Prüft Pi oder installiert die Anbieter-CLI in der Release-Version. Ohne id: die CLIs der angebotenen Dienste und bestehender Codex-Teams.",
+  'providers.help.check_key': "Fragt den aktiven Anbieter, ob er den API-Schlüssel auf Pi akzeptiert. Exit 3 nur bei abgelehntem Schlüssel.",
 };

@@ -36,7 +36,7 @@ test('the code still knows codex and the two providers that run only on pi, each
   const pairs = PAIRS.map(({ provider, harness }) => `${provider.value}/${harness}`);
   for (const wanted of ['openai/codex', 'openai/pi', 'glm/pi', 'kimi/pi']) assert.ok(pairs.includes(wanted), `${wanted} in ${pairs}`);
   assert.ok(!pairs.includes('glm/codex'));
-  assert.ok(OFFERED.some(({ provider, harness }) => provider.value === 'glm' && harness === 'pi'));
+  assert.ok(OFFERED.some(({ provider, harness }) => provider.value === 'claude' && harness === 'pi'));
 });
 
 for (const { provider, harness } of NOT_OFFERED) {
@@ -60,17 +60,16 @@ for (const { provider, harness } of OFFERED) {
   });
 }
 
-test('glm on the pi harness is driven by pi, and with the other harness it is refused for what it is, not as «no provider»', () => {
+test('GLM is still driven by pi in the runtime, but team start refuses it while it is paused', () => {
   const glm = PI_API_CHOICES.find((p) => p.value === 'glm');
   assert.equal(providerCli(configOf(glm, 'pi')), 'pi');
   assert.equal(providerCli(configOf(glm, 'codex')), null);
-  const refusal = startRefusal(configOf(glm, 'codex'), { containerMode: true });
-  assert.match(refusal, /GLM \(Z\.ai\) runs only on the pi harness/);
-  assert.match(refusal, /jht providers harness pi/);
-  assert.doesNotMatch(refusal, /no active provider/);
-  // a subscription is still refused on the provider that has none, by the harness rule
-  const subscription = { ...configOf(glm, 'pi'), providers: { glm: { name: 'glm', auth_method: 'subscription' } } };
-  assert.match(startRefusal(subscription, { containerMode: true }), /only with an API key/);
+  for (const harness of ['pi', 'codex']) {
+    const refusal = startRefusal(configOf(glm, harness), { containerMode: true });
+    assert.match(refusal, /provider 'glm' is not offered in this release/);
+    assert.match(refusal, /jht setup/);
+    assert.doesNotMatch(refusal, /no active provider/);
+  }
 });
 
 test('a provider the setup does not offer is still «no active provider»', () => {

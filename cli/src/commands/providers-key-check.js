@@ -11,6 +11,7 @@ import { piApiProvider } from '../../../shared/runtime/provider-models.js';
 import { checkPiApiKey, rejectedKeyMessage } from '../../../shared/runtime/provider-key-check.js';
 import { resolveSecret } from '../../wizard/secret-ref.js';
 import { c } from './_colors.js';
+import { say } from '../lib/texts.js';
 
 const CONFIG_PATH = join(JHT_HOME, 'jht.config.json');
 
@@ -49,7 +50,7 @@ export function registerProvidersKeyCheck(program) {
   const providers = program.commands.find((cmd) => cmd.name() === 'providers');
   providers
     .command('check-key', { hidden: true })
-    .description('Ask the provider whether it accepts the API key (glm and kimi on pi). Exit 3 only when the key is refused.')
+    .description(say('providers.help.check_key'))
     .option('--quiet', 'Print only when the key is refused')
     .action(async (opts) => {
       let config = {};

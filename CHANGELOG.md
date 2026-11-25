@@ -5,13 +5,11 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
-## [0.4.0] — date to be set
-
-<!-- To settle before the tag: the date; whether GLM and Kimi are tested for this release (now: no, and the Providers section says so); the ChatGPT subscription, which `jht setup` still offers (shared/runtime/release-providers.js) while these notes do not promise it. Remove this line when settled. -->
+## [0.4.0] — 2026-11-25
 
 **The agent team runs in a Podman container on your computer, driven from the `jht` CLI, with the sync with the website
-off. The team runs on Pi with an API key, and Claude (Anthropic) and OpenAI are the two providers tested for this
-release.** The desktop app is not in 0.4.0. The release notes say which of this was tested on real machines and which was not.
+off. The team runs on Pi with a Claude (Anthropic) API key, an OpenAI API key or a ChatGPT subscription.**
+The desktop app is not in 0.4.0. The release notes say which of this was tested on real machines and which was not.
 
 ### Platforms
 
@@ -44,11 +42,12 @@ release.** The desktop app is not in 0.4.0. The release notes say which of this 
 - **Tested for 0.4.0: Pi with Claude (Anthropic)** and **Pi with OpenAI**, each with an **API key** that `jht setup`
   asks for (typed hidden) or takes from a file or from standard input. Its cost is yours: set a spending ceiling
   (`no_quota_cap`, see PROVIDERS) and the team pauses there; without one nothing stops the spending.
-- **GLM (Z.ai) and Kimi (Moonshot)** are still in `jht setup`, also on Pi with an API key, but **were not tested for this
-  release**.
-- **The ChatGPT subscription** (the Codex CLI, and Pi's own sign-in) is **not part of 0.4.0** and was not tested for it. A
-  team you set up with 0.3.9 on Codex keeps working, with one warning (in `jht team start`, `jht doctor`, `jht status`
-  and `jht providers`) that says how to move to an API key; its code stays.
+- **The ChatGPT subscription on Pi** is offered through Pi's own **OpenAI** sign-in, without an API key.
+- **Teams set up with 0.3.x on Codex keep working**, with one warning (in `jht team start`, `jht doctor`, `jht status`
+  and `jht providers`); Codex is no longer offered for new teams.
+- **The Claude subscription is not part of 0.4.0.** Claude on Pi is billed per token as extra usage, outside the subscription;
+  use an API key and set a spending ceiling.
+- **GLM (Z.ai) and Kimi (Moonshot) are paused** and are not offered by `jht setup` in this release.
 - The services a release offers are one list (`shared/runtime/release-providers.js`); `jht setup`, `jht providers use`
   and `jht providers harness` refuse the others, and `jht doctor` says a team configured on one of them is not supported
   in this release. `jht providers update` without an id no longer updates Kimi: name it (`jht providers update kimi`).

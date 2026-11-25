@@ -163,7 +163,7 @@ test('OpenAI in the wizard: offered with a key on Pi, the key checked with OpenA
   const box = sandbox();
   const { r, events, calls, configText, out } = run(box, { select: { 'AI Provider': 'openai' }, keys: [`sk-${KEY}`] });
   assert.equal(r.status, 0, r.stderr);
-  assert.deepEqual(events.find((e) => e.kind === 'select' && e.message === 'AI Provider').options, ['glm', 'kimi', 'openai', 'claude']);
+  assert.deepEqual(events.find((e) => e.kind === 'select' && e.message === 'AI Provider').options, [...RELEASE_PROVIDERS]);
   const config = JSON.parse(configText);
   assert.equal(config.active_provider, 'openai');
   assert.equal(config.harness, 'pi');
@@ -193,12 +193,12 @@ test('Claude in the wizard: offered with a key on Pi, kept in the key store, Opu
 test('a key the provider accepts on an empty account (Z.ai 429 code 1113): kept, and the end of the setup says top it up, not «All set»', () => {
   const box = sandbox();
   const empty = { status: 429, body: '{"error":{"code":"1113","message":"Insufficient balance or no resource package. Please recharge."}}' };
-  const { events, configText, out } = run(box, { select: { 'AI Provider': 'glm' }, keys: [KEY] }, [empty]);
+  const { events, configText, out } = run(box, { select: { 'AI Provider': 'claude' }, keys: [KEY] }, [empty]);
   assert.equal(events.at(-1).ok, true);
-  assert.equal(readFileSync(JSON.parse(configText).providers.glm.api_key_ref.path, 'utf8'), `${KEY}\n`, 'the key is right: it is kept');
-  assert.match(out, /GLM \(Z\.ai\) accepted the API key, but the account has no credit left/);
+  assert.equal(readFileSync(JSON.parse(configText).providers.claude.api_key_ref.path, 'utf8'), `${KEY}\n`, 'the key is right: it is kept');
+  assert.match(out, /Claude \(Anthropic\) accepted the API key, but the account has no credit left/);
   const outro = events.find((e) => e.kind === 'outro').message;
-  assert.match(outro, /the credit on GLM \(Z\.ai\) is used up/);
+  assert.match(outro, /the credit on Claude \(Anthropic\) is used up/);
   assert.doesNotMatch(outro, /All set/);
   assert.equal(out.includes(KEY), false);
 });
@@ -207,7 +207,7 @@ test('the end of the setup does not ask to start the onboarding when the Assiste
   const box = sandbox();
   mkdirSync(join(box.home, 'profile'), { recursive: true });
   writeFileSync(join(box.home, 'profile', 'ready.flag'), '');
-  const { events } = run(box, { select: { 'AI Provider': 'kimi' }, keys: [KEY] }, [200]);
+  const { events } = run(box, { select: { 'AI Provider': 'claude' }, keys: [KEY] }, [200]);
   const outro = events.find((e) => e.kind === 'outro').message;
   assert.match(outro, /^All set! The team is running/);
   assert.doesNotMatch(outro, /onboarding|Assistente/);
@@ -216,14 +216,14 @@ test('the end of the setup does not ask to start the onboarding when the Assiste
 
 test('a key the provider accepts says the credit is not checked there, and the setup ends «All set»', () => {
   const box = sandbox();
-  const { events, out } = run(box, { select: { 'AI Provider': 'kimi' }, keys: [KEY] }, [200]);
+  const { events, out } = run(box, { select: { 'AI Provider': 'claude' }, keys: [KEY] }, [200]);
   assert.match(out, /accepted the API key\. The credit of the account is not checked here/);
   assert.match(events.find((e) => e.kind === 'outro').message, /^All set!/);
 });
 
 test('a key the provider refuses three times saves nothing: no config, no key file, and what to do is said', () => {
   const box = sandbox();
-  const { events, configText, out } = run(box, { select: { 'AI Provider': 'glm' }, keys: [KEY, OTHER, KEY] }, [401, 401, 401]);
+  const { events, configText, out } = run(box, { select: { 'AI Provider': 'claude' }, keys: [KEY, OTHER, KEY] }, [401, 401, 401]);
   assert.equal(configText, null);
   assert.deepEqual(keyFiles(box), []);
   assert.equal(events.at(-1).ok, false);
@@ -234,9 +234,9 @@ test('a key the provider refuses three times saves nothing: no config, no key fi
 
 test('a refused key is asked again, and the one the provider accepts is the one kept', () => {
   const box = sandbox();
-  const { events, configText } = run(box, { select: { 'AI Provider': 'glm' }, keys: [KEY, OTHER] }, [401, 200]);
+  const { events, configText } = run(box, { select: { 'AI Provider': 'claude' }, keys: [KEY, OTHER] }, [401, 200]);
   assert.equal(events.at(-1).ok, true);
-  assert.equal(readFileSync(JSON.parse(configText).providers.glm.api_key_ref.path, 'utf8'), `${OTHER}\n`);
+  assert.equal(readFileSync(JSON.parse(configText).providers.claude.api_key_ref.path, 'utf8'), `${OTHER}\n`);
 });
 
 test('Codex with an OpenAI key: hidden, checked, handed to codex login --with-api-key on its standard input, the config holds no key', { skip: codexSkip }, () => {
@@ -276,7 +276,7 @@ test('Codex that does not take the key stops the setup and says so', { skip: cod
 
 test('a setup cancelled after the config was saved leaves no config and no key', () => {
   const box = sandbox({ installFails: true });
-  const { events, configText } = run(box, { select: { 'AI Provider': 'glm' }, keys: [KEY], cancelAtConfirm: true });
+  const { events, configText } = run(box, { select: { 'AI Provider': 'claude' }, keys: [KEY], cancelAtConfirm: true });
   assert.equal(events.at(-1).kind, 'cancelled');
   assert.equal(configText, null);
   assert.deepEqual(keyFiles(box), []);
@@ -285,7 +285,7 @@ test('a setup cancelled after the config was saved leaves no config and no key',
 test('a setup cancelled over a config that was there leaves that config byte for byte', () => {
   const before = JSON.stringify({ version: 4, active_provider: 'openai', providers: { openai: { name: 'openai', auth_method: 'subscription', model: 'm' } }, channels: {} }, null, 2);
   const box = sandbox({ installFails: true, existingConfig: before });
-  const { events, configText } = run(box, { select: { 'Config management': 'modify', 'AI Provider': 'glm' }, keys: [KEY], cancelAtConfirm: true });
+  const { events, configText } = run(box, { select: { 'Config management': 'modify', 'AI Provider': 'claude' }, keys: [KEY], cancelAtConfirm: true });
   assert.equal(events.at(-1).kind, 'cancelled');
   assert.equal(configText, before);
 });
@@ -296,7 +296,7 @@ test('after a non-interactive setup with a key, jht doctor offers no migration a
   mkdirSync(home, { recursive: true });
   const env = { PATH: `${dirname(process.execPath)}:/usr/bin:/bin`, HOME: root, JHT_HOME: home, JHT_DEPS_PREFIX: join(root, 'deps'), LANG: 'en_US.UTF-8', NO_COLOR: '1', JHT_LANG: 'en' };
   const entry = join(cli, 'bin/jht.js');
-  const setup = spawnSync(process.execPath, [entry, 'setup', '--non-interactive', '--provider', 'glm', '--harness', 'pi', '--api-key-stdin', '--skip-health', '--language', 'en'],
+  const setup = spawnSync(process.execPath, [entry, 'setup', '--non-interactive', '--provider', 'claude', '--harness', 'pi', '--api-key-stdin', '--skip-health', '--language', 'en'],
     { env, input: `${KEY}\n`, encoding: 'utf8', timeout: 60_000 });
   assert.equal(setup.status, 0, setup.stdout + setup.stderr);
   assert.equal(JSON.parse(readFileSync(join(home, 'jht.config.json'), 'utf8')).version, 4);
@@ -304,7 +304,7 @@ test('after a non-interactive setup with a key, jht doctor offers no migration a
   const said = doctor.stdout + doctor.stderr;
   assert.doesNotMatch(said, /jht migrate|update available/, said);
   assert.doesNotMatch(said, /has no API key/, said);
-  assert.match(said, /Provider: glm/, said);
+  assert.match(said, /Provider: claude/, said);
   assert.equal(said.includes(KEY), false);
 });
 
@@ -312,27 +312,27 @@ test('doctor says a key is missing when the reference leads to nothing', () => {
   const root = mkdtempSync(join(tmpdir(), 'jht-doctor-nokey-'));
   const home = join(root, '.jht');
   mkdirSync(home, { recursive: true });
-  writeFileSync(join(home, 'jht.config.json'), JSON.stringify({ version: 4, active_provider: 'glm', harness: 'pi',
-    providers: { glm: { name: 'glm', auth_method: 'api_key', model: 'm', api_key_ref: { type: 'ref', source: 'file', path: join(root, 'absent.key') } } }, channels: {} }));
+  writeFileSync(join(home, 'jht.config.json'), JSON.stringify({ version: 4, active_provider: 'claude', harness: 'pi',
+    providers: { claude: { name: 'claude', auth_method: 'api_key', model: 'm', api_key_ref: { type: 'ref', source: 'file', path: join(root, 'absent.key') } } }, channels: {} }));
   const env = { PATH: `${dirname(process.execPath)}:/usr/bin:/bin`, HOME: root, JHT_HOME: home, LANG: 'en_US.UTF-8', NO_COLOR: '1', JHT_LANG: 'en' };
   const doctor = spawnSync(process.execPath, [join(cli, 'bin/jht.js'), 'doctor', '--all'], { env, encoding: 'utf8', timeout: 60_000 });
-  assert.match(doctor.stdout + doctor.stderr, /Provider glm has no API key/);
+  assert.match(doctor.stdout + doctor.stderr, /Provider claude has no API key/);
 });
 
 test('a setup cancelled over a key that was already stored puts that key back, and one cancelled at the question for the key stores nothing', () => {
   const box = sandbox({ installFails: true });
   mkdirSync(join(box.deps, 'keys'), { recursive: true, mode: 0o700 });
-  writeFileSync(join(box.deps, 'keys', 'glm.key'), `${OTHER}\n`, { mode: 0o600 });
-  const { events } = run(box, { select: { 'AI Provider': 'glm' }, keys: [KEY], cancelAtConfirm: true });
+  writeFileSync(join(box.deps, 'keys', 'claude.key'), `${OTHER}\n`, { mode: 0o600 });
+  const { events } = run(box, { select: { 'AI Provider': 'claude' }, keys: [KEY], cancelAtConfirm: true });
   assert.equal(events.at(-1).kind, 'cancelled');
-  assert.equal(readFileSync(join(box.deps, 'keys', 'glm.key'), 'utf8'), `${OTHER}\n`, 'the key that worked is still there');
+  assert.equal(readFileSync(join(box.deps, 'keys', 'claude.key'), 'utf8'), `${OTHER}\n`, 'the key that worked is still there');
 });
 
 test('a cancel that comes before the key store is written (at the key question) leaves no key file', () => {
   const box = sandbox();
   const driver = readFileSync(box.driver, 'utf8').replace("password: async (p) => {", "password: async (p) => { if (answers.cancelAtPassword) throw new WizardCancelledError();");
   writeFileSync(box.driver, driver);
-  const { events } = run(box, { select: { 'AI Provider': 'glm' }, cancelAtPassword: true });
+  const { events } = run(box, { select: { 'AI Provider': 'claude' }, cancelAtPassword: true });
   assert.equal(events.at(-1).kind, 'cancelled');
   assert.deepEqual(keyFiles(box), []);
 });
@@ -360,7 +360,7 @@ test('a kept configuration of a service this release does not offer is said, and
 test('the budget in the wizard: the trial of $5 for 30 minutes is the answer already chosen, saved as team.budget, 24/7, and said in one line', () => {
   const box = sandbox();
   const t0 = Date.now();
-  const { events, configText } = run(box, { select: { 'AI Provider': 'glm' }, keys: [KEY] });
+  const { events, configText } = run(box, { select: { 'AI Provider': 'claude' }, keys: [KEY] });
   const ask = events.find((e) => e.kind === 'select' && e.message === 'How much should the team work?');
   assert.deepEqual(ask.options, ['trial', 'night', 'days', 'none']);
   assert.equal(events.some((e) => e.kind === 'select' && e.message === 'When should the team work?'), false, 'the old hours question is not asked');
@@ -379,7 +379,7 @@ test('the budget in the wizard: the trial of $5 for 30 minutes is the answer alr
 test('the budget in the wizard: «a few days» asks the amount, the days and the hours, and saves the period with the hours in the zone of the person', () => {
   const box = sandbox();
   const { events, configText } = run(box, {
-    select: { 'AI Provider': 'glm', 'How much should the team work?': 'days', 'For how many days?': 3, 'When does it work?': 'ten_from_8' },
+    select: { 'AI Provider': 'claude', 'How much should the team work?': 'days', 'For how many days?': 3, 'When does it work?': 'ten_from_8' },
     text: { 'How many dollars in total?': '10' },
     keys: [KEY],
   });
@@ -395,7 +395,7 @@ test('the budget in the wizard: «a few days» asks the amount, the days and the
 test('the budget in the wizard: a yes to the pace saves it in the budget and the note says it is spread over the time', () => {
   const box = sandbox();
   const { events, configText } = run(box, {
-    select: { 'AI Provider': 'glm', 'How much should the team work?': 'days', 'For how many days?': 3, 'When does it work?': 'ten_from_8' },
+    select: { 'AI Provider': 'claude', 'How much should the team work?': 'days', 'For how many days?': 3, 'When does it work?': 'ten_from_8' },
     text: { 'How many dollars in total?': '10' },
     confirm: true,
     keys: [KEY],
@@ -406,7 +406,7 @@ test('the budget in the wizard: a yes to the pace saves it in the budget and the
 
 test('the budget in the wizard: «no limit» warns, saves no budget and asks the working hours as before', () => {
   const box = sandbox();
-  const { events, configText } = run(box, { select: { 'AI Provider': 'glm', 'How much should the team work?': 'none', 'When should the team work?': 'office' }, keys: [KEY] });
+  const { events, configText } = run(box, { select: { 'AI Provider': 'claude', 'How much should the team work?': 'none', 'When should the team work?': 'office' }, keys: [KEY] });
   assert.ok(events.some((e) => e.kind === 'note' && /spends as long as there is credit on your account/.test(e.message)));
   const team = JSON.parse(configText).team;
   assert.equal(team.budget, undefined);
@@ -415,19 +415,19 @@ test('the budget in the wizard: «no limit» warns, saves no budget and asks the
 
 test('the budget in the wizard: a reset with the same trial opens a new period (the old one may be spent or over)', () => {
   const saved = '2026-11-15T21:30:00.000Z';
-  const before = JSON.stringify({ version: 4, active_provider: 'glm', harness: 'pi', providers: { glm: { name: 'glm', auth_method: 'api_key', model: 'm' } }, channels: {},
+  const before = JSON.stringify({ version: 4, active_provider: 'claude', harness: 'pi', providers: { claude: { name: 'claude', auth_method: 'api_key', model: 'm' } }, channels: {},
     team: { budget: { usd: 5, duration_minutes: 30, saved_at: saved, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone, set_by: 'setup' } } });
   const box = sandbox({ existingConfig: before });
-  const { configText } = run(box, { select: { 'Config management': 'reset', 'AI Provider': 'glm' }, keys: [KEY] });
+  const { configText } = run(box, { select: { 'Config management': 'reset', 'AI Provider': 'claude' }, keys: [KEY] });
   assert.notEqual(JSON.parse(configText).team.budget.saved_at, saved, 'the same trial after a reset is a new period');
   const box2 = sandbox({ existingConfig: before.replace('"usd":5', '"usd":7') });
-  const second = run(box2, { select: { 'Config management': 'reset', 'AI Provider': 'glm' }, keys: [KEY] });
+  const second = run(box2, { select: { 'Config management': 'reset', 'AI Provider': 'claude' }, keys: [KEY] });
   assert.notEqual(JSON.parse(second.configText).team.budget.saved_at, saved, 'another amount starts again');
 });
 
 test('agents refused for the disk at the end of the setup: set up and saved, the team needs space, and the setup ends with 3 (giro Mac build8)', async () => {
   const box = sandbox({ teamStartFails: true });
-  const { events, calls, configText } = run(box, { select: { 'AI Provider': 'kimi' }, keys: [KEY] }, [200], { FAKE_DISK: 'low' });
+  const { events, calls, configText } = run(box, { select: { 'AI Provider': 'claude' }, keys: [KEY] }, [200], { FAKE_DISK: 'low' });
   assert.ok(calls.includes('jht team start'));
   assert.ok(configText, 'the configuration is saved');
   const outro = events.find((e) => e.kind === 'outro').message;
@@ -444,7 +444,7 @@ test('agents refused for the disk at the end of the setup: set up and saved, the
 
 test('a team start that failed for something else than the disk is still a failed setup', () => {
   const box = sandbox({ teamStartFails: true });
-  const { events } = run(box, { select: { 'AI Provider': 'kimi' }, keys: [KEY] }, [200], { FAKE_DISK: 'ok' });
+  const { events } = run(box, { select: { 'AI Provider': 'claude' }, keys: [KEY] }, [200], { FAKE_DISK: 'ok' });
   assert.match(events.find((e) => e.kind === 'outro').message, /Team start failed/);
   assert.equal(events.at(-1).ok, false);
 });
@@ -475,36 +475,36 @@ function withKeptKey(provider) {
 const keepAsk = (events) => events.find((e) => e.kind === 'select' && e.options.join() === 'keep,new');
 
 test('same service, a key kept that the provider accepts: «keep the key» is the default and no key is typed', () => {
-  const box = withKeptKey('glm');
-  const { r, events, configText, out } = run(box, { select: { 'Config management': 'modify', 'AI Provider': 'glm' } }, [200]);
+  const box = withKeptKey('claude');
+  const { r, events, configText, out } = run(box, { select: { 'Config management': 'modify', 'AI Provider': 'claude' } }, [200]);
   assert.equal(r.status, 0, r.stderr);
   const ask = keepAsk(events);
   assert.ok(ask, 'the choice to keep the key is offered');
   assert.equal(ask.initial, 'keep');
   assert.equal(events.some((e) => e.kind === 'password'), false, 'nothing is typed');
   const config = JSON.parse(configText);
-  assert.equal(config.providers.glm.api_key_ref.path, join(box.deps, 'keys', 'glm.key'));
-  assert.equal(readFileSync(join(box.deps, 'keys', 'glm.key'), 'utf8'), `${KEY}\n`, 'the key is as it was');
+  assert.equal(config.providers.claude.api_key_ref.path, join(box.deps, 'keys', 'claude.key'));
+  assert.equal(readFileSync(join(box.deps, 'keys', 'claude.key'), 'utf8'), `${KEY}\n`, 'the key is as it was');
   assert.equal(out.includes(KEY), false);
 });
 
 test('same service and «a new key»: the key is asked and replaces the old one', () => {
-  const box = withKeptKey('glm');
-  const { events } = run(box, { select: { 'Config management': 'modify', 'AI Provider': 'glm' }, byOptions: { 'keep,new': 'new' }, keys: [OTHER] }, [200, 200]);
+  const box = withKeptKey('claude');
+  const { events } = run(box, { select: { 'Config management': 'modify', 'AI Provider': 'claude' }, byOptions: { 'keep,new': 'new' }, keys: [OTHER] }, [200, 200]);
   assert.ok(keepAsk(events));
   assert.ok(events.some((e) => e.kind === 'password'));
-  assert.equal(readFileSync(join(box.deps, 'keys', 'glm.key'), 'utf8'), `${OTHER}\n`);
+  assert.equal(readFileSync(join(box.deps, 'keys', 'claude.key'), 'utf8'), `${OTHER}\n`);
 });
 
 test('a kept key the provider refuses is not offered: the key is asked', () => {
-  const box = withKeptKey('glm');
-  const { events } = run(box, { select: { 'Config management': 'modify', 'AI Provider': 'glm' }, keys: [OTHER] }, [401, 200]);
+  const box = withKeptKey('claude');
+  const { events } = run(box, { select: { 'Config management': 'modify', 'AI Provider': 'claude' }, keys: [OTHER] }, [401, 200]);
   assert.equal(keepAsk(events), undefined);
   assert.ok(events.some((e) => e.kind === 'password'));
 });
 
 test('another service than the saved one: the key of that service is asked, nothing is offered to keep', () => {
-  const box = withKeptKey('glm');
-  const { events } = run(box, { select: { 'Config management': 'modify', 'AI Provider': 'kimi' }, keys: [OTHER] }, [200]);
+  const box = withKeptKey('claude');
+  const { events } = run(box, { select: { 'Config management': 'modify', 'AI Provider': 'openai' }, keys: [`sk-${OTHER}`] }, [200]);
   assert.equal(keepAsk(events), undefined);
 });
