@@ -1,4 +1,4 @@
-"""`jht setup --api-key-file <file on the Windows host>` for glm and kimi: the wrapper hands the key to the setup on its input.
+"""`jht setup --api-key-file <file on the Windows host>` for claude and openai: the wrapper hands the key to the setup on its input.
 
 The setup runs in the container, which sees neither C:\\... nor any mode on ~/.jht. The wrapper reads the file on the host and sends
 the key on the standard input of the setup (`--api-key-stdin`), so the key is in no argument, no log and no config. The function and the
@@ -23,7 +23,7 @@ from wrapper_ps_texts import say_functions  # noqa: E402
 ROOT = Path(__file__).resolve().parents[1]
 TEXTS = say_functions("en")  # the texts the functions say, in English: the errors of this file are read in English
 WRAPPER = (ROOT / "scripts" / "jht-wrapper.ps1").read_text(encoding="utf-8").replace("\r\n", "\n")
-KEY = "-".join(["synthetic", "glm", "key", "ab" * 8])
+KEY = "-".join(["synthetic", "claude", "key", "ab" * 8])
 
 
 def _function(name: str) -> str:
@@ -75,16 +75,16 @@ def _key_file(tmp_path: Path, data: bytes, name="key.txt") -> Path:
 
 def test_a_file_on_the_host_becomes_the_stdin_flag_and_the_path_leaves_the_arguments(tmp_path):
     path = _key_file(tmp_path, (KEY + "\r\n").encode())
-    out = _convert(tmp_path, ["--non-interactive", "--provider", "glm", "--harness", "pi", "--api-key-file", str(path), "--skip-health"])
+    out = _convert(tmp_path, ["--non-interactive", "--provider", "claude", "--harness", "pi", "--api-key-file", str(path), "--skip-health"])
     assert _field(out, "ERROR") == "" and _field(out, "KEY") == "present" and _field(out, "KEYTEXT") == KEY
-    assert _field(out, "ARGS") == "--non-interactive|--provider|glm|--harness|pi|--api-key-stdin|--skip-health"
+    assert _field(out, "ARGS") == "--non-interactive|--provider|claude|--harness|pi|--api-key-stdin|--skip-health"
     assert str(path) not in _field(out, "ARGS") and KEY not in _field(out, "ARGS")
 
 
 def test_the_equals_form_works_too(tmp_path):
     path = _key_file(tmp_path, KEY.encode())
-    out = _convert(tmp_path, ["--provider=kimi", f"--api-key-file={path}"])
-    assert _field(out, "KEYTEXT") == KEY and _field(out, "ARGS") == "--provider=kimi|--api-key-stdin"
+    out = _convert(tmp_path, ["--provider=openai", f"--api-key-file={path}"])
+    assert _field(out, "KEYTEXT") == KEY and _field(out, "ARGS") == "--provider=openai|--api-key-stdin"
 
 
 @pytest.mark.parametrize("encoding", ["utf-16", "utf-8-sig", "utf-16-be"])
@@ -145,7 +145,7 @@ def test_the_setup_branch_pipes_the_key_to_docker_and_never_puts_it_in_an_argume
 {TEXTS}
 {_function("Convert-SetupKeyFileArgs")}
 {_function("Invoke-NativeWithStdin")}
-$Rest = [string[]]@('--non-interactive', '--provider', 'glm', '--harness', 'pi', '--api-key-file', '{path}')
+$Rest = [string[]]@('--non-interactive', '--provider', 'claude', '--harness', 'pi', '--api-key-file', '{path}')
 $Container = 'jht'
 $NodeEntry = '/app/cli/bin/jht.js'
 $ExecFlags = @('-it')
@@ -180,7 +180,7 @@ switch ($Sub) {{
     assert "STDIN=" + KEY in text
     args = next(line for line in text.splitlines() if line.startswith("ARGS="))
     assert KEY not in args and str(path) not in args
-    assert args == "ARGS=exec -i -e JHT_HOST_TYPE=local jht node /app/cli/bin/jht.js setup --non-interactive --provider glm --harness pi --api-key-stdin"
+    assert args == "ARGS=exec -i -e JHT_HOST_TYPE=local jht node /app/cli/bin/jht.js setup --non-interactive --provider claude --harness pi --api-key-stdin"
     assert KEY not in done.stdout + done.stderr
     # the person is told the file on the computer can go, once the setup has the key
     assert "you can delete the file on this computer" in done.stdout and str(path) in done.stdout

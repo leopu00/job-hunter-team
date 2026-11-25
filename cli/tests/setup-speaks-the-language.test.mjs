@@ -68,8 +68,8 @@ function sandbox(lang) {
   // the language the person chose at the install, and a team set up before the update
   writeFileSync(join(home, 'i18n-prefs.json'), JSON.stringify({ locale: lang }));
   writeFileSync(join(home, 'jht.config.json'), JSON.stringify({
-    version: 4, active_provider: 'glm', harness: 'pi',
-    providers: { glm: { name: 'glm', auth_method: 'api_key', api_key_ref: { type: 'ref', source: 'file', path: join(deps, 'keys', 'glm.key') } } },
+    version: 4, active_provider: 'openai', harness: 'pi',
+    providers: { openai: { name: 'openai', auth_method: 'api_key', api_key_ref: { type: 'ref', source: 'file', path: join(deps, 'keys', 'openai.key') } } },
     channels: { telegram: { bots: { assistente: { bot_token: 'synthetic' } } } },
   }));
   // the budget of the team was paused at the end of its period, BEFORE this setup saved a new budget: the pause of the old
