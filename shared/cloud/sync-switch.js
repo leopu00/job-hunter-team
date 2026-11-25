@@ -17,15 +17,19 @@
  * ESM with no dependencies, like shared/release/version.js.
  */
 
-export const SYNC_ENV = 'JHT_CLOUD_SYNC';
+export const SYNC_ENV = "JHT_CLOUD_SYNC";
 
 function isObject(value) {
-  return value !== null && typeof value === 'object' && !Array.isArray(value);
+  return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
 /** A pairing needs a token that is a non-blank string. */
 export function hasToken(config) {
-  return isObject(config) && typeof config.token === 'string' && config.token.trim() !== '';
+  return (
+    isObject(config) &&
+    typeof config.token === "string" &&
+    config.token.trim() !== ""
+  );
 }
 
 /**
@@ -35,16 +39,19 @@ export function hasToken(config) {
  */
 export function syncSwitch(config, env = process.env) {
   const raw = env?.[SYNC_ENV];
-  const flag = typeof raw === 'string' ? raw.trim() : '';
-  if (flag === '0') return { active: false, reason: 'env-off' };
-  if (flag === '1') {
-    return hasToken(config) ? { active: true, reason: 'env-on' } : { active: false, reason: 'env-no-token' };
+  const flag = typeof raw === "string" ? raw.trim() : "";
+  if (flag === "0") return { active: false, reason: "env-off" };
+  if (flag === "1") {
+    return hasToken(config)
+      ? { active: true, reason: "env-on" }
+      : { active: false, reason: "env-no-token" };
   }
-  if (!isObject(config)) return { active: false, reason: 'absent' };
-  if (config.enabled === true) return { active: true, reason: 'file-enabled' };
+  if (!isObject(config)) return { active: false, reason: "absent" };
+  if (config.enabled === true) return { active: true, reason: "file-enabled" };
   const pausedAt = config.paused_at;
-  if (typeof pausedAt === 'string' && pausedAt !== '') return { active: false, reason: 'paused' };
-  return { active: false, reason: 'disabled' };
+  if (typeof pausedAt === "string" && pausedAt !== "")
+    return { active: false, reason: "paused" };
+  return { active: false, reason: "disabled" };
 }
 
 /**
