@@ -1,4 +1,4 @@
-"""`jht setup --api-key-file <file on the host>` for glm and kimi on Linux and macOS: the same way as the Windows wrapper.
+"""`jht setup --api-key-file <file on the host>` for claude and openai on Linux and macOS: the same way as the Windows wrapper.
 
 The setup runs in the container; the wrapper reads the file on the host and sends the key on the standard input of the setup
 (`--api-key-stdin`), so the key is in no argument, no environment and no log. The two functions are taken from the wrapper and run with
@@ -18,7 +18,7 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 WRAPPER = (ROOT / "scripts" / "jht-wrapper.sh").read_text(encoding="utf-8")
-KEY = "-".join(["synthetic", "glm", "key", "ab" * 8])
+KEY = "-".join(["synthetic", "claude", "key", "ab" * 8])
 BASHES = [b for b in dict.fromkeys(filter(None, [shutil.which("bash"), "/bin/bash"])) if os.path.exists(b)]
 
 pytestmark = pytest.mark.skipif(os.name == "nt", reason="the POSIX wrapper")
@@ -79,17 +79,17 @@ def _file(tmp_path: Path, data: bytes, name="key.txt", mode=0o600) -> Path:
 
 def test_a_file_on_the_host_becomes_the_stdin_flag_and_the_path_leaves_the_arguments(bash, tmp_path):
     path = _file(tmp_path, (KEY + "\n").encode())
-    rc, key, args, err = _convert(bash, tmp_path, "setup", "--non-interactive", "--provider", "glm", "--harness", "pi",
+    rc, key, args, err = _convert(bash, tmp_path, "setup", "--non-interactive", "--provider", "claude", "--harness", "pi",
                                   "--api-key-file", str(path), "--skip-health")
     assert (rc, key) == ("0", KEY)
-    assert args == "setup|--non-interactive|--provider|glm|--harness|pi|--api-key-stdin|--skip-health"
+    assert args == "setup|--non-interactive|--provider|claude|--harness|pi|--api-key-stdin|--skip-health"
     assert str(path) not in args and KEY not in args + err
 
 
 def test_the_equals_form_works_too(bash, tmp_path):
     path = _file(tmp_path, KEY.encode())
-    rc, key, args, _ = _convert(bash, tmp_path, "setup", "--provider=kimi", f"--api-key-file={path}")
-    assert (rc, key, args) == ("0", KEY, "setup|--provider=kimi|--api-key-stdin")
+    rc, key, args, _ = _convert(bash, tmp_path, "setup", "--provider=openai", f"--api-key-file={path}")
+    assert (rc, key, args) == ("0", KEY, "setup|--provider=openai|--api-key-stdin")
 
 
 @pytest.mark.parametrize("data", [(KEY + "\r\n").encode(), b"\xef\xbb\xbf" + KEY.encode() + b"\n", ("  " + KEY + "  \n").encode(),
@@ -166,12 +166,12 @@ echo "RC=$rc"
 
 def test_the_setup_pipes_the_key_to_docker_and_never_puts_it_in_an_argument_or_the_environment(bash, tmp_path):
     path = _file(tmp_path, (KEY + "\n").encode())
-    done = _run(bash, tmp_path, EXEC, "setup", "--non-interactive", "--provider", "glm", "--harness", "pi", "--api-key-file", str(path))
+    done = _run(bash, tmp_path, EXEC, "setup", "--non-interactive", "--provider", "claude", "--harness", "pi", "--api-key-file", str(path))
     assert "RC=0" in done.stdout, done.stdout + done.stderr
     log = (tmp_path / "log.txt").read_text(encoding="utf-8")
     assert "STDIN=" + KEY in log
     args = next(line for line in log.splitlines() if line.startswith("ARGS="))
-    assert args.strip() == "ARGS=exec -i -e JHT_HOST_TYPE=local jhtid node /app/cli/bin/jht.js setup --non-interactive --provider glm --harness pi --api-key-stdin"
+    assert args.strip() == "ARGS=exec -i -e JHT_HOST_TYPE=local jhtid node /app/cli/bin/jht.js setup --non-interactive --provider claude --harness pi --api-key-stdin"
     assert KEY not in args and str(path) not in args
     assert KEY not in "".join(line for line in log.splitlines() if line.startswith("ENV:")), "the key is in the environment of docker"
     assert KEY not in done.stdout + done.stderr
@@ -186,11 +186,11 @@ def test_when_the_setup_fails_the_key_is_gone_and_the_file_is_not_called_deletab
 
 
 def test_without_a_host_file_the_setup_runs_exactly_as_before(bash, tmp_path):
-    done = _run(bash, tmp_path, EXEC, "setup", "--non-interactive", "--api-key-file", "/jht_user/key.txt", "--provider", "glm")
+    done = _run(bash, tmp_path, EXEC, "setup", "--non-interactive", "--api-key-file", "/jht_user/key.txt", "--provider", "claude")
     assert "RC=0" in done.stdout, done.stdout + done.stderr
     log = (tmp_path / "log.txt").read_text(encoding="utf-8")
     args = next(line for line in log.splitlines() if line.startswith("ARGS="))
-    assert args.strip() == "ARGS=exec -it -e JHT_HOST_TYPE=local jhtid node /app/cli/bin/jht.js setup --non-interactive --api-key-file /jht_user/key.txt --provider glm"
+    assert args.strip() == "ARGS=exec -it -e JHT_HOST_TYPE=local jhtid node /app/cli/bin/jht.js setup --non-interactive --api-key-file /jht_user/key.txt --provider claude"
     assert log.splitlines()[-1] == "STDIN="
 
 

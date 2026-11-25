@@ -101,7 +101,7 @@ def cli_copy(tmp_path_factory):
     return pkg
 
 
-def run_start(cli_copy, tmp_path, pct, agent="scout:1", container=True, sessions="", config='{"active_provider":"glm","harness":"pi","providers":{"glm":{"name":"glm","auth_method":"api_key","api_key_ref":{"type":"ref","source":"env","id":"ZAI_API_KEY"}}}}'):
+def run_start(cli_copy, tmp_path, pct, agent="scout:1", container=True, sessions="", config='{"active_provider":"claude","harness":"pi","providers":{"claude":{"name":"claude","auth_method":"api_key","api_key_ref":{"type":"ref","source":"env","id":"ANTHROPIC_API_KEY"}}}}'):
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir(exist_ok=True)
     for name, body in (("docker", FAKE_DOCKER), ("tmux", FAKE_TMUX), ("codex", "#!/bin/sh\nexit 0\n"), ("pi", "#!/bin/sh\nexit 0\n")):
