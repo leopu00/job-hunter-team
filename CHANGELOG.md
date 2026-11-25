@@ -45,8 +45,8 @@ The desktop app is not in 0.4.0. The release notes say which of this was tested 
 - **The ChatGPT subscription on Pi** is offered through Pi's own **OpenAI** sign-in, without an API key.
 - **Teams set up with 0.3.x on Codex keep working**, with one warning (in `jht team start`, `jht doctor`, `jht status`
   and `jht providers`); Codex is no longer offered for new teams.
-- **The Claude subscription is not part of 0.4.0.** Claude on Pi is billed per token as extra usage, outside the subscription;
-  use an API key and set a spending ceiling.
+- **The Claude subscription is not part of 0.4.0.** Pi itself warns that using a Claude subscription from Pi may be billed
+  per token as extra usage, outside the subscription; use an API key and set a spending ceiling.
 - **GLM (Z.ai) and Kimi (Moonshot) are paused** and are not offered by `jht setup` in this release.
 - The services a release offers are one list (`shared/runtime/release-providers.js`); `jht setup`, `jht providers use`
   and `jht providers harness` refuse the others, and `jht doctor` says a team configured on one of them is not supported
@@ -85,9 +85,8 @@ The desktop app is not in 0.4.0. The release notes say which of this was tested 
 
 ### Known limits
 
-- **What 0.4.0 runs**: only the Pi harness, with an API key; Claude and OpenAI are the two tested providers. The Codex
-  CLI and the ChatGPT subscription are not part of this release (a team set up with 0.3.9 on them keeps working, with a
-  warning), and neither is Claude Code as a harness; the desktop app is not in this release either.
+- **Codex is no longer offered to new teams.** Teams set up with 0.3.x on Codex keep working, with a warning.
+  The ChatGPT subscription on Pi remains offered.
 - **The Scouts' tools arrive after the install.** The first download is the core image. At the end of the
   onboarding a background job downloads the Scouts' tools (the full image) and moves the team there. If the move
   fails even after a `jht down` and `jht up`, the team stays stopped until the person runs `jht down` and then
