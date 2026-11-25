@@ -112,12 +112,14 @@ def test_the_guides_and_the_changelog_say_codex_only():
     assert "An API key for GLM (Z.ai), Kimi (Moonshot), OpenAI or Claude (Anthropic): 0.4.0 runs the team only on Pi with one of them." in text("docs/guides/VPS-SETUP-WIZARD.md")
     changelog = text("CHANGELOG.md")
     release = changelog[changelog.index("## [0.4.0]"):]
-    # 0.4.0: Pi with an API key; Claude and OpenAI are the tested providers, GLM and Kimi are still offered but untested,
-    # the ChatGPT subscription is not part of the release; a team set up with 0.3.9 on Codex keeps working
-    assert "team runs on Pi with an API key, and Claude (Anthropic) and OpenAI are the two providers tested for this" in release[:4000].replace("\n", " ")
+    assert "team runs on Pi with a Claude (Anthropic) API key, an OpenAI API key or a ChatGPT subscription" in release[:4000].replace("\n", " ")
     assert "**Tested for 0.4.0: Pi with Claude (Anthropic)** and **Pi with OpenAI**" in release[:6000]
-    assert "**GLM (Z.ai) and Kimi (Moonshot)** are still in `jht setup`" in release[:6000] and "**were not tested for this\n  release**" in release[:6000]
-    assert "team you set up with 0.3.9 on Codex keeps working, with one warning" in release[:6000].replace("\n  ", " ")
+    assert "**GLM (Z.ai) and Kimi (Moonshot) are paused**" in release[:6000]
+    assert "**The ChatGPT subscription on Pi** is offered" in release[:6000]
+    assert "**The Claude subscription is not part of 0.4.0.**" in release[:6000]
+    assert "**Teams set up with 0.3.x on Codex keep working**" in release[:6000]
+    assert "## [0.4.0] — 2026-11-25" in release
+    assert "To settle before the tag" not in release
     # the sync with the website: off by default, paused and resumed without losing the pairing
     assert "### Sync with the website: off by default" in release[:6000] and "`jht cloud resume`" in release[:6000]
     readme = text("README.md")

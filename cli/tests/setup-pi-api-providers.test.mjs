@@ -1,4 +1,4 @@
-// `jht setup --non-interactive --provider glm|kimi --harness pi` (JHT-T314): the key from a file, never in the config;
+// `jht setup --non-interactive --provider claude|openai --harness pi` (JHT-T314): the key from a file, never in the config;
 // the providers that charge by the token run only on the pi harness, with an API key.
 import assert from 'node:assert/strict';
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
@@ -58,34 +58,34 @@ test('the key variable of an env reference is the provider\'s, not a guess', { s
 
 test('their key is never plaintext: by reference only (a file the setup keeps, env or file); the file of the person is in setup-key-store.test.mjs', async () => {
   for (const extra of [{}, { secretMode: 'plaintext', apiKey: 'synthetic-key' }]) {
-    const { code, text } = await setup({ provider: 'glm', harness: 'pi', ...extra });
+    const { code, text } = await setup({ provider: 'claude', harness: 'pi', ...extra });
     assert.equal(code, 1, text);
     assert.match(text, /by reference: use --api-key-file or --api-key-stdin .* or --secret-mode env or --secret-mode file/);
   }
 });
 
 test('they run only on pi, and only with an API key', async () => {
-  const codex = await setup({ provider: 'glm', harness: 'codex', secretMode: 'file', secretFile: '/dev/shm/k' });
+  const codex = await setup({ provider: 'claude', harness: 'codex', secretMode: 'file', secretFile: '/dev/shm/k' });
   assert.equal(codex.code, 1);
   assert.match(codex.text, /only on pi/);
-  const subscription = await setup({ provider: 'glm', harness: 'pi', authMethod: 'subscription', subscriptionEmail: 'user@example.test' });
+  const subscription = await setup({ provider: 'claude', harness: 'pi', authMethod: 'subscription', subscriptionEmail: 'user@example.test' });
   assert.equal(subscription.code, 1);
   assert.match(subscription.text, /only with an API key/);
 });
 
 test('an unknown provider, and one this release does not offer, say what is offered', async () => {
-  for (const provider of ['gemini', 'openai', 'claude', 'kimi', 'moonshot'].filter((name) => !offeredInRelease(name))) {
+  for (const provider of ['gemini', 'glm', 'kimi', 'moonshot'].filter((name) => !offeredInRelease(name))) {
     const { code, text } = await setup({ provider });
     assert.equal(code, 1, provider);
     assert.match(text, new RegExp(`This release offers only ${RELEASE_PROVIDERS.join(', ')} with an API key, on the pi harness`), provider);
-    assert.match(text, /jht setup --non-interactive --provider glm --api-key-stdin/, provider);
+    assert.match(text, /jht setup --non-interactive --provider openai --api-key-stdin/, provider);
   }
 });
 
-test('without --provider and --harness the setup is GLM on pi', async () => {
+test('without --provider and --harness the setup is OpenAI on pi', async () => {
   const { code, text } = await setup({ secretMode: 'file', secretFile: '/dev/shm/jht-key' });
   assert.equal(code, 0, text);
-  assert.equal(config().active_provider, 'glm');
+  assert.equal(config().active_provider, 'openai');
   assert.equal(config().harness, 'pi');
 });
 
@@ -140,7 +140,7 @@ test('openai on pi with the ChatGPT subscription: a way of this release, no key,
 });
 
 test('the other services never take a subscription on pi: glm, kimi and claude are refused with the way that is', async () => {
-  for (const provider of ['glm', 'kimi', 'claude']) {
+  for (const provider of ['glm', 'kimi', 'claude'].filter(offeredInRelease)) {
     const { code, text } = await setup({ provider, authMethod: 'subscription', subscriptionEmail: 'user@example.test' });
     assert.equal(code, 1, `${provider}: ${text}`);
     assert.match(text, /only with an API key/, provider);

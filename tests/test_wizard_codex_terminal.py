@@ -294,10 +294,10 @@ def test_the_wizard_asks_the_language_first_and_saves_the_answer(tmp_path):
     terminal = WizardTerminal(node, env)
     try:
         answer_language(terminal, DOWN)  # Italiano
-        # with more than one service in the release the provider is asked: Enter keeps GLM, the first
-        terminal.until("GLM (Z.ai)")
-        terminal.send(b"\r")
-        terminal.until("Chiave API di GLM")
+        # with more than one service in the release the provider is asked: OpenAI is first; Down selects Claude
+        terminal.until("Claude (Anthropic)")
+        terminal.send(b"\x1b[B\r")
+        terminal.until("Chiave API di Claude")
         assert json.loads((home / "i18n-prefs.json").read_text(encoding="utf-8")) == {"locale": "it"}
     finally:
         terminal.close()

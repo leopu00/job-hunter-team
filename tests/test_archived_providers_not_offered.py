@@ -8,6 +8,7 @@ use`.
 """
 
 import json
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -29,7 +30,7 @@ def config_of(home: Path) -> dict:
     return json.loads((home / ".jht" / "jht.config.json").read_text())
 
 
-# Kimi is back in 0.4.0 on Pi with a key (shared/runtime/release-providers.js): it is refused only while it is not offered
+# Paused providers are refused according to shared/runtime/release-providers.js.
 import re  # noqa: E402
 
 # the source is formatted with either quote
@@ -39,10 +40,10 @@ _CANONICAL = {"moonshot": "kimi", "anthropic": "claude"}
 
 
 @pytest.mark.parametrize("names", [kept for kept in (tuple(n for n in names if "'%s'" % _CANONICAL.get(n.lower(), n.lower()) not in OFFERED)
-                                                     for names in [("kimi", "moonshot", "KIMI"), ("claude", "anthropic", "Claude"), ("codex", "openai")])
+                                                     for names in [("glm", "GLM"), ("kimi", "moonshot", "KIMI"), ("claude", "anthropic", "Claude"), ("codex", "openai")])
                                    if kept])
 def test_providers_use_refuses_what_this_release_does_not_offer_and_leaves_the_configuration_as_it_was(jht_home, names):
-    """The services of a release are one list (shared/runtime/release-providers.js): 0.4.0 offers GLM only."""
+    """The services of a release are one list (shared/runtime/release-providers.js): the setup offers OpenAI and Claude on Pi."""
     make_config(jht_home / ".jht", {"active_provider": "openai", "providers": {"openai": {}}})
     before = (jht_home / ".jht" / "jht.config.json").read_bytes()
     for name in names:
@@ -65,19 +66,21 @@ def test_the_list_shows_an_archived_provider_only_to_the_team_that_still_uses_it
         assert shown in out and "· active" in out, (active, out)
 
 
-def test_the_wizard_offers_codex_and_the_two_key_providers_and_not_kimi_or_claude_as_subscriptions():
+def test_the_wizard_offers_exactly_the_release_list_and_not_kimi_or_claude_as_subscriptions():
     helpers = (ROOT / "cli/wizard/setup-helpers.js").read_text(encoding="utf-8")
     catalog = helpers[helpers.index("export const AI_PROVIDERS"):helpers.index("// --- Config IO")]
     assert "kimi" not in catalog.lower() and "claude" not in catalog.lower()
     for lang in LANGS:
         locale = json.loads((ROOT / f"shared/locales/{lang}.json").read_text(encoding="utf-8"))
         assert "wizard.provider.kimi" not in locale and "wizard.provider.claude" not in locale, lang
-        assert ("kimi" in str(locale.get("wizard.cli.provider", "")).lower()) <= ("'kimi'" in OFFERED), lang
-        assert ("claude" in str(locale.get("wizard.cli.provider", "")).lower()) <= ("'claude'" in OFFERED), lang
+    choices = subprocess.run(
+        ["node", "--input-type=module", "-e", "import { WIZARD_PROVIDERS } from './cli/wizard/setup.js'; console.log(JSON.stringify(WIZARD_PROVIDERS.map(p => p.value)))"],
+        cwd=ROOT, check=True, capture_output=True, text=True,
+    )
+    assert json.loads(choices.stdout) == list(dict.fromkeys(re.findall(r"provider: ['\"]([a-z]+)['\"]", _OFFERS)))
     # the choices of the wizard are the catalog's: nothing else feeds them
     setup = (ROOT / "cli/wizard/setup.js").read_text(encoding="utf-8")
-    # ... and what is offered besides Codex is GLM and Kimi with an API key (they run only on Pi, no subscription): the list the
-    # wizard shows is Codex's catalog followed by that one
+    # The runtime catalog stays available; only the release list feeds the choices.
     assert "options: WIZARD_PROVIDERS.map(" in setup
     assert "[...AI_PROVIDERS, ...PI_API_CHOICES].find(" in setup and "OPENAI_PI_CHOICE" in setup  # OpenAI: with a key on pi
 

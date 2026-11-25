@@ -48,7 +48,7 @@ describe('runNonInteractiveSetup — health failure in the language of the perso
   it('refuses a provider that is no longer offered and saves nothing', async () => {
     const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     const before = process.exitCode;
-    for (const provider of ['gemini', 'claude', 'openai', 'kimi'].filter((name) => !offeredInRelease(name))) {
+    for (const provider of ['gemini', 'glm', 'claude', 'openai', 'kimi', 'moonshot'].filter((name) => !offeredInRelease(name))) {
       process.exitCode = 0;
       await runNonInteractiveSetup({
         provider, authMethod: 'api_key', secretMode: 'plaintext', apiKey: 'sk-ant-api-key-long-enough',

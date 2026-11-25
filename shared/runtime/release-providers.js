@@ -5,8 +5,6 @@
  * (cli/tests/release-providers.test.mjs); the code that serves the others stays for the next release.
  */
 export const RELEASE_OFFERS = Object.freeze([
-  Object.freeze({ provider: "glm", harness: "pi", auth: "api_key" }),
-  Object.freeze({ provider: "kimi", harness: "pi", auth: "api_key" }),
   Object.freeze({ provider: "openai", harness: "pi", auth: "api_key" }),
   Object.freeze({ provider: "claude", harness: "pi", auth: "api_key" }),
   // OpenAI with the ChatGPT subscription, run by Pi with its own sign-in (not Codex's): no key, paced by the plan
@@ -63,7 +61,7 @@ export function configOffered(config) {
 }
 
 /**
- * What this release offers, in one English sentence for the refusals of the CLI («glm, kimi, openai, claude on Pi with an API
+ * What this release offers, in one English sentence for the refusals of the CLI («openai, claude on Pi with an API
  * key»). Built from RELEASE_OFFERS, so it never says less than the list.
  */
 export function offersSentence() {

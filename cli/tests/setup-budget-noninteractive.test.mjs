@@ -32,7 +32,7 @@ async function setup(opts) {
   process.exitCode = 0;
   try {
     await runNonInteractiveSetup({
-      language: 'en', authMethod: 'api_key', harness: 'pi', provider: 'glm', apiKeyStdin: true,
+      language: 'en', authMethod: 'api_key', harness: 'pi', provider: 'claude', apiKeyStdin: true,
       stdin: Readable.from([Buffer.from(`${KEY}\n`)]), now: NOW, ...opts,
     });
   } finally { console.log = log; console.error = error; globalThis.fetch = realFetch; }
@@ -115,7 +115,7 @@ test('wrong values are refused with a clear sentence, before any key is kept, an
     assert.equal(code, 1, `${JSON.stringify(opts)} → ${text}`);
     assert.match(text, message, JSON.stringify(opts));
     assert.equal(existsSync(CONFIG), false, `nothing saved for ${JSON.stringify(opts)}`);
-    assert.equal(existsSync(join(DEPS, 'keys', 'glm.key')), false, `no key kept for ${JSON.stringify(opts)}`);
+    assert.equal(existsSync(join(DEPS, 'keys', 'claude.key')), false, `no key kept for ${JSON.stringify(opts)}`);
   }
 });
 
