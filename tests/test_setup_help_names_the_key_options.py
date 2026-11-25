@@ -67,7 +67,7 @@ def test_the_help_names_every_option_of_the_command_and_no_other(lang):
     # the Codex subscription is not offered in 0.4.0 (only Pi): its options still work for a setup made with 0.3.9,
     # the help does not name them
     assert named == set(_options_of_the_command()) - KEPT_NOT_OFFERED
-    assert not re.search(r"codex|subscription", _sh_text(lang), re.I)
+    assert not re.search(r"codex|glm|kimi", _sh_text(lang), re.I)
 
 
 def test_both_wrappers_answer_setup_help_before_the_generic_one_and_with_the_same_text():

@@ -54,7 +54,7 @@ def test_no_provider_opens_no_login_and_says_which_command_chooses_one(tmp_path:
     # the read answers nothing for a config that is not there yet or has no active_provider
     done, calls = _login(tmp_path, "")
     assert done.returncode == 1, (done.returncode, done.stderr)
-    assert NO_PROVIDER_EN in done.stderr and "jht providers use glm" in done.stderr  # glm: the default of 0.4.0
+    assert NO_PROVIDER_EN in done.stderr and "jht setup" in done.stderr
     assert _logins(calls) == [], "no CLI is started when no provider is chosen"
     assert "command not found" not in done.stderr
 
@@ -76,13 +76,13 @@ def test_the_powershell_wrapper_has_the_same_cases():
     assert re.search(r"\{ \$_ -in @\([^)]*''", block) is None
     empty = re.search(r"^\s*'' \{ throw \(Get-JhtText '([a-z_.]+)'\) \}", block, re.M)
     assert empty is not None
-    # the sentence is a text of the catalog, in every language; the default provider of 0.4.0 is the one it names
+    # the sentence points to the setup, where only the services of the release can be chosen
     sys.path.insert(0, str(Path(__file__).resolve().parent))
     from script_texts import LANGUAGES, catalog
 
     for lang in LANGUAGES:
         sentence = catalog(lang)["wrapper." + empty.group(1)]
-        assert "jht providers use glm" in sentence, lang
+        assert "jht setup" in sentence, lang
     assert NO_PROVIDER in catalog("it")["wrapper." + empty.group(1)]
     assert block.index("'' { throw") < block.index("default {")
 

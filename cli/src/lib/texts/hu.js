@@ -248,4 +248,7 @@ export default {
   "help.long_description": "Megmutatja az összes parancsot (hosszú lista)",
   "profile.workers_renewed": "A csapat a lecserélt profilon dolgozott: {workers} újraindul az újjal. A Capitano és az Assistente folytatja.",
   "profile.workers_not_renewed": "A futó workereket ({workers}) nem sikerült újraindítani, még az előző profil van a fejükben. Indítsd újra a csapatot: jht team stop --all, majd jht team start",
+  'providers.help.description': "AI-szolgáltatók Pi-n: Claude- vagy OpenAI-API-kulcs, vagy ChatGPT-előfizetés; listázás, megjelenítés és váltás",
+  'providers.help.update': "Ellenőrzi a Pi-t, vagy telepíti a szolgáltató CLI-jének kiadáshoz rögzített verzióját. Id nélkül: az elérhető szolgáltatások és a meglévő Codex-csapatok CLI-jei.",
+  'providers.help.check_key': "Megkérdezi az aktív szolgáltatót, hogy elfogadja-e az API-kulcsot Pi-n. Csak elutasított kulcsnál lép ki 3-mal.",
 };

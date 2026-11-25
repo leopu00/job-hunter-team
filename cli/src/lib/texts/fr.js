@@ -248,4 +248,7 @@ export default {
   "help.long_description": "Affiche toutes les commandes (liste longue)",
   "profile.workers_renewed": "L'équipe travaillait sur le profil que tu as remplacé : {workers} redémarrent avec le nouveau. Le Capitano et l'Assistente continuent.",
   "profile.workers_not_renewed": "Les workers en marche ({workers}) n'ont pas pu être redémarrés : ils ont encore l'ancien profil en tête. Redémarre l'équipe avec : jht team stop --all, puis jht team start",
+  'providers.help.description': "Fournisseurs IA sur Pi : clé API Claude ou OpenAI, ou abonnement ChatGPT ; lister, afficher et changer",
+  'providers.help.update': "Vérifie Pi ou installe la CLI du fournisseur à la version de la release. Sans id : les CLI des services proposés et des équipes Codex existantes.",
+  'providers.help.check_key': "Demande au fournisseur actif si la clé API est acceptée sur Pi. Code 3 seulement si la clé est refusée.",
 };

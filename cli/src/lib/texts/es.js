@@ -248,4 +248,7 @@ export default {
   "help.long_description": "Muestra todos los comandos (lista larga)",
   "profile.workers_renewed": "El equipo trabajaba con el perfil que has reemplazado: {workers} se reinician con el nuevo. El Capitano y el Assistente siguen.",
   "profile.workers_not_renewed": "No se pudieron reiniciar los workers en marcha ({workers}): siguen teniendo en mente el perfil anterior. Reinicia el equipo con: jht team stop --all y luego jht team start",
+  'providers.help.description': "Proveedores de IA en Pi: clave API de Claude u OpenAI, o suscripción de ChatGPT; listar, mostrar y cambiar",
+  'providers.help.update': "Comprueba Pi o instala la CLI del proveedor en la versión de la release. Sin id: las CLI de los servicios ofrecidos y los equipos Codex existentes.",
+  'providers.help.check_key': "Pregunta al proveedor activo si acepta la clave API en Pi. Sale con 3 solo si se rechaza la clave.",
 };

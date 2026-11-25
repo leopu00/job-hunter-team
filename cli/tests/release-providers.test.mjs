@@ -97,3 +97,33 @@ test('the guided setup names the chosen provider in its command without question
   assert.doesNotMatch(startAgent, /github\.com\/openai\/codex|Install the Claude CLI|Install the Kimi CLI/);
   assert.match(startAgent, /is not offered in this release: the team runs on Pi with an API key\. Run: jht setup/);
 });
+
+
+test('setup and providers help offer only the release services in every catalog language', () => {
+  for (const lang of ['en', 'it', 'de', 'es', 'fr', 'hu', 'pt']) {
+    const root = mkdtempSync(join(tmpdir(), 'jht-release-help-'));
+    const catalog = JSON.parse(readFileSync(join(cli, '..', 'shared/locales', `${lang}.json`), 'utf8'));
+    for (const key of ['wrapper.help.setup', 'wizard.cli.provider', 'wizard.cli.api_key_file', 'wrapper.line.nessun_provider_attivo_scegline_uno', 'wizard.key.host_file_hint']) {
+      assert.doesNotMatch(catalog[key], /glm|kimi/i, `${lang}: ${key}`);
+    }
+    const paused = { en: 'paused', it: 'in pausa', de: 'pausiert', es: 'en pausa', fr: 'en pause', hu: 'szünetel', pt: 'em pausa' }[lang];
+    for (const key of ['wizard.provider.key_glm', 'wizard.provider.key_kimi', 'wizard.oauth.pi_wrong_provider']) {
+      assert.ok(catalog[key].includes(paused), `${lang}: ${key}`);
+      assert.match(catalog[key], /0\.4\.0/, `${lang}: ${key}`);
+    }
+    for (const args of [['setup', '--help'], ['providers', '--help'], ['providers', 'check-key', '--help']]) {
+      const done = spawnSync(process.execPath, [join(cli, 'bin/jht.js'), ...args], {
+        env: { ...process.env, HOME: root, JHT_HOME: join(root, '.jht'), JHT_LANG: lang, NO_COLOR: '1' },
+        encoding: 'utf8', timeout: 30_000,
+      });
+      assert.equal(done.status, 0, done.stderr);
+      assert.doesNotMatch(done.stdout, /glm|kimi/i, `${lang}: ${args.join(' ')}`);
+      if (args.length === 2) {
+        assert.match(done.stdout, /openai/i, lang);
+        assert.match(done.stdout, /claude/i, lang);
+        assert.match(done.stdout, /ChatGPT/, lang);
+      }
+      assert.doesNotMatch(done.stdout, /providers\.help\./, lang);
+    }
+  }
+});

@@ -1090,7 +1090,7 @@ function handleLimits(opts = {}) {
 }
 
 export function registerProvidersCommand(program) {
-  const cmd = new Command('providers').description('AI providers: list, show the active one, switch');
+  const cmd = new Command('providers').description(say('providers.help.description'));
 
   // Default action: list (back-compat con `jht providers`)
   cmd.action(handleProviders);
@@ -1118,7 +1118,7 @@ export function registerProvidersCommand(program) {
 
   cmd
     .command('update [id]')
-    .description('Install the provider\'s CLI (codex) at the version pinned by this release. Omitted id: all supported providers.')
+    .description(say('providers.help.update'))
     .option('--latest', 'install the latest published version instead of the release pin (explicit, temporary: the next boot restores the pin)')
     .action(async (id, opts) => (id === 'pi' ? (await import('./providers-harness.js')).checkPi() : handleUpdate(id, opts)));
 

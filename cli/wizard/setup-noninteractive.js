@@ -159,7 +159,7 @@ export async function runNonInteractiveSetup(opts) {
       // (The CLI runs in the container; a Windows node only gets here in tests.)
       if (process.platform !== 'win32' && !isLauncherSafePath(opts.secretFile)) {
         console.error(pc.red('--secret-file must be an absolute path inside the container, of letters, digits and _ . / - only, without "..".'));
-        console.error(pc.dim('  A key file on your computer: give it to --api-key-file (glm, kimi) and the setup keeps it for you.'));
+        console.error(pc.dim(`  ${t('wizard.key.host_file_hint')}`));
         process.exitCode = 1;
         return;
       }

@@ -463,14 +463,16 @@ Nothing is downloaded or turned on until you ask for it with `on`. The stream is
 Without options the guided installation starts. With --non-interactive it asks nothing:
 you give everything with the options.
 
+AI provider on Pi: openai (default; API key or ChatGPT subscription), claude (API key).
+
   --non-interactive            no questions
-  --provider <name>            glm (Z.ai, default), kimi (Moonshot), openai or claude (Anthropic)
+  --provider <name>            openai (default) or claude (Anthropic)
   --harness <name>             pi (default)
   --api-key-file <path>        file that contains the API key (one line, readable only by you).
-                               jht reads a file of your computer and passes it to setup: with glm and kimi
+                               jht reads a file of your computer and passes it to setup: with Claude and OpenAI
                                setup keeps the key on its own, never in the configuration
   --api-key-stdin              reads the API key from standard input (one line): never on the command line
-  --api-key <key>              the key written here, in clear text (not allowed for glm and kimi)
+  --api-key <key>              the key written here, in clear text (not allowed; use a reference)
   --secret-mode <mode>         how the key is saved: plaintext (default), env or file
   --secret-env <name>          with --secret-mode env: the environment variable that contains it
   --secret-file <path>         with --secret-mode file: the file that contains it
@@ -485,8 +487,8 @@ you give everything with the options.
   --reset                      starts again from a clean configuration
 
 Examples:
-  with a GLM key in a file:
-    jht setup --non-interactive --provider glm --harness pi --api-key-file key.txt
+  with a Claude API key in a file:
+    jht setup --non-interactive --provider claude --harness pi --api-key-file key.txt
   OpenAI with an API key, on Pi (for Claude: --provider claude):
     jht setup --non-interactive --provider openai --harness pi --api-key-stdin' ;;
     help.tools) printf '%s' 'Usage: jht tools <command>
@@ -619,7 +621,7 @@ This help starts nothing and downloads nothing.' ;;
     line.migrazione_docker_podman_gia_verificata) printf '%s' 'Docker -> Podman migration already verified; the Docker volumes stay intact and still hold the mail passwords, the portal logins and the Telegram tokens.' ;;
     line.migrazione_docker_podman_verificata_i) printf '%s' 'Docker -> Podman migration verified. The Docker volumes were not removed and still hold the mail passwords, the portal logins and the Telegram tokens: delete them only with an explicit confirmation in the future cleanup command.' ;;
     line.mount_repair_failed.s_non_si_puo_rendere) printf '%s' '%s cannot be made writable for the container (it runs as uid %s) and nothing was started. Run once: sudo chown -R %s %s and run '\''jht up'\'' again.' ;;
-    line.nessun_provider_attivo_scegline_uno) printf '%s' 'no active provider: choose one with '\''jht providers use glm'\''' ;;
+    line.nessun_provider_attivo_scegline_uno) printf '%s' 'no active provider: choose one with '\''jht setup'\''' ;;
     line.nessun_ruolo_ha_un_token) printf '%s' 'No role has a legacy token: for a new bot use jht telegram pair <role>.' ;;
     line.niente_da_fermare_nessun_container) printf '%s' 'nothing to stop: no container of the project.' ;;
     line.no_answer) printf '%s' 'no answer' ;;
@@ -937,14 +939,16 @@ Niente si scarica o si accende finche'\'' non lo chiedi con `on`. Lo stream e'\'
 Senza opzioni parte l'\''installazione guidata. Con --non-interactive non chiede niente:
 tutto si da'\'' con le opzioni.
 
+Provider AI su Pi: openai (predefinito; chiave API o abbonamento ChatGPT), claude (chiave API).
+
   --non-interactive            nessuna domanda
-  --provider <nome>            glm (Z.ai, predefinito), kimi (Moonshot), openai o claude (Anthropic)
+  --provider <nome>            openai (predefinito) o claude (Anthropic)
   --harness <nome>             pi (predefinito)
   --api-key-file <percorso>    file che contiene la chiave API (una riga, leggibile solo da te).
-                               Un file del tuo computer lo legge jht e lo passa al setup: con glm e kimi
+                               Un file del tuo computer lo legge jht e lo passa al setup: con Claude e OpenAI
                                il setup tiene la chiave per conto suo, mai nella configurazione
   --api-key-stdin              legge la chiave API dallo standard input (una riga): mai sulla riga di comando
-  --api-key <chiave>           la chiave scritta qui, in chiaro (non ammessa per glm e kimi)
+  --api-key <chiave>           la chiave scritta qui, in chiaro (non ammessa; usa un riferimento)
   --secret-mode <modo>         come si salva la chiave: plaintext (predefinito), env o file
   --secret-env <nome>          con --secret-mode env: la variabile d'\''ambiente che la contiene
   --secret-file <percorso>     con --secret-mode file: il file che la contiene
@@ -959,8 +963,8 @@ tutto si da'\'' con le opzioni.
   --reset                      riparte da una configurazione pulita
 
 Esempi:
-  con una chiave GLM in un file:
-    jht setup --non-interactive --provider glm --harness pi --api-key-file chiave.txt
+  con una chiave API Claude in un file:
+    jht setup --non-interactive --provider claude --harness pi --api-key-file chiave.txt
   OpenAI con una chiave API, su Pi (per Claude: --provider claude):
     jht setup --non-interactive --provider openai --harness pi --api-key-stdin' ;;
     help.tools) printf '%s' 'Uso: jht tools <comando>
@@ -1093,7 +1097,7 @@ Questo aiuto non avvia niente e non scarica niente.' ;;
     line.migrazione_docker_podman_gia_verificata) printf '%s' 'Migrazione Docker -> Podman gia'\'' verificata; i volumi Docker restano intatti e contengono ancora le password della posta, gli accessi ai portali e i token di Telegram.' ;;
     line.migrazione_docker_podman_verificata_i) printf '%s' 'Migrazione Docker -> Podman verificata. I volumi Docker non sono stati rimossi e contengono ancora le password della posta, gli accessi ai portali e i token di Telegram: cancellali solo con una conferma esplicita nel futuro comando di pulizia.' ;;
     line.mount_repair_failed.s_non_si_puo_rendere) printf '%s' '%s non si puo'\'' rendere scrivibile al container (gira come uid %s) e non e'\'' stato avviato niente. Fai una volta: sudo chown -R %s %s e riesegui '\''jht up'\''.' ;;
-    line.nessun_provider_attivo_scegline_uno) printf '%s' 'nessun provider attivo: scegline uno con '\''jht providers use glm'\''' ;;
+    line.nessun_provider_attivo_scegline_uno) printf '%s' 'nessun provider attivo: scegline uno con '\''jht setup'\''' ;;
     line.nessun_ruolo_ha_un_token) printf '%s' 'Nessun ruolo ha un token legacy: per un bot nuovo usa jht telegram pair <ruolo>.' ;;
     line.niente_da_fermare_nessun_container) printf '%s' 'niente da fermare: nessun container del progetto.' ;;
     line.no_answer) printf '%s' 'nessuna risposta' ;;
@@ -1412,14 +1416,16 @@ Semmi sem töltődik le és nem kapcsol be, amíg az `on` paranccsal nem kéred.
 Kapcsolók nélkül az irányított telepítés indul. A --non-interactive kapcsolóval semmit sem kérdez:
 mindent kapcsolókkal adsz meg.
 
+AI-szolgáltató Pi-n: openai (alapértelmezett; API-kulcs vagy ChatGPT-előfizetés), claude (API-kulcs).
+
   --non-interactive            nincs kérdés
-  --provider <name>            glm (Z.ai, alapértelmezett), kimi (Moonshot), openai vagy claude (Anthropic)
+  --provider <name>            openai (alapértelmezett) vagy claude (Anthropic)
   --harness <name>             pi (alapértelmezett)
   --api-key-file <path>        az API-kulcsot tartalmazó fájl (egy sor, csak te olvashatod).
-                               A gépeden lévő fájlt a jht olvassa be és adja át a beállításnak: glm és kimi
+                               A gépeden lévő fájlt a jht olvassa be és adja át a beállításnak: Claude és OpenAI
                                esetén a beállítás magánál tartja a kulcsot, sosem a konfigurációban
   --api-key-stdin              a standard bemenetről olvassa az API-kulcsot (egy sor): sosem a parancssorban
-  --api-key <key>              az itt beírt kulcs, nyílt szövegként (glm és kimi esetén nem engedélyezett)
+  --api-key <key>              az itt beírt kulcs, nyílt szövegként (Claude és OpenAI esetén nem engedélyezett)
   --secret-mode <mode>         hogyan mentődik a kulcs: plaintext (alapértelmezett), env vagy file
   --secret-env <name>          --secret-mode env esetén: a kulcsot tartalmazó környezeti változó
   --secret-file <path>         --secret-mode file esetén: a kulcsot tartalmazó fájl
@@ -1434,8 +1440,8 @@ mindent kapcsolókkal adsz meg.
   --reset                      tiszta beállításból indul újra
 
 Példák:
-  egy fájlban lévő GLM-kulccsal:
-    jht setup --non-interactive --provider glm --harness pi --api-key-file kulcs.txt
+  egy fájlban lévő Claude-API-kulccsal:
+    jht setup --non-interactive --provider claude --harness pi --api-key-file kulcs.txt
   OpenAI API-kulccsal, Pi-n (Claude-hoz: --provider claude):
     jht setup --non-interactive --provider openai --harness pi --api-key-stdin' ;;
     help.tools) printf '%s' 'Használat: jht tools <parancs>
@@ -1568,7 +1574,7 @@ Ez a súgó semmit nem indít el és semmit nem tölt le.' ;;
     line.migrazione_docker_podman_gia_verificata) printf '%s' 'A Docker -> Podman migráció már ellenőrizve; a Docker-kötetek érintetlenek maradnak, és még tartalmazzák a levelezési jelszavakat, a portálok hozzáféréseit és a Telegram-tokeneket.' ;;
     line.migrazione_docker_podman_verificata_i) printf '%s' 'A Docker -> Podman migráció ellenőrizve. A Docker-kötetek nem lettek eltávolítva, és még tartalmazzák a levelezési jelszavakat, a portálok hozzáféréseit és a Telegram-tokeneket: csak a jövőbeli takarító parancsban, kifejezett megerősítéssel töröld őket.' ;;
     line.mount_repair_failed.s_non_si_puo_rendere) printf '%s' '%s nem tehető írhatóvá a konténer számára (uid %s-ként fut), és semmi sem indult el. Futtasd egyszer: sudo chown -R %s %s, majd futtasd újra a '\''jht up'\'' parancsot.' ;;
-    line.nessun_provider_attivo_scegline_uno) printf '%s' 'nincs aktív szolgáltató: válassz egyet a '\''jht providers use glm'\'' paranccsal' ;;
+    line.nessun_provider_attivo_scegline_uno) printf '%s' 'nincs aktív szolgáltató: válassz egyet a '\''jht setup'\'' paranccsal' ;;
     line.nessun_ruolo_ha_un_token) printf '%s' 'Egyik szerepnek sincs régi tokenje: új bothoz használd a jht telegram pair <szerep> parancsot.' ;;
     line.niente_da_fermare_nessun_container) printf '%s' 'nincs mit leállítani: a projektnek nincs konténere.' ;;
     line.no_answer) printf '%s' 'nincs válasz' ;;
@@ -1889,15 +1895,17 @@ No se descarga ni se enciende nada hasta que lo pidas con `on`. El stream es sol
 Sin opciones arranca la instalación guiada. Con --non-interactive no pregunta nada:
 todo se da con las opciones.
 
+Proveedor de IA en Pi: openai (predeterminado; clave API o suscripción de ChatGPT), claude (clave API).
+
   --non-interactive            ninguna pregunta
-  --provider <name>            glm (Z.ai, predeterminado), kimi (Moonshot), openai o claude (Anthropic)
+  --provider <name>            openai (predeterminado) o claude (Anthropic)
   --harness <name>             pi (predeterminado)
   --api-key-file <path>        archivo que contiene la clave API (una línea, que solo puedas leer tú).
-                               Un archivo de tu ordenador lo lee jht y se lo pasa al setup: con glm y kimi
+                               Un archivo de tu ordenador lo lee jht y se lo pasa al setup: con Claude y OpenAI
                                el setup guarda la clave por su cuenta, nunca en la configuración
   --api-key-stdin              lee la clave API de la entrada estándar (una línea):
                                nunca en la línea de comandos
-  --api-key <key>              la clave escrita aquí, en claro (no admitida para glm y kimi)
+  --api-key <key>              la clave escrita aquí, en claro (no admitida; usa una referencia)
   --secret-mode <mode>         cómo se guarda la clave: plaintext (predeterminado), env o file
   --secret-env <name>          con --secret-mode env: la variable de entorno que la contiene
   --secret-file <path>         con --secret-mode file: el archivo que la contiene
@@ -1912,8 +1920,8 @@ todo se da con las opciones.
   --reset                      vuelve a empezar desde una configuración limpia
 
 Ejemplos:
-  con una clave GLM en un archivo:
-    jht setup --non-interactive --provider glm --harness pi --api-key-file clave.txt
+  con una clave API de Claude en un archivo:
+    jht setup --non-interactive --provider claude --harness pi --api-key-file clave.txt
   OpenAI con una clave API, en Pi (para Claude: --provider claude):
     jht setup --non-interactive --provider openai --harness pi --api-key-stdin' ;;
     help.tools) printf '%s' 'Uso: jht tools <comando>
@@ -2046,7 +2054,7 @@ Esta ayuda no arranca nada ni descarga nada.' ;;
     line.migrazione_docker_podman_gia_verificata) printf '%s' 'Migración Docker -> Podman ya verificada; los volúmenes de Docker siguen intactos y aún contienen las contraseñas del correo, los accesos a los portales y los tokens de Telegram.' ;;
     line.migrazione_docker_podman_verificata_i) printf '%s' 'Migración Docker -> Podman verificada. Los volúmenes de Docker no se han eliminado y aún contienen las contraseñas del correo, los accesos a los portales y los tokens de Telegram: bórralos solo con una confirmación explícita en el futuro comando de limpieza.' ;;
     line.mount_repair_failed.s_non_si_puo_rendere) printf '%s' '%s no se puede hacer escribible para el contenedor (se ejecuta como uid %s) y no se ha arrancado nada. Haz una vez: sudo chown -R %s %s y vuelve a ejecutar '\''jht up'\''.' ;;
-    line.nessun_provider_attivo_scegline_uno) printf '%s' 'no hay ningún proveedor activo: elige uno con '\''jht providers use glm'\''' ;;
+    line.nessun_provider_attivo_scegline_uno) printf '%s' 'no hay ningún proveedor activo: elige uno con '\''jht setup'\''' ;;
     line.nessun_ruolo_ha_un_token) printf '%s' 'Ningún rol tiene un token antiguo: para un bot nuevo usa jht telegram pair <rol>.' ;;
     line.niente_da_fermare_nessun_container) printf '%s' 'nada que detener: no hay contenedores del proyecto.' ;;
     line.no_answer) printf '%s' 'ninguna respuesta' ;;
@@ -2364,14 +2372,16 @@ Nichts wird heruntergeladen oder gestartet, bevor du es mit `on` verlangst. Der 
 Ohne Optionen startet die geführte Installation. Mit --non-interactive wird nichts gefragt:
 Alles wird über die Optionen angegeben.
 
+KI-Anbieter auf Pi: openai (Standard; API-Schlüssel oder ChatGPT-Abo), claude (API-Schlüssel).
+
   --non-interactive            keine Fragen
-  --provider <name>            glm (Z.ai, Standard), kimi (Moonshot), openai oder claude (Anthropic)
+  --provider <name>            openai (Standard) oder claude (Anthropic)
   --harness <name>             pi (Standard)
   --api-key-file <path>        Datei mit dem API-Schlüssel (eine Zeile, nur für dich lesbar).
-                               jht liest die Datei auf deinem Computer und gibt sie ans Setup weiter; bei glm
-                               und kimi behält das Setup den Schlüssel für sich, nie in der Konfiguration
+                               jht liest die Datei auf deinem Computer und gibt sie ans Setup weiter; bei Claude
+                               und OpenAI behält das Setup den Schlüssel für sich, nie in der Konfiguration
   --api-key-stdin              liest den API-Schlüssel von stdin (eine Zeile): nie auf der Befehlszeile
-  --api-key <key>              der Schlüssel direkt hier, im Klartext (nicht erlaubt für glm und kimi)
+  --api-key <key>              der Schlüssel direkt hier, im Klartext (nicht erlaubt; nutze eine Referenz)
   --secret-mode <mode>         wie der Schlüssel gespeichert wird: plaintext (Standard), env oder file
   --secret-env <name>          mit --secret-mode env: die Umgebungsvariable, die ihn enthält
   --secret-file <path>         mit --secret-mode file: die Datei, die ihn enthält
@@ -2386,8 +2396,8 @@ Alles wird über die Optionen angegeben.
   --reset                      beginnt mit einer sauberen Konfiguration neu
 
 Beispiele:
-  mit einem GLM-Schlüssel in einer Datei:
-    jht setup --non-interactive --provider glm --harness pi --api-key-file schluessel.txt
+  mit einem Claude-API-Schlüssel in einer Datei:
+    jht setup --non-interactive --provider claude --harness pi --api-key-file schluessel.txt
   OpenAI mit einem API-Schlüssel, auf Pi (für Claude: --provider claude):
     jht setup --non-interactive --provider openai --harness pi --api-key-stdin' ;;
     help.tools) printf '%s' 'Verwendung: jht tools <Befehl>
@@ -2520,7 +2530,7 @@ Diese Hilfe startet nichts und lädt nichts herunter.' ;;
     line.migrazione_docker_podman_gia_verificata) printf '%s' 'Migration Docker -> Podman schon geprüft; die Docker-Volumes bleiben unverändert und enthalten noch die Mail-Passwörter, die Portal-Zugänge und die Telegram-Tokens.' ;;
     line.migrazione_docker_podman_verificata_i) printf '%s' 'Migration Docker -> Podman geprüft. Die Docker-Volumes wurden nicht entfernt und enthalten noch die Mail-Passwörter, die Portal-Zugänge und die Telegram-Tokens: Lösche sie nur mit einer ausdrücklichen Bestätigung im künftigen Aufräumbefehl.' ;;
     line.mount_repair_failed.s_non_si_puo_rendere) printf '%s' '%s lässt sich für den Container (läuft als uid %s) nicht beschreibbar machen, und nichts wurde gestartet. Mach einmal: sudo chown -R %s %s und führe '\''jht up'\'' erneut aus.' ;;
-    line.nessun_provider_attivo_scegline_uno) printf '%s' 'Kein Anbieter aktiv: Wähle einen mit '\''jht providers use glm'\''' ;;
+    line.nessun_provider_attivo_scegline_uno) printf '%s' 'Kein Anbieter aktiv: Wähle einen mit '\''jht setup'\''' ;;
     line.nessun_ruolo_ha_un_token) printf '%s' 'Keine Rolle hat einen alten Token: Für einen neuen Bot nutze jht telegram pair <Rolle>.' ;;
     line.niente_da_fermare_nessun_container) printf '%s' 'Nichts zu stoppen: kein Container des Projekts.' ;;
     line.no_answer) printf '%s' 'keine Antwort' ;;
@@ -2838,14 +2848,16 @@ Rien ne se télécharge ni ne s'\''allume tant que tu ne le demandes pas avec `o
 Sans options, l'\''installation guidée démarre. Avec --non-interactive, rien n'\''est demandé :
 tout se donne avec les options.
 
+Fournisseur IA sur Pi : openai (par défaut ; clé API ou abonnement ChatGPT), claude (clé API).
+
   --non-interactive            aucune question
-  --provider <name>            glm (Z.ai, par défaut), kimi (Moonshot), openai ou claude (Anthropic)
+  --provider <name>            openai (par défaut) ou claude (Anthropic)
   --harness <name>             pi (par défaut)
   --api-key-file <path>        fichier qui contient la clé API (une ligne, lisible seulement par toi).
                                jht lit ce fichier sur ton ordinateur et le passe au setup :
-                               avec glm et kimi, le setup garde la clé à part, jamais dans la configuration
+                               avec Claude et OpenAI, le setup garde la clé à part, jamais dans la configuration
   --api-key-stdin              lit la clé API sur l'\''entrée standard (une ligne) : jamais sur la ligne de commande
-  --api-key <key>              la clé écrite ici, en clair (refusée pour glm et kimi)
+  --api-key <key>              la clé écrite ici, en clair (refusée ; utilise une référence)
   --secret-mode <mode>         comment la clé est enregistrée : plaintext (par défaut), env ou file
   --secret-env <name>          avec --secret-mode env : la variable d'\''environnement qui la contient
   --secret-file <path>         avec --secret-mode file : le fichier qui la contient
@@ -2860,8 +2872,8 @@ tout se donne avec les options.
   --reset                      repart d'\''une configuration propre
 
 Exemples :
-  avec une clé GLM dans un fichier :
-    jht setup --non-interactive --provider glm --harness pi --api-key-file cle.txt
+  avec une clé API Claude dans un fichier :
+    jht setup --non-interactive --provider claude --harness pi --api-key-file cle.txt
   OpenAI avec une clé API, sur Pi (pour Claude : --provider claude) :
     jht setup --non-interactive --provider openai --harness pi --api-key-stdin' ;;
     help.tools) printf '%s' 'Utilisation : jht tools <commande>
@@ -2994,7 +3006,7 @@ Cette aide ne démarre rien et ne télécharge rien.' ;;
     line.migrazione_docker_podman_gia_verificata) printf '%s' 'Migration Docker -> Podman déjà vérifiée ; les volumes Docker restent intacts et contiennent encore les mots de passe mail, les accès aux portails et les tokens Telegram.' ;;
     line.migrazione_docker_podman_verificata_i) printf '%s' 'Migration Docker -> Podman vérifiée. Les volumes Docker n'\''ont pas été supprimés et contiennent encore les mots de passe mail, les accès aux portails et les tokens Telegram : efface-les seulement avec une confirmation explicite dans la future commande de nettoyage.' ;;
     line.mount_repair_failed.s_non_si_puo_rendere) printf '%s' '%s ne peut pas être rendu accessible en écriture au conteneur (il tourne en uid %s) et rien n'\''a été démarré. Fais une fois : sudo chown -R %s %s et relance '\''jht up'\''.' ;;
-    line.nessun_provider_attivo_scegline_uno) printf '%s' 'aucun fournisseur actif : choisis-en un avec '\''jht providers use glm'\''' ;;
+    line.nessun_provider_attivo_scegline_uno) printf '%s' 'aucun fournisseur actif : choisis-en un avec '\''jht setup'\''' ;;
     line.nessun_ruolo_ha_un_token) printf '%s' 'Aucun rôle n'\''a d'\''ancien token : pour un nouveau bot, utilise jht telegram pair <rôle>.' ;;
     line.niente_da_fermare_nessun_container) printf '%s' 'rien à arrêter : aucun conteneur du projet.' ;;
     line.no_answer) printf '%s' 'aucune réponse' ;;
@@ -3312,14 +3324,16 @@ Nada é descarregado nem ligado até o pedires com `on`. O stream é só de visu
 Sem opções arranca a instalação guiada. Com --non-interactive não pergunta nada:
 tudo se dá com as opções.
 
+Fornecedor de IA no Pi: openai (predefinido; chave API ou subscrição ChatGPT), claude (chave API).
+
   --non-interactive            nenhuma pergunta
-  --provider <name>            glm (Z.ai, predefinido), kimi (Moonshot), openai ou claude (Anthropic)
+  --provider <name>            openai (predefinido) ou claude (Anthropic)
   --harness <name>             pi (predefinido)
   --api-key-file <path>        ficheiro que contém a chave API (uma linha, legível só por ti).
-                               O jht lê um ficheiro do teu computador e passa-o ao setup: com glm e kimi
+                               O jht lê um ficheiro do teu computador e passa-o ao setup: com Claude e OpenAI
                                o setup guarda a chave por conta própria, nunca na configuração
   --api-key-stdin              lê a chave API da entrada padrão (uma linha): nunca na linha de comandos
-  --api-key <key>              a chave escrita aqui, em claro (não admitida para glm e kimi)
+  --api-key <key>              a chave escrita aqui, em claro (não admitida; usa uma referência)
   --secret-mode <mode>         como se guarda a chave: plaintext (predefinido), env ou file
   --secret-env <name>          com --secret-mode env: a variável de ambiente que a contém
   --secret-file <path>         com --secret-mode file: o ficheiro que a contém
@@ -3334,8 +3348,8 @@ tudo se dá com as opções.
   --reset                      recomeça de uma configuração limpa
 
 Exemplos:
-  com uma chave GLM num ficheiro:
-    jht setup --non-interactive --provider glm --harness pi --api-key-file chave.txt
+  com uma chave API Claude num ficheiro:
+    jht setup --non-interactive --provider claude --harness pi --api-key-file chave.txt
   OpenAI com uma chave API, no Pi (para Claude: --provider claude):
     jht setup --non-interactive --provider openai --harness pi --api-key-stdin' ;;
     help.tools) printf '%s' 'Uso: jht tools <comando>
@@ -3468,7 +3482,7 @@ Esta ajuda não inicia nada nem descarrega nada.' ;;
     line.migrazione_docker_podman_gia_verificata) printf '%s' 'Migração Docker -> Podman já verificada; os volumes do Docker ficam intactos e ainda contêm as palavras-passe do correio, os acessos aos portais e os tokens do Telegram.' ;;
     line.migrazione_docker_podman_verificata_i) printf '%s' 'Migração Docker -> Podman verificada. Os volumes do Docker não foram removidos e ainda contêm as palavras-passe do correio, os acessos aos portais e os tokens do Telegram: apaga-os só com uma confirmação explícita no futuro comando de limpeza.' ;;
     line.mount_repair_failed.s_non_si_puo_rendere) printf '%s' 'não é possível tornar %s gravável para o contentor (corre como uid %s) e nada foi iniciado. Faz uma vez: sudo chown -R %s %s e corre '\''jht up'\'' de novo.' ;;
-    line.nessun_provider_attivo_scegline_uno) printf '%s' 'nenhum fornecedor ativo: escolhe um com '\''jht providers use glm'\''' ;;
+    line.nessun_provider_attivo_scegline_uno) printf '%s' 'nenhum fornecedor ativo: escolhe um com '\''jht setup'\''' ;;
     line.nessun_ruolo_ha_un_token) printf '%s' 'Nenhuma função tem um token antigo: para um bot novo usa jht telegram pair <função>.' ;;
     line.niente_da_fermare_nessun_container) printf '%s' 'nada para parar: nenhum contentor do projeto.' ;;
     line.no_answer) printf '%s' 'nenhuma resposta' ;;
