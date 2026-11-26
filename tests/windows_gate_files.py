@@ -94,6 +94,7 @@ PENDING: dict[str, str] = {}
 # Not run on Windows: they test the wrappers on Linux and macOS with pwsh and sh fakes, and use what Windows does not
 # have. file -> why. A new file that runs PowerShell must be in one of the groups above or here (the guard test).
 POSIX_ONLY: dict[str, str] = {
+    "tests/test_upgrade_docker_requires_podman.py": "POSIX provider fakes; the native Windows cases are in test_windows_upgrade_docker_requires_podman.py",
     "tests/test_agent_shell_privileges.py": "imports pty/fcntl: a POSIX terminal",
     "tests/test_apply_host_wrapper.py": "imports pty: a POSIX terminal",
     "tests/test_broker_reset_wrapper.py": "runs the bash wrapper and a Linux container",
