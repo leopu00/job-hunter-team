@@ -85,6 +85,9 @@ def test_the_build_fails_if_sudo_comes_back():
 
 
 def _resolved_service(*files: str) -> dict:
+    provider = subprocess.run(["docker", "compose", "version"], capture_output=True, timeout=30)
+    if provider.returncode != 0:
+        pytest.skip("docker compose plugin unavailable")
     # Resolve flags only; the legacy-upgrade guard is tested without this marker elsewhere.
     env = {**os.environ, "HOME": "/tmp/jht-compose-home", "JHT_PODMAN_RUNTIME_READY": "1"}
     if "DOCKER_CONFIG" not in os.environ and os.environ.get("HOME"):
@@ -93,8 +96,7 @@ def _resolved_service(*files: str) -> dict:
     for name in files:
         args += ["-f", str(ROOT / name)]
     result = subprocess.run(args + ["config", "--format", "json"], capture_output=True, text=True, env=env, timeout=60)
-    if result.returncode != 0:
-        pytest.skip(f"docker compose unavailable: {result.stderr.strip()[:120]}")
+    assert result.returncode == 0, result.stderr
     return json.loads(result.stdout)["services"]["jht"]
 
 

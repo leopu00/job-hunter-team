@@ -362,15 +362,17 @@ def test_podman_override_keeps_the_base_loopback_port_in_its_own_network():
 def _compose_command():
     """`docker-compose` o il plugin `docker compose`: il primo che renderizza davvero.
 
-    Si prova `config` su un file vuoto, non `version`: su alcune installazioni
+    Si prova `config` su un progetto minimo, non `version`: su alcune installazioni
     `docker compose version` risponde ma `docker compose -f` non è riconosciuto.
     """
     candidates = [["docker-compose"], ["docker", "compose"]]
     for command in candidates:
         if not shutil.which(command[0]):
             continue
-        probe = subprocess.run([*command, "-f", str(COMPOSE), "config", "--quiet"], capture_output=True, check=False,
-                               env={**os.environ, "JHT_PODMAN_RUNTIME_READY": "1"})
+        # Availability must not depend on whether the product's base renders.
+        # A broken base must fail the test below, rather than skip its coverage.
+        probe = subprocess.run([*command, "-f", "-", "config", "--quiet"], capture_output=True, check=False,
+                               input="services:\n  probe:\n    image: example.invalid/probe\n", text=True)
         if probe.returncode == 0:
             return command
     return None
