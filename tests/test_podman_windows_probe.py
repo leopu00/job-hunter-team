@@ -7,6 +7,7 @@ import shutil
 import subprocess
 
 import pytest
+from windows_native_fakes import powershell_argv
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -87,7 +88,7 @@ def test_probe_is_valid_powershell():
     assert result.returncode == 0, result.stderr
 
 
-@pytest.mark.skipif(shutil.which("pwsh") is None, reason="PowerShell is unavailable")
+@pytest.mark.skipif(os.name != "nt" and shutil.which("pwsh") is None, reason="PowerShell is unavailable")
 @pytest.mark.parametrize("previous", [None, "caller-value"])
 @pytest.mark.parametrize("fails", [False, True])
 def test_probe_compose_scopes_marker_and_requires_verified_backend(previous, fails):
@@ -124,7 +125,7 @@ exit 0
     env.pop("JHT_PODMAN_RUNTIME_READY", None)
     if previous is not None:
         env["JHT_PODMAN_RUNTIME_READY"] = previous
-    result = subprocess.run([shutil.which("pwsh"), "-NoProfile", "-Command", command],
+    result = subprocess.run([*powershell_argv(), "-Command", command],
                             env=env, capture_output=True, text=True, timeout=30)
     assert result.returncode == 0, result.stdout + result.stderr
     assert source.index("Invoke-NativeChecked 'docker' 'info'") < source.index("$script:ProbeRuntimeReady = $true")
