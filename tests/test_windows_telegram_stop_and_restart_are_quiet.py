@@ -41,7 +41,7 @@ def _case(tmp_path, body: str, fail: str = ""):
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
     _fake(bin_dir, "docker", COMPOSE_CASES)
-    return _run(tmp_path, PS1, ["Invoke-ComposeQuiet", "Invoke-Compose", "Invoke-TelegramLifecycleSteps"], PREAMBLE + body, {"FAKE_FAIL": fail})
+    return _run(tmp_path, PS1, ["Invoke-ComposeQuiet", "Invoke-WithPodmanComposeRuntime", "Invoke-Compose", "Invoke-TelegramLifecycleSteps"], PREAMBLE + body, {"FAKE_FAIL": fail})
 
 
 def test_the_stop_of_a_telegram_without_a_bot_prints_no_line_of_compose(tmp_path):

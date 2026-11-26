@@ -68,6 +68,7 @@ public static class FakeContainerEngine
     {
         if (Has(args, "info"))
         {
+            if (Environment.GetEnvironmentVariable("FAKE_INFO_READY") == "1") { return 0; }
             Console.Error.WriteLine("Cannot connect to Podman. Please verify your connection to the Linux system");
             return 125;
         }
@@ -156,6 +157,7 @@ $Podman = Join-Path $env:FAKE_BIN 'podman.exe'
 $ContainerRuntime = 'podman'; $Container = 'jht'; $BrokerContainer = 'jht-broker'; $TelegramContainer = 'jht-telegram'
 $ComposeFile = 'docker-compose.yml'; $PodmanComposeFile = 'docker-compose.podman.yml'; $RuntimeDir = '.'
 $JhtHome = $env:TEMP; $DefaultRuntimeImage = 'ghcr.io/leopu00/jht:latest'
+function Assert-TrustedRuntime {}
 """
 
 CHECK_OLD = r"""
@@ -199,7 +201,7 @@ CASES = {
                 "& $PodmanPath machine list --format json 2>$null", "MACHINE=present"),
     "service": (["Get-RunningComposeServiceId", "Get-ComposeProjectName", "Get-ComposeLabel"], SERVICE, "& docker @composeArgs 2>$null",
                 "& docker @composeArgs 2>$null", f"ID={CONTAINER_ID}"),
-    "telegram": (["Invoke-TelegramLegacy", "Get-ComposeImage"], TELEGRAM, "Invoke-TelegramLegacy remaining 2>$null",
+    "telegram": (["Invoke-TelegramLegacy", "Invoke-WithPodmanComposeRuntime", "Get-ComposeImage"], TELEGRAM, "Invoke-TelegramLegacy remaining 2>$null",
                  "Invoke-TelegramLegacy remaining 2>$null", "REMAINING=[capitano] CODE=1"),
 }
 
@@ -209,6 +211,7 @@ def _run(tmp_path: Path, shell: str, imports: list[str], body: str, bin_dir: Pat
     harness.write_text(IMPORT + body, encoding="utf-8-sig")
     run_env = {
         **os.environ, "FAKE_BIN": str(bin_dir), "FAKE_ID": CONTAINER_ID, "FAKE_LABELS": LABELS,
+        "FAKE_INFO_READY": "1" if "Invoke-WithPodmanComposeRuntime" in imports else "0",
         "JHT_UNDER_TEST": str(WRAPPER), "JHT_IMPORT": ",".join(imports), "JHT_OLD_FORM": "", "JHT_NEW_CALL": "", **env,
     }
     return subprocess.run(

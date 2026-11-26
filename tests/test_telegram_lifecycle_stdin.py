@@ -51,7 +51,7 @@ def source_for(language, mutant):
             assert source.count(' </dev/null') == 1
             source = source.replace(' </dev/null', '')
         return adapter + '\nTELEGRAM_SERVICE=jht-telegram\n' + source + '\ntelegram_lifecycle_command pair assistente\n'
-    actual = powershell_functions("Invoke-Compose")
+    actual = powershell_functions("Invoke-WithPodmanComposeRuntime", "Invoke-Compose")
     if mutant:
         # the line goes through Invoke-NativeWithStdin (no BOM in front of what is piped): the mutant drops the `$null |` inside it
         old = 'elseif ($NoInput) { Invoke-NativeWithStdin { $null | & docker compose'

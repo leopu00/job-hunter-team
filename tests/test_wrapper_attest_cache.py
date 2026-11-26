@@ -429,7 +429,7 @@ def test_a_different_home_changes_the_key(tmp_path: Path):
 
 
 def test_the_key_names_every_variable_the_compose_substitutes():
-    """Whatever `${NAME}` the compose holds is either in the callers' list, a host.env value, HOME, or JHT_IMAGE."""
+    """Whatever `${NAME}` the compose holds is either in the callers' list, a host.env value, HOME, JHT_IMAGE, or the verified constant marker."""
     import re
 
     root = Path(__file__).resolve().parents[1]
@@ -439,5 +439,5 @@ def test_the_key_names_every_variable_the_compose_substitutes():
     caller = re.search(r'^PODMAN_CALLER_ENV="([^"]*)"', wrapper, re.M).group(1).split()
     key = wrapper.split("attest_cache_key() {")[1].split("\n}\n")[0]
     for name in sorted(names):
-        covered = name in caller or f"${{{name}:-}}" in key or (name == "HOME" and "home=$HOME" in key) or (name == "JHT_IMAGE" and "JHT_IMAGE" in key)
+        covered = name in caller or f"${{{name}:-}}" in key or (name == "HOME" and "home=$HOME" in key) or (name == "JHT_IMAGE" and "JHT_IMAGE" in key) or (name == "JHT_PODMAN_RUNTIME_READY" and "podman-runtime-ready=1" in key)
         assert covered, f"{name} enters the expected hash and is not in the cache key"

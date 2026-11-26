@@ -74,7 +74,7 @@ def _compose(tmp_path, *, verbose: bool = False, fail: str = "", body: str = BOD
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
     _fake(bin_dir, "docker", COMPOSE_CASES)
-    return _run(tmp_path, PS1, ["Invoke-ComposeQuiet", "Invoke-Compose"], body, {"VERBOSE": "1" if verbose else "0", "FAKE_FAIL": fail})
+    return _run(tmp_path, PS1, ["Invoke-ComposeQuiet", "Invoke-WithPodmanComposeRuntime", "Invoke-Compose"], body, {"VERBOSE": "1" if verbose else "0", "FAKE_FAIL": fail})
 
 
 def test_windows_compose_that_went_well_prints_nothing_and_gives_its_code(tmp_path):

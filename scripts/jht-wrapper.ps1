@@ -5396,6 +5396,26 @@ function Invoke-NativeWithStdin {
   }
 }
 
+# Keep the marker inside each Compose call: invoking this script from PowerShell
+# must not leave it in the caller's environment for a later legacy Docker upgrade.
+function Invoke-WithPodmanComposeRuntime {
+  param([Parameter(Mandatory)][scriptblock]$ComposeCommand)
+  $previousReady = $env:JHT_PODMAN_RUNTIME_READY
+  Remove-Item -LiteralPath Env:JHT_PODMAN_RUNTIME_READY -ErrorAction SilentlyContinue
+  try {
+    if ($ContainerRuntime -eq 'podman') {
+      Assert-TrustedRuntime
+      $null = & { $ErrorActionPreference = 'Continue'; & docker info 2>&1 }
+      if ($LASTEXITCODE -ne 0) { throw (Get-JhtText 'ps.podman_machine_not_responding') }
+      $env:JHT_PODMAN_RUNTIME_READY = '1'
+    }
+    & $ComposeCommand
+  } finally {
+    if ($null -eq $previousReady) { Remove-Item -LiteralPath Env:JHT_PODMAN_RUNTIME_READY -ErrorAction SilentlyContinue }
+    else { $env:JHT_PODMAN_RUNTIME_READY = $previousReady }
+  }
+}
+
 function Invoke-Compose {
   [CmdletBinding(PositionalBinding=$false)]
   param([switch]$NoInput, [string]$InputText, [Parameter(ValueFromRemainingArguments)] $Args)
@@ -5408,9 +5428,12 @@ function Invoke-Compose {
   if ($ContainerRuntime -eq 'podman') { $files += @('-f', $PodmanComposeFile) }
   # $Args is the script block's own inside Invoke-NativeWithStdin: the arguments go in a variable of theirs.
   $composeArgs = @($Args)
-  if ($PSBoundParameters.ContainsKey('InputText')) { Invoke-NativeWithStdin { $InputText | & docker compose @files --project-directory $RuntimeDir @composeArgs } }
-  elseif ($NoInput) { Invoke-NativeWithStdin { $null | & docker compose @files --project-directory $RuntimeDir @composeArgs } }
-  else { & docker compose @files --project-directory $RuntimeDir @Args }
+  $withInput = $PSBoundParameters.ContainsKey('InputText')
+  Invoke-WithPodmanComposeRuntime {
+    if ($withInput) { Invoke-NativeWithStdin { $InputText | & docker compose @files --project-directory $RuntimeDir @composeArgs } }
+    elseif ($NoInput) { Invoke-NativeWithStdin { $null | & docker compose @files --project-directory $RuntimeDir @composeArgs } }
+    else { & docker compose @files --project-directory $RuntimeDir @composeArgs }
+  }
 }
 
 # `jht up` and `jht down` say the phase and the result: compose's own lines (Network, Volume, Container Creating, Created, Started...) are
@@ -5671,7 +5694,7 @@ function Get-ComposeImage {
   param([string]$File)
   $files = @('-f', $File)
   if ($ContainerRuntime -eq 'podman') { $files += @('-f', $PodmanComposeFile) }
-  $ref = ((& { $ErrorActionPreference = 'Continue'; & docker compose @files --project-directory $RuntimeDir config --images 2>$null } | Select-Object -First 1) -as [string])
+  $ref = ((Invoke-WithPodmanComposeRuntime { & { $ErrorActionPreference = 'Continue'; & docker compose @files --project-directory $RuntimeDir config --images 2>$null } } | Select-Object -First 1) -as [string])
   if ($ref) { $ref = $ref.Trim() }
   if (-not $ref) { $ref = if ($env:JHT_IMAGE) { $env:JHT_IMAGE } else { $DefaultRuntimeImage } }
   return $ref
@@ -7634,7 +7657,9 @@ function Invoke-UpgradeCompose {
   $all = @('compose', '-f', $File)
   if ($ContainerRuntime -eq 'podman') { $all += @('-f', $PodmanComposeFile) }
   $all += @('--project-directory', $RuntimeDir) + $ComposeArgs
-  if ($script:UpgradeJson) { & { $ErrorActionPreference = 'Continue'; & docker @all *> $null } } else { & docker @all }
+  Invoke-WithPodmanComposeRuntime {
+    if ($script:UpgradeJson) { & { $ErrorActionPreference = 'Continue'; & docker @all *> $null } } else { & docker @all }
+  }
   return $LASTEXITCODE -eq 0
 }
 
@@ -7866,7 +7891,7 @@ function Invoke-RuntimeUpgrade {
     if (-not (Invoke-UpgradeCompose $newCompose 'pull' $Container)) { Remove-UpgradeTransaction; Write-UpgradeResult $false $false 'pull' $oldVersion $oldImage $oldVersion $oldImage $false (Get-JhtText 'ps.upgrade_image_download_failed') $false; return 1 }
     $candidateFiles = @('-f', $newCompose)
     if ($ContainerRuntime -eq 'podman') { $candidateFiles += @('-f', $PodmanComposeFile) }
-    $candidateRef = ((& { $ErrorActionPreference = 'Continue'; & docker compose @candidateFiles --project-directory $RuntimeDir config --images 2>$null } | Select-Object -First 1) -as [string]).Trim()
+    $candidateRef = ((Invoke-WithPodmanComposeRuntime { & { $ErrorActionPreference = 'Continue'; & docker compose @candidateFiles --project-directory $RuntimeDir config --images 2>$null } } | Select-Object -First 1) -as [string]).Trim()
     if (-not $candidateRef) { $candidateRef = if ($env:JHT_IMAGE) { $env:JHT_IMAGE } else { $DefaultRuntimeImage } }
     $candidateImage = ((& { $ErrorActionPreference = 'Continue'; & docker image inspect $candidateRef --format '{{.Id}}' 2>$null } | Select-Object -First 1) -as [string]).Trim()
     if (-not $candidateImage) { $candidateImage = 'sconosciuta' }

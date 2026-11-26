@@ -979,7 +979,7 @@ def _up_with_folders(tmp_path, *, documents: bool, fail: str = ""):
         (tmp_path / "Documents" / "Job Hunter Team").mkdir(parents=True)
         (tmp_path / "Documents" / "Job Hunter Team" / "cv.pdf").write_bytes(b"keep me")
     return _run(
-        tmp_path, WRAPPER, ["Repair-MountOwnership", "Invoke-Compose", "Stop-OnFailedComposeUp", "Write-Err"], UP_FOLDERS_BODY,
+        tmp_path, WRAPPER, ["Repair-MountOwnership", "Invoke-WithPodmanComposeRuntime", "Invoke-Compose", "Stop-OnFailedComposeUp", "Write-Err"], UP_FOLDERS_BODY,
         {"RUNTIME": "podman", "FAKE_FAIL": fail},
     )
 
@@ -1049,7 +1049,7 @@ def _up_in_turn(tmp_path, *, runtime: str = "podman", fail: str = "", compose: P
         marker.write_text("", encoding="utf-8")
     _fake(bin_dir, "docker", COMPOSE_TURN_CASES)
     result, calls = _run(
-        tmp_path, WRAPPER, ["Invoke-PodmanServicesUpInTurn", "Invoke-ComposeQuiet", "Invoke-Compose", "Stop-OnFailedComposeUp", "Write-Err"], UP_IN_TURN_BODY,
+        tmp_path, WRAPPER, ["Invoke-PodmanServicesUpInTurn", "Invoke-ComposeQuiet", "Invoke-WithPodmanComposeRuntime", "Invoke-Compose", "Stop-OnFailedComposeUp", "Write-Err"], UP_IN_TURN_BODY,
         {"RUNTIME": runtime, "FAKE_FAIL": fail, "COMPOSE_UNDER_TEST": str(compose), "MARKER_UNDER_TEST": str(marker)},
     )
     return result, [call[call.index(" up ") + 1:] if " up " in call else call for call in calls]
@@ -1058,13 +1058,13 @@ def _up_in_turn(tmp_path, *, runtime: str = "podman", fail: str = "", compose: P
 def test_with_podman_a_broker_made_before_precedes_the_team_alone_and_by_its_profile(tmp_path):
     result, calls = _up_in_turn(tmp_path)
     assert result.returncode == 0, result.stdout + result.stderr
-    assert calls == ["up -d --no-deps jht-broker", "up -d", "after-up"]
+    assert calls == ["info", "up -d --no-deps jht-broker", "info", "up -d", "after-up"]
 
 
 def test_a_clean_install_makes_no_broker_at_up(tmp_path):
     result, calls = _up_in_turn(tmp_path, made=False)
     assert result.returncode == 0, result.stdout + result.stderr
-    assert calls == ["up -d", "after-up"]
+    assert calls == ["info", "up -d", "after-up"]
 
 
 def test_with_docker_the_up_is_the_whole_one_as_before(tmp_path):
@@ -1077,7 +1077,7 @@ def test_a_service_whose_up_fails_stops_jht_with_its_code_before_the_others(tmp_
     result, calls = _up_in_turn(tmp_path, fail="broker")
     assert result.returncode == 4, result.stdout + result.stderr
     assert "compose_up_failed" in result.stdout + result.stderr
-    assert calls == ["up -d --no-deps jht-broker"]
+    assert calls == ["info", "up -d --no-deps jht-broker"]
 
 
 def test_a_compose_file_without_the_services_gets_the_whole_up_alone(tmp_path):
@@ -1085,7 +1085,7 @@ def test_a_compose_file_without_the_services_gets_the_whole_up_alone(tmp_path):
     old.write_text("services:\n  jht:\n    image: x\n", encoding="utf-8")
     result, calls = _up_in_turn(tmp_path, compose=old)
     assert result.returncode == 0, result.stdout + result.stderr
-    assert calls == ["up -d", "after-up"]
+    assert calls == ["info", "up -d", "after-up"]
 
 
 def test_every_whole_compose_up_of_the_wrapper_comes_after_the_services_in_turn():

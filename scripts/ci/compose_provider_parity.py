@@ -329,6 +329,7 @@ def render_and_compare(root: Path, podman_compose: str, podman: str, docker_comp
         environment.update(
             {
                 "JHT_IMAGE": "ghcr.io/leopu00/jht@sha256:" + "a" * 64,
+                "JHT_PODMAN_RUNTIME_READY": "1",
                 "JHT_HOST_TYPE": "vps",
                 "JHT_LANG": "it",
                 "JHT_USER_TZ": "Europe/Rome",

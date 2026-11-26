@@ -111,7 +111,7 @@ RUNTIME_TIER_FILE="{runtime}/no-tier"
 COMPOSE_ALL_PROFILES=screen
 PODMAN_CALLER_ENV="JHT_EXTRAS_IMAGE"
 podman_ensure_on_path() {{ :; }}
-podman_binary() {{ printf '/bin/true\\n'; }}
+podman_binary() {{ command -v true; }}
 podman_compose_binary() {{ printf '%s\\n' "{compose}"; }}
 podman_compose_pair_supported() {{ :; }}
 runtime_extras_digest() {{ [ -n "{extras}" ] || return 1; printf '%s\\n' "{extras}"; }}

@@ -35,7 +35,7 @@ $ErrorActionPreference = 'Stop'
 $tokens = $null; $errors = $null
 $ast = [System.Management.Automation.Language.Parser]::ParseFile($env:JHT_UNDER_TEST, [ref]$tokens, [ref]$errors)
 if ($errors.Count) { throw "parse: $($errors[0])" }
-foreach ($name in @('Invoke-NativeWithStdin', 'Invoke-Compose', 'Invoke-BrokerAdmin', 'Invoke-TelegramAdmin', 'Get-AgentCloudField')) {
+foreach ($name in @('Invoke-NativeWithStdin', 'Invoke-WithPodmanComposeRuntime', 'Invoke-Compose', 'Invoke-BrokerAdmin', 'Invoke-TelegramAdmin', 'Get-AgentCloudField')) {
   $fn = $ast.Find({ param($n) $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq $name }, $true)
   if (-not $fn) { throw "$name missing" }
   Invoke-Expression $fn.Extent.Text

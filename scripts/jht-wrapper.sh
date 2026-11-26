@@ -5054,7 +5054,7 @@ compose_file_run() {
       (
         cd "$RUNTIME_DIR" || return 1
         CONTAINER_CONNECTION="$PODMAN_MACHINE_NAME" \
-        PODMAN_COMPOSE_WARNING_LOGS=false \
+        JHT_PODMAN_RUNTIME_READY=1 PODMAN_COMPOSE_WARNING_LOGS=false \
           "$compose_bin" --podman-path "$podman_bin" -p "$project" -f "$file" "$@"
       )
       return $?
@@ -5073,7 +5073,7 @@ compose_file_run() {
       (
         cd "$RUNTIME_DIR" || return 1
         unset CONTAINER_CONNECTION
-        PODMAN_COMPOSE_WARNING_LOGS=false \
+        JHT_PODMAN_RUNTIME_READY=1 PODMAN_COMPOSE_WARNING_LOGS=false \
           ${cap[@]+"${cap[@]}"} "$compose_bin" "$no_pod" --podman-path "$podman_bin" -p "$project" -f "$file" -f "$override" "$@"
       ) || status=$?
       if [ "${1:-}" = "up" ] && [ "$status" -ne 0 ]; then
@@ -6628,6 +6628,11 @@ podman_expected_config_hash() {
   podman_bin="$(podman_binary)" || return 1
   compose_bin="$(podman_compose_binary)" || return 1
   podman_compose_pair_supported "$podman_bin" "$compose_bin" || return 1
+  if [ "$PODMAN_RUNTIME_MODE" = "machine" ]; then
+    "$podman_bin" --connection "$PODMAN_MACHINE_NAME" info >/dev/null 2>&1 || return 1
+  else
+    podman_native_rootless || return 1
+  fi
   # La stessa immagine di `up`: prima di ogni compose che avvia, require_trusted_runtime
   # esporta JHT_IMAGE dal pin del canale di test. L'attestazione gira anche in un processo
   # che non e' passato di li' (status, ensure_up, snapshot): senza il pin
@@ -6649,7 +6654,7 @@ podman_expected_config_hash() {
       [ -z "$pinned_image" ] || export JHT_IMAGE="$pinned_image"
       [ -z "$extras_image" ] || export JHT_EXTRAS_IMAGE="$extras_image"
       CONTAINER_CONNECTION="$PODMAN_MACHINE_NAME" \
-      COMPOSE_PROFILES="$COMPOSE_ALL_PROFILES" PODMAN_COMPOSE_WARNING_LOGS=false \
+      JHT_PODMAN_RUNTIME_READY=1 COMPOSE_PROFILES="$COMPOSE_ALL_PROFILES" PODMAN_COMPOSE_WARNING_LOGS=false \
         "$compose_bin" --verbose --dry-run --project-name jht \
           --podman-path "$podman_bin" -f "$file" up -d --force-recreate "$service"
     } 2>&1)" || return 1
@@ -6663,7 +6668,7 @@ podman_expected_config_hash() {
       [ "$env_mode" != clean ] || unset $PODMAN_CALLER_ENV
       [ -z "$pinned_image" ] || export JHT_IMAGE="$pinned_image"
       [ -z "$extras_image" ] || export JHT_EXTRAS_IMAGE="$extras_image"
-      COMPOSE_PROFILES="$COMPOSE_ALL_PROFILES" PODMAN_COMPOSE_WARNING_LOGS=false \
+      JHT_PODMAN_RUNTIME_READY=1 COMPOSE_PROFILES="$COMPOSE_ALL_PROFILES" PODMAN_COMPOSE_WARNING_LOGS=false \
         "$compose_bin" "$no_pod" --verbose --dry-run --project-name jht \
           --podman-path "$podman_bin" -f "$file" -f "$override" up -d --force-recreate "$service"
     } 2>&1)" || return 1
@@ -6792,6 +6797,7 @@ service=$service
 uid=$HOST_UID
 runtime=$CONTAINER_RUNTIME $PODMAN_RUNTIME_MODE $PODMAN_MACHINE_NAME
 project=$project
+podman-runtime-ready=1
 podman=$podman_identity
 podman-compose=$compose_identity
 home=$HOME
