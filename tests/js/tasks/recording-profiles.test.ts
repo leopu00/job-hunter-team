@@ -58,6 +58,9 @@ describe("profili riprese — dataset reale e ripetibile", () => {
       ...process.env,
       XDG_CONFIG_HOME: join(privateRoot, "config"),
       XDG_DATA_HOME: join(privateRoot, "data"),
+      // Always validate this checkout, even if a runtime is installed locally.
+      JHT_RECORDING_BASE_COMPOSE: join(repo, "docker-compose.yml"),
+      JHT_PODMAN_RUNTIME_READY: "",
     };
     const command = join(repo, "web", "node_modules", ".bin", "tsx");
     const script = join(repo, "web", "scripts", "recording-profile.ts");

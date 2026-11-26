@@ -83,7 +83,9 @@ def compose_flags() -> list[str]:
     resolved = subprocess.run(
         ["docker", "compose", "-f", str(COMPOSE), "config", "--format", "json"],
         capture_output=True, text=True, check=True, timeout=60,
-        env={**os.environ, "HOME": os.environ.get("HOME") or tempfile.gettempdir()},
+        # Render only; the probe starts its isolated container separately.
+        env={**os.environ, "HOME": os.environ.get("HOME") or tempfile.gettempdir(),
+             "JHT_PODMAN_RUNTIME_READY": "1"},
     )
     service = json.loads(resolved.stdout)["services"]["jht"]
     flags: list[str] = []

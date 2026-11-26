@@ -85,7 +85,8 @@ def test_the_build_fails_if_sudo_comes_back():
 
 
 def _resolved_service(*files: str) -> dict:
-    env = {**os.environ, "HOME": "/tmp/jht-compose-home"}
+    # Resolve flags only; the legacy-upgrade guard is tested without this marker elsewhere.
+    env = {**os.environ, "HOME": "/tmp/jht-compose-home", "JHT_PODMAN_RUNTIME_READY": "1"}
     if "DOCKER_CONFIG" not in os.environ and os.environ.get("HOME"):
         env["DOCKER_CONFIG"] = str(Path(os.environ["HOME"]) / ".docker")
     args = ["docker", "compose"]

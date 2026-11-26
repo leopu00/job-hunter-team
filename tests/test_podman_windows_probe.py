@@ -87,6 +87,49 @@ def test_probe_is_valid_powershell():
     assert result.returncode == 0, result.stderr
 
 
+@pytest.mark.skipif(shutil.which("pwsh") is None, reason="PowerShell is unavailable")
+@pytest.mark.parametrize("previous", [None, "caller-value"])
+@pytest.mark.parametrize("fails", [False, True])
+def test_probe_compose_scopes_marker_and_requires_verified_backend(previous, fails):
+    source = PROBE.read_text(encoding="utf-8")
+    start = source.index("function Invoke-ProbeCompose {")
+    function = source[start:source.index("\nfunction Remove-ProbeResources", start)]
+    command = function + """
+$ErrorActionPreference = 'Stop'
+$ComposeFile = '/fixture/base.yml'
+$PodmanComposeFile = '/fixture/podman.yml'
+$script:calls = 0
+function Invoke-NativeChecked {
+  $script:calls++
+  if ($env:JHT_PODMAN_RUNTIME_READY -cne '1') { throw 'missing marker' }
+  if ($env:PROBE_FAIL -eq '1') { throw 'provider failed' }
+}
+$previous = $env:JHT_PODMAN_RUNTIME_READY
+$script:ProbeRuntimeReady = $false
+try { Invoke-ProbeCompose config; throw 'unverified call accepted' }
+catch { if ($_.Exception.Message -ne 'Probe Podman runtime has not been verified.') { throw } }
+if ($script:calls -ne 0) { throw 'provider called before verification' }
+$script:ProbeRuntimeReady = $true
+foreach ($operation in @('config', 'up', 'restart', 'down')) {
+  $failed = $false
+  try { Invoke-ProbeCompose $operation }
+  catch { $failed = $true; if ($env:PROBE_FAIL -ne '1' -or $_.Exception.Message -ne 'provider failed') { throw } }
+  if ($failed -ne ($env:PROBE_FAIL -eq '1')) { throw 'wrong provider result' }
+  if ($env:JHT_PODMAN_RUNTIME_READY -cne $previous) { throw 'caller environment changed' }
+}
+if ($script:calls -ne 4) { throw 'missing provider call' }
+exit 0
+"""
+    env = {**os.environ, "PROBE_FAIL": "1" if fails else "0"}
+    env.pop("JHT_PODMAN_RUNTIME_READY", None)
+    if previous is not None:
+        env["JHT_PODMAN_RUNTIME_READY"] = previous
+    result = subprocess.run([shutil.which("pwsh"), "-NoProfile", "-Command", command],
+                            env=env, capture_output=True, text=True, timeout=30)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert source.index("Invoke-NativeChecked 'docker' 'info'") < source.index("$script:ProbeRuntimeReady = $true")
+
+
 def test_persistent_network_config_uses_native_connector_and_localhost_proxy():
     source = NETWORK.read_text(encoding="utf-8") + (NETWORK.parent / "podman-machine-bridge.ps1").read_text(encoding="utf-8")
     proxy = PROXY.read_text(encoding="utf-8")

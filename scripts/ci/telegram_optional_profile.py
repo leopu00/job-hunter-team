@@ -29,6 +29,8 @@ def creation_plan(provider: str, compose: Path, directory: Path, words: list[str
     )
     engine.chmod(0o700)
     env = {"PATH": os.defpath, "HOME": str(directory), "LANG": "C.UTF-8",
+           # Dry-run against the inert engine above, never a running team.
+           "JHT_PODMAN_RUNTIME_READY": "1",
            "PODMAN_COMPOSE_WARNING_LOGS": "false", "JHT_IMAGE": "example.invalid/jht:fixture"}
     result = subprocess.run(
         [provider, "--podman-path", str(engine), "--project-name", "jht", "-f", str(compose),

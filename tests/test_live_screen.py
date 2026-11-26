@@ -369,7 +369,8 @@ def _compose_command():
     for command in candidates:
         if not shutil.which(command[0]):
             continue
-        probe = subprocess.run([*command, "-f", str(COMPOSE), "config", "--quiet"], capture_output=True, check=False)
+        probe = subprocess.run([*command, "-f", str(COMPOSE), "config", "--quiet"], capture_output=True, check=False,
+                               env={**os.environ, "JHT_PODMAN_RUNTIME_READY": "1"})
         if probe.returncode == 0:
             return command
     return None
@@ -381,7 +382,7 @@ def test_podman_override_merges_to_the_base_loopback_port_only(tmp_path):
     result = subprocess.run(
         [*_compose_command(), "-f", str(COMPOSE), "-f", str(PODMAN_COMPOSE), "--profile", "screen", "config", "--format", "json"],
         capture_output=True, text=True, check=False,
-        env={**os.environ, "HOME": str(tmp_path)},
+        env={**os.environ, "HOME": str(tmp_path), "JHT_PODMAN_RUNTIME_READY": "1"},
     )
     assert result.returncode == 0, result.stderr
 

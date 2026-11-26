@@ -19,6 +19,7 @@ param(
 $ErrorActionPreference = 'Stop'
 $script:ProbeRoot = $null
 $script:ProbeStartedContainer = $false
+$script:ProbeRuntimeReady = $false
 $script:OriginalPath = $env:PATH
 $script:OriginalHome = $env:HOME
 $script:OriginalJhtUserDir = $env:JHT_USER_DIR_HOST
@@ -216,16 +217,23 @@ function Assert-FileContains {
 
 function Invoke-ProbeCompose {
   param([Parameter(ValueFromRemainingArguments)][string[]]$Arguments)
-  Invoke-NativeChecked 'docker' 'compose' '-f' $ComposeFile '-f' $PodmanComposeFile `
-    '--project-directory' (Split-Path -Parent $ComposeFile) @Arguments
+  if (-not $script:ProbeRuntimeReady) { throw 'Probe Podman runtime has not been verified.' }
+  $previousReady = $env:JHT_PODMAN_RUNTIME_READY
+  try {
+    $env:JHT_PODMAN_RUNTIME_READY = '1'
+    Invoke-NativeChecked 'docker' 'compose' '-f' $ComposeFile '-f' $PodmanComposeFile `
+      '--project-directory' (Split-Path -Parent $ComposeFile) @Arguments
+  } finally {
+    if ($null -eq $previousReady) { Remove-Item Env:JHT_PODMAN_RUNTIME_READY -ErrorAction SilentlyContinue }
+    else { $env:JHT_PODMAN_RUNTIME_READY = $previousReady }
+  }
 }
 
 function Remove-ProbeResources {
   if ($script:ProbeStartedContainer -and (Get-Command docker -ErrorAction SilentlyContinue)) {
     Write-ProbeStep 'Removing probe container and named volumes'
     # best effort, and under 'Stop' Windows PowerShell 5.1 would stop on a line of its stderr (T82)
-    & { $ErrorActionPreference = 'Continue'; & docker compose -f $ComposeFile -f $PodmanComposeFile `
-      --project-directory (Split-Path -Parent $ComposeFile) down --volumes *> $null }
+    try { Invoke-ProbeCompose down --volumes *> $null } catch { }
   }
   if (-not $Keep -and $script:ProbeRoot -and (Test-Path -LiteralPath $script:ProbeRoot)) {
     Remove-Item -LiteralPath $script:ProbeRoot -Recurse -Force
@@ -289,6 +297,7 @@ try {
   Write-ProbeStep "docker resolves to temporary shim; backend is $podmanPath"
   Invoke-NativeChecked 'docker' '--version'
   Invoke-NativeChecked 'docker' 'info'
+  $script:ProbeRuntimeReady = $true
   Invoke-NativeChecked 'docker' 'compose' 'version'
   Invoke-ProbeCompose 'config' '--quiet'
 

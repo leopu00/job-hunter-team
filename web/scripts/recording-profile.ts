@@ -770,7 +770,12 @@ function verifyResolvedCompose(root: string): void {
         "--format",
         "json",
       ],
-      { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] },
+      {
+        encoding: "utf8",
+        stdio: ["ignore", "pipe", "pipe"],
+        // Render only: this command never starts a runtime or upgrades a team.
+        env: { ...process.env, JHT_PODMAN_RUNTIME_READY: "1" },
+      },
     );
   } catch {
     throw new Error("docker compose config non disponibile o non valido");

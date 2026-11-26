@@ -58,6 +58,29 @@ def test_compose_requires_the_migration_marker(tmp_path, provider, ready):
         assert "migrate the Docker installation" in done.stderr
 
 
+def test_ci_privilege_render_supplies_marker_without_changing_caller(monkeypatch):
+    from scripts.ci.agent_shell_privileges import compose_flags
+
+    if not shutil.which("docker"):
+        pytest.skip("Docker CLI is not installed")
+    monkeypatch.setenv(READY, "")
+    flags = compose_flags()
+    assert "no-new-privileges:true" in flags
+    assert flags[flags.index("--cap-drop") + 1] == "ALL"
+    assert os.environ[READY] == ""
+
+
+def test_telegram_dry_run_supplies_marker_without_changing_caller(tmp_path, monkeypatch):
+    from scripts.ci.telegram_optional_profile import creation_plan
+
+    provider = shutil.which("podman-compose")
+    if not provider:
+        pytest.skip("podman-compose is not installed")
+    monkeypatch.setenv(READY, "")
+    assert creation_plan(provider, ROOT / "docker-compose.yml", tmp_path, ["up", "-d"]) == {"jht"}
+    assert os.environ[READY] == ""
+
+
 # Kept as released, including the generic legacy result when config fails.
 POSIX_PREFLIGHT = r'''
   release_base="$(attested_raw_base)" || {
