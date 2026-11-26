@@ -117,7 +117,7 @@ def legacy_preflight_leaves_the_existing_runtime_and_team_untouched(tmp_path, sh
     runtime = tmp_path / "runtime"
     runtime.mkdir()
     for name in ("docker-compose.yml", "wrapper", ".runtime-integrity", "team-running", "user-data"):
-        (runtime / name).write_text("existing " + name)
+        (runtime / name).write_text("existing " + name, encoding="utf-8")
     before = {p.name: p.read_bytes() for p in runtime.iterdir()}
     stage = tmp_path / "stage"
     stage.mkdir()
@@ -177,13 +177,13 @@ function Test-LegacyPreflight {
 exit (Test-LegacyPreflight)
 '''
         path = tmp_path / "preflight.ps1"
-        path.write_text(harness)
+        path.write_text(harness, encoding="utf-8")
         command = [*powershell_argv(), "-File", str(path)]
     done = subprocess.run(command, env=env, capture_output=True, text=True, timeout=60)
     assert done.returncode == 1, done.stdout + done.stderr
     assert "result=preflight" in done.stdout
     assert "runtime_change_requires_migration" in done.stderr
-    assert (stage / "calls").read_text().strip() == "config -q"
+    assert (stage / "calls").read_text(encoding="utf-8").strip() == "config -q"
     assert {p.name: p.read_bytes() for p in runtime.iterdir()} == before
 
 
@@ -195,14 +195,14 @@ def test_039_posix_preflight_leaves_the_existing_runtime_and_team_untouched(tmp_
 @pytest.mark.parametrize("operation", ["compose_file_run", "podman_expected_config_hash"])
 @pytest.mark.parametrize("engine_ready", [True, False])
 def test_posix_every_podman_compose_path_supplies_its_own_marker(tmp_path, mode, operation, engine_ready):
-    source = (ROOT / "scripts/jht-wrapper.sh").read_text()
+    source = (ROOT / "scripts/jht-wrapper.sh").read_text(encoding="utf-8")
     function = re.search(rf"^{operation}\(\) \{{.*?^\}}", source, re.M | re.S).group()
     provider = tmp_path / "provider"
     provider.write_text('#!/bin/sh\necho "$JHT_PODMAN_RUNTIME_READY" >> "$MARKER_LOG"\n'
-                        'echo "podman create --name=jht --label io.podman.compose.config-hash=' + 'a' * 64 + ' jht"\n')
+                        'echo "podman create --name=jht --label io.podman.compose.config-hash=' + 'a' * 64 + ' jht"\n', encoding="utf-8")
     provider.chmod(0o700)
     podman = tmp_path / "podman"
-    podman.write_text('#!/bin/sh\nexit "$ENGINE_CODE"\n')
+    podman.write_text('#!/bin/sh\nexit "$ENGINE_CODE"\n', encoding="utf-8")
     podman.chmod(0o700)
     harness = r'''
 set -u
@@ -227,7 +227,7 @@ jht_say() { echo "$*"; }
                           capture_output=True, text=True, timeout=30)
     if engine_ready:
         assert done.returncode == 0, done.stdout + done.stderr
-        assert log.read_text().strip() == "1"
+        assert log.read_text(encoding="utf-8").strip() == "1"
     else:
         assert done.returncode != 0
         assert not log.exists()

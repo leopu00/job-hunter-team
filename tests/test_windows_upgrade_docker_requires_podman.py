@@ -22,7 +22,7 @@ def test_039_windows_preflight_leaves_the_existing_runtime_and_team_untouched(tm
 @pytest.mark.parametrize("previous", [None, "caller-value"])
 @pytest.mark.parametrize("command_fails", [False, True])
 def test_windows_marker_is_scoped_to_a_verified_podman_call(tmp_path, previous, command_fails):
-    source = (ROOT / "scripts/jht-wrapper.ps1").read_text()
+    source = (ROOT / "scripts/jht-wrapper.ps1").read_text(encoding="utf-8")
     function = re.search(r"^function Invoke-WithPodmanComposeRuntime \{.*?^\}", source, re.M | re.S).group()
     harness = r'''
 $ErrorActionPreference = 'Stop'
@@ -55,7 +55,7 @@ foreach ($runtime in @('docker', 'podman')) {
 }
 '''
     path = tmp_path / "marker.ps1"
-    path.write_text(harness)
+    path.write_text(harness, encoding="utf-8")
     env = {**os.environ, "COMMAND_FAILS": "1" if command_fails else "0"}
     env.pop("PRIOR_READY", None)
     if previous is not None:
@@ -67,7 +67,7 @@ foreach ($runtime in @('docker', 'podman')) {
 @pytest.mark.parametrize("operation", ["Invoke-Compose", "Invoke-UpgradeCompose", "Get-ComposeImage"])
 def test_windows_compose_paths_validate_the_new_project(tmp_path, operation):
     compose_command = docker_compose()
-    source = (ROOT / "scripts/jht-wrapper.ps1").read_text()
+    source = (ROOT / "scripts/jht-wrapper.ps1").read_text(encoding="utf-8")
     functions = "\n".join(re.search(rf"^function {name} \{{.*?^\}}", source, re.M | re.S).group()
                           for name in ("Invoke-WithPodmanComposeRuntime", operation))
     harness = r'''
@@ -93,7 +93,7 @@ switch ($env:OPERATION) {
 if ($env:JHT_PODMAN_RUNTIME_READY -cne 'caller-value') { throw 'caller environment changed' }
 '''
     path = tmp_path / "compose-path.ps1"
-    path.write_text(harness)
+    path.write_text(harness, encoding="utf-8")
     env = {**environment(tmp_path), "SOURCE": str(ROOT), "BOX": str(tmp_path), "OPERATION": operation,
            "COMPOSE_EXE": compose_command[0], "COMPOSE_PLUGIN": "1" if len(compose_command) > 1 else "0"}
     done = subprocess.run([*powershell_argv(), "-File", str(path)], env=env, capture_output=True, text=True, timeout=60)
