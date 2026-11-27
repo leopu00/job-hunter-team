@@ -437,14 +437,14 @@ function Get-InstallerTextTable {
     'en:installer.windows.host_env_written' { return 'host.env written:' }
     'en:installer.windows.image' { return 'image:  ' }
     'en:installer.windows.image_free_disk' { return 'And its image, to free the disk:' }
-    'en:installer.windows.install_may_not_know' { return 'install and may not know them yet ("not recognized as the name of a cmdlet").' }
+    'en:installer.windows.install_may_not_know' { return 'install and may not know it yet ("not recognized as the name of a cmdlet").' }
     'en:installer.windows.installation_complete' { return '|  Installation complete!                  |' }
-    'en:installer.windows.jht_podman_are_your' { return 'jht and podman are on your PATH from now on, but THIS PowerShell window was open before the' }
+    'en:installer.windows.jht_podman_are_your' { return 'jht is on your PATH from now on, but THIS PowerShell window was open before the' }
     'en:installer.windows.launching_setup_wizard' { return 'Launching the setup wizard...' }
     'en:installer.windows.mode_podman_machine_wsl' { return 'mode:    Podman machine (WSL)' }
     'en:installer.windows.next_steps' { return 'Next steps:' }
     'en:installer.windows.only_windows' { return 'install.ps1 only supports Windows. On Linux/macOS use install.sh.' }
-    'en:installer.windows.open_new_powershell_window' { return 'Open a NEW PowerShell window to use jht and podman. No restart of the computer is needed.' }
+    'en:installer.windows.open_new_powershell_window' { return 'Open a NEW PowerShell window to use jht. No restart of the computer is needed. Podman is there for jht and works through it: on its own, `podman` does not reach the JHT machine.' }
     'en:installer.windows.override_lacks_keep_id' { return 'Downloaded Podman override lacks keep-id.' }
     'en:installer.windows.pairing_token_present_skipping' { return 'Pairing token present: skipping the interactive wizard. The container will complete the pairing on first boot.' }
     'en:installer.windows.pairing_token_saved' { return 'Pairing token saved:' }
@@ -507,14 +507,14 @@ function Get-InstallerTextTable {
     'it:installer.windows.host_env_written' { return 'host.env scritto:' }
     'it:installer.windows.image' { return 'immagine:' }
     'it:installer.windows.image_free_disk' { return 'E la sua immagine, per liberare il disco:' }
-    'it:installer.windows.install_may_not_know' { return 'installazione e potrebbe non conoscerli ancora ("non riconosciuto come nome di cmdlet").' }
+    'it:installer.windows.install_may_not_know' { return 'installazione e potrebbe non conoscerlo ancora ("non riconosciuto come nome di cmdlet").' }
     'it:installer.windows.installation_complete' { return '|  Installazione completata!               |' }
-    'it:installer.windows.jht_podman_are_your' { return 'da adesso jht e podman sono nel PATH, ma QUESTA finestra di PowerShell era aperta prima dell''' }
+    'it:installer.windows.jht_podman_are_your' { return ('da adesso jht ' + [char]0x00E8 + ' nel PATH, ma QUESTA finestra di PowerShell era aperta prima dell''') }
     'it:installer.windows.launching_setup_wizard' { return 'Avvio la configurazione guidata...' }
     'it:installer.windows.mode_podman_machine_wsl' { return 'modo:     macchina Podman (WSL)' }
     'it:installer.windows.next_steps' { return 'Prossimi passi:' }
     'it:installer.windows.only_windows' { return 'install.ps1 funziona solo su Windows. Su Linux/macOS usa install.sh.' }
-    'it:installer.windows.open_new_powershell_window' { return 'Apri una NUOVA finestra di PowerShell per usare jht e podman. Non serve riavviare il computer.' }
+    'it:installer.windows.open_new_powershell_window' { return ('Apri una NUOVA finestra di PowerShell per usare jht. Non serve riavviare il computer. Podman c''' + [char]0x00E8 + ' per jht e si usa attraverso jht: da solo, `podman` non raggiunge la macchina di JHT.') }
     'it:installer.windows.override_lacks_keep_id' { return 'Il file di Podman scaricato (docker-compose.podman.yml) non ha keep-id.' }
     'it:installer.windows.pairing_token_present_skipping' { return 'Token di abbinamento presente: salto il wizard interattivo. Il container completera'' l''abbinamento al primo avvio.' }
     'it:installer.windows.pairing_token_saved' { return 'Token di abbinamento salvato:' }
@@ -577,14 +577,14 @@ function Get-InstallerTextTable {
     'hu:installer.windows.host_env_written' { return ('A host.env meg' + [char]0x00ED + 'rva:') }
     'hu:installer.windows.image' { return ('k' + [char]0x00E9 + 'p: ') }
     'hu:installer.windows.image_free_disk' { return ('' + [char]0x00C9 + 's a k' + [char]0x00E9 + 'p' + [char]0x00E9 + 't is, hogy helyet szabad' + [char]0x00ED + 'ts fel a lemezen:') }
-    'hu:installer.windows.install_may_not_know' { return ('telep' + [char]0x00ED + 't' + [char]0x00E9 + 's el' + [char]0x0151 + 'tt ny' + [char]0x00ED + 'lt meg, ' + [char]0x00E9 + 's lehet, hogy m' + [char]0x00E9 + 'g nem ismeri ' + [char]0x0151 + 'ket ("not recognized as the name of a cmdlet").') }
+    'hu:installer.windows.install_may_not_know' { return ('telep' + [char]0x00ED + 't' + [char]0x00E9 + 's el' + [char]0x0151 + 'tt ny' + [char]0x00ED + 'lt meg, ' + [char]0x00E9 + 's lehet, hogy m' + [char]0x00E9 + 'g nem ismeri ("not recognized as the name of a cmdlet").') }
     'hu:installer.windows.installation_complete' { return '|  A telepites kesz!                       |' }
-    'hu:installer.windows.jht_podman_are_your' { return ('a jht ' + [char]0x00E9 + 's a podman mostant' + [char]0x00F3 + 'l benne van a PATH-ban, de EZ a PowerShell-ablak m' + [char]0x00E9 + 'g a') }
+    'hu:installer.windows.jht_podman_are_your' { return ('a jht mostant' + [char]0x00F3 + 'l benne van a PATH-ban, de EZ a PowerShell-ablak m' + [char]0x00E9 + 'g a') }
     'hu:installer.windows.launching_setup_wizard' { return ('A be' + [char]0x00E1 + 'll' + [char]0x00ED + 't' + [char]0x00F3 + ' var' + [char]0x00E1 + 'zsl' + [char]0x00F3 + ' ind' + [char]0x00ED + 't' + [char]0x00E1 + 'sa...') }
     'hu:installer.windows.mode_podman_machine_wsl' { return ('m' + [char]0x00F3 + 'd:  Podman-g' + [char]0x00E9 + 'p (WSL)') }
     'hu:installer.windows.next_steps' { return ('K' + [char]0x00F6 + 'vetkez' + [char]0x0151 + ' l' + [char]0x00E9 + 'p' + [char]0x00E9 + 'sek:') }
     'hu:installer.windows.only_windows' { return ('Az install.ps1 csak Windowson m' + [char]0x0171 + 'k' + [char]0x00F6 + 'dik. Linuxon/macOS-en haszn' + [char]0x00E1 + 'ld az install.sh-t.') }
-    'hu:installer.windows.open_new_powershell_window' { return ('Nyiss egy ' + [char]0x00DA + 'J PowerShell-ablakot a jht ' + [char]0x00E9 + 's a podman haszn' + [char]0x00E1 + 'lat' + [char]0x00E1 + 'hoz. A sz' + [char]0x00E1 + 'm' + [char]0x00ED + 't' + [char]0x00F3 + 'g' + [char]0x00E9 + 'pet nem kell ' + [char]0x00FA + 'jraind' + [char]0x00ED + 'tani.') }
+    'hu:installer.windows.open_new_powershell_window' { return ('Nyiss egy ' + [char]0x00DA + 'J PowerShell-ablakot a jht haszn' + [char]0x00E1 + 'lat' + [char]0x00E1 + 'hoz. A sz' + [char]0x00E1 + 'm' + [char]0x00ED + 't' + [char]0x00F3 + 'g' + [char]0x00E9 + 'pet nem kell ' + [char]0x00FA + 'jraind' + [char]0x00ED + 'tani. A Podman a jht-nak van telep' + [char]0x00ED + 'tve, ' + [char]0x00E9 + 's a jht-n kereszt' + [char]0x00FC + 'l m' + [char]0x0171 + 'k' + [char]0x00F6 + 'dik: ' + [char]0x00F6 + 'nmag' + [char]0x00E1 + 'ban a `podman` nem ' + [char]0x00E9 + 'ri el a JHT g' + [char]0x00E9 + 'p' + [char]0x00E9 + 't.') }
     'hu:installer.windows.override_lacks_keep_id' { return ('A let' + [char]0x00F6 + 'lt' + [char]0x00F6 + 'tt Podman-fel' + [char]0x00FC + 'l' + [char]0x00ED + 'r' + [char]0x00F3 + 'f' + [char]0x00E1 + 'jlb' + [char]0x00F3 + 'l hi' + [char]0x00E1 + 'nyzik a keep-id.') }
     'hu:installer.windows.pairing_token_present_skipping' { return ('Van p' + [char]0x00E1 + 'ros' + [char]0x00ED + 't' + [char]0x00E1 + 'si token: kihagyom az interakt' + [char]0x00ED + 'v var' + [char]0x00E1 + 'zsl' + [char]0x00F3 + 't. A kont' + [char]0x00E9 + 'ner az els' + [char]0x0151 + ' ind' + [char]0x00ED + 't' + [char]0x00E1 + 'skor befejezi a p' + [char]0x00E1 + 'ros' + [char]0x00ED + 't' + [char]0x00E1 + 'st.') }
     'hu:installer.windows.pairing_token_saved' { return ('A p' + [char]0x00E1 + 'ros' + [char]0x00ED + 't' + [char]0x00E1 + 'si token elmentve:') }
@@ -647,14 +647,14 @@ function Get-InstallerTextTable {
     'es:installer.windows.host_env_written' { return 'host.env escrito:' }
     'es:installer.windows.image' { return 'imagen: ' }
     'es:installer.windows.image_free_disk' { return 'Y su imagen, para liberar disco:' }
-    'es:installer.windows.install_may_not_know' { return ('instalaci' + [char]0x00F3 + 'n y puede que a' + [char]0x00FA + 'n no los conozca ("no se reconoce como nombre de un cmdlet").') }
+    'es:installer.windows.install_may_not_know' { return ('instalaci' + [char]0x00F3 + 'n y puede que a' + [char]0x00FA + 'n no lo conozca ("no se reconoce como nombre de un cmdlet").') }
     'es:installer.windows.installation_complete' { return '|  Instalacion completada!                 |' }
-    'es:installer.windows.jht_podman_are_your' { return ('desde ahora jht y podman est' + [char]0x00E1 + 'n en tu PATH, pero ESTA ventana de PowerShell ya estaba abierta antes de la') }
+    'es:installer.windows.jht_podman_are_your' { return ('desde ahora jht est' + [char]0x00E1 + ' en tu PATH, pero ESTA ventana de PowerShell ya estaba abierta antes de la') }
     'es:installer.windows.launching_setup_wizard' { return ('Iniciando la configuraci' + [char]0x00F3 + 'n guiada...') }
     'es:installer.windows.mode_podman_machine_wsl' { return ('modo:    m' + [char]0x00E1 + 'quina Podman (WSL)') }
     'es:installer.windows.next_steps' { return ('Pr' + [char]0x00F3 + 'ximos pasos:') }
     'es:installer.windows.only_windows' { return 'install.ps1 solo funciona en Windows. En Linux/macOS usa install.sh.' }
-    'es:installer.windows.open_new_powershell_window' { return 'Abre una NUEVA ventana de PowerShell para usar jht y podman. No hace falta reiniciar el ordenador.' }
+    'es:installer.windows.open_new_powershell_window' { return ('Abre una NUEVA ventana de PowerShell para usar jht. No hace falta reiniciar el ordenador. Podman est' + [char]0x00E1 + ' para jht y funciona a trav' + [char]0x00E9 + 's de jht: por s' + [char]0x00ED + ' solo, `podman` no llega a la m' + [char]0x00E1 + 'quina de JHT.') }
     'es:installer.windows.override_lacks_keep_id' { return 'Al override de Podman descargado le falta keep-id.' }
     'es:installer.windows.pairing_token_present_skipping' { return ('Hay un token de emparejamiento: me salto la configuraci' + [char]0x00F3 + 'n guiada. El contenedor completar' + [char]0x00E1 + ' el emparejamiento en el primer arranque.') }
     'es:installer.windows.pairing_token_saved' { return 'Token de emparejamiento guardado:' }
@@ -717,14 +717,14 @@ function Get-InstallerTextTable {
     'de:installer.windows.host_env_written' { return 'host.env geschrieben:' }
     'de:installer.windows.image' { return 'Image:  ' }
     'de:installer.windows.image_free_disk' { return 'Und sein Image, um Speicherplatz freizugeben:' }
-    'de:installer.windows.install_may_not_know' { return 'Installation offen und kennt sie vielleicht noch nicht ("wird nicht als Name eines Cmdlet erkannt").' }
+    'de:installer.windows.install_may_not_know' { return 'Installation offen und kennt es vielleicht noch nicht ("wird nicht als Name eines Cmdlet erkannt").' }
     'de:installer.windows.installation_complete' { return '|  Installation abgeschlossen!             |' }
-    'de:installer.windows.jht_podman_are_your' { return 'jht und podman sind ab jetzt in deinem PATH, aber DIESES PowerShell-Fenster war schon vor der' }
+    'de:installer.windows.jht_podman_are_your' { return 'jht ist ab jetzt in deinem PATH, aber DIESES PowerShell-Fenster war schon vor der' }
     'de:installer.windows.launching_setup_wizard' { return 'Starte den Einrichtungsassistenten...' }
     'de:installer.windows.mode_podman_machine_wsl' { return 'Modus:   Podman-Maschine (WSL)' }
     'de:installer.windows.next_steps' { return ('N' + [char]0x00E4 + 'chste Schritte:') }
     'de:installer.windows.only_windows' { return ('install.ps1 unterst' + [char]0x00FC + 'tzt nur Windows. Unter Linux/macOS nutze install.sh.') }
-    'de:installer.windows.open_new_powershell_window' { return ('' + [char]0x00D6 + 'ffne ein NEUES PowerShell-Fenster, um jht und podman zu nutzen. Ein Neustart des Computers ist nicht n' + [char]0x00F6 + 'tig.') }
+    'de:installer.windows.open_new_powershell_window' { return ('' + [char]0x00D6 + 'ffne ein NEUES PowerShell-Fenster, um jht zu nutzen. Ein Neustart des Computers ist nicht n' + [char]0x00F6 + 'tig. Podman ist f' + [char]0x00FC + 'r jht da und l' + [char]0x00E4 + 'uft ' + [char]0x00FC + 'ber jht: allein erreicht `podman` die JHT-Maschine nicht.') }
     'de:installer.windows.override_lacks_keep_id' { return 'Dem heruntergeladenen Podman-Override fehlt keep-id.' }
     'de:installer.windows.pairing_token_present_skipping' { return ('Kopplungstoken vorhanden: Der interaktive Assistent wird ' + [char]0x00FC + 'bersprungen. Der Container schlie' + [char]0x00DF + 't die Kopplung beim ersten Start ab.') }
     'de:installer.windows.pairing_token_saved' { return 'Kopplungstoken gespeichert:' }
@@ -787,14 +787,14 @@ function Get-InstallerTextTable {
     'fr:installer.windows.host_env_written' { return ('host.env ' + [char]0x00E9 + 'crit :') }
     'fr:installer.windows.image' { return 'image :   ' }
     'fr:installer.windows.image_free_disk' { return ('Et son image, pour lib' + [char]0x00E9 + 'rer le disque :') }
-    'fr:installer.windows.install_may_not_know' { return ('l''installation et ne les conna' + [char]0x00EE + 't peut-' + [char]0x00EA + 'tre pas encore ("n''est pas reconnu comme nom d''applet de commande").') }
+    'fr:installer.windows.install_may_not_know' { return ('l''installation et ne le conna' + [char]0x00EE + 't peut-' + [char]0x00EA + 'tre pas encore ("n''est pas reconnu comme nom d''applet de commande").') }
     'fr:installer.windows.installation_complete' { return '|  Installation terminee !                 |' }
-    'fr:installer.windows.jht_podman_are_your' { return ('jht et podman sont dans ton PATH d' + [char]0x00E8 + 's maintenant, mais CETTE fen' + [char]0x00EA + 'tre PowerShell ' + [char]0x00E9 + 'tait ouverte avant') }
+    'fr:installer.windows.jht_podman_are_your' { return ('jht est dans ton PATH d' + [char]0x00E8 + 's maintenant, mais CETTE fen' + [char]0x00EA + 'tre PowerShell ' + [char]0x00E9 + 'tait ouverte avant') }
     'fr:installer.windows.launching_setup_wizard' { return 'Lancement de l''assistant de configuration...' }
     'fr:installer.windows.mode_podman_machine_wsl' { return 'mode :    machine Podman (WSL)' }
     'fr:installer.windows.next_steps' { return ('' + [char]0x00C9 + 'tapes suivantes :') }
     'fr:installer.windows.only_windows' { return 'install.ps1 ne prend en charge que Windows. Sur Linux/macOS, utilise install.sh.' }
-    'fr:installer.windows.open_new_powershell_window' { return ('Ouvre une NOUVELLE fen' + [char]0x00EA + 'tre PowerShell pour utiliser jht et podman. Pas besoin de red' + [char]0x00E9 + 'marrer l''ordinateur.') }
+    'fr:installer.windows.open_new_powershell_window' { return ('Ouvre une NOUVELLE fen' + [char]0x00EA + 'tre PowerShell pour utiliser jht. Pas besoin de red' + [char]0x00E9 + 'marrer l''ordinateur. Podman est l' + [char]0x00E0 + ' pour jht et passe par jht : seul, `podman` n''atteint pas la machine de JHT.') }
     'fr:installer.windows.override_lacks_keep_id' { return ('L''override Podman t' + [char]0x00E9 + 'l' + [char]0x00E9 + 'charg' + [char]0x00E9 + ' n''a pas keep-id.') }
     'fr:installer.windows.pairing_token_present_skipping' { return ('Token d''appairage pr' + [char]0x00E9 + 'sent : je saute l''assistant interactif. Le conteneur terminera l''appairage ' + [char]0x00E0 + ' son premier d' + [char]0x00E9 + 'marrage.') }
     'fr:installer.windows.pairing_token_saved' { return ('Token d''appairage enregistr' + [char]0x00E9 + ' :') }
@@ -857,14 +857,14 @@ function Get-InstallerTextTable {
     'pt:installer.windows.host_env_written' { return 'host.env escrito:' }
     'pt:installer.windows.image' { return 'imagem: ' }
     'pt:installer.windows.image_free_disk' { return 'E a sua imagem, para libertar o disco:' }
-    'pt:installer.windows.install_may_not_know' { return ('instala' + [char]0x00E7 + [char]0x00E3 + 'o e pode ainda n' + [char]0x00E3 + 'o os conhecer ("not recognized as the name of a cmdlet").') }
+    'pt:installer.windows.install_may_not_know' { return ('instala' + [char]0x00E7 + [char]0x00E3 + 'o e pode ainda n' + [char]0x00E3 + 'o o conhecer ("not recognized as the name of a cmdlet").') }
     'pt:installer.windows.installation_complete' { return '|  Instalacao concluida!                   |' }
-    'pt:installer.windows.jht_podman_are_your' { return ('A partir de agora o jht e o podman est' + [char]0x00E3 + 'o no teu PATH, mas ESTA janela do PowerShell j' + [char]0x00E1 + ' estava aberta antes da') }
+    'pt:installer.windows.jht_podman_are_your' { return ('A partir de agora o jht est' + [char]0x00E1 + ' no teu PATH, mas ESTA janela do PowerShell j' + [char]0x00E1 + ' estava aberta antes da') }
     'pt:installer.windows.launching_setup_wizard' { return ('A iniciar a configura' + [char]0x00E7 + [char]0x00E3 + 'o guiada...') }
     'pt:installer.windows.mode_podman_machine_wsl' { return ('modo:    m' + [char]0x00E1 + 'quina Podman (WSL)') }
     'pt:installer.windows.next_steps' { return ('Pr' + [char]0x00F3 + 'ximos passos:') }
     'pt:installer.windows.only_windows' { return ('O install.ps1 s' + [char]0x00F3 + ' funciona no Windows. No Linux/macOS usa o install.sh.') }
-    'pt:installer.windows.open_new_powershell_window' { return ('Abre uma NOVA janela do PowerShell para usar o jht e o podman. N' + [char]0x00E3 + 'o ' + [char]0x00E9 + ' preciso reiniciar o computador.') }
+    'pt:installer.windows.open_new_powershell_window' { return ('Abre uma NOVA janela do PowerShell para usar o jht. N' + [char]0x00E3 + 'o ' + [char]0x00E9 + ' preciso reiniciar o computador. O Podman est' + [char]0x00E1 + ' l' + [char]0x00E1 + ' para o jht e funciona atrav' + [char]0x00E9 + 's do jht: sozinho, o `podman` n' + [char]0x00E3 + 'o chega ' + [char]0x00E0 + ' m' + [char]0x00E1 + 'quina do JHT.') }
     'pt:installer.windows.override_lacks_keep_id' { return ('O ficheiro do Podman descarregado (docker-compose.podman.yml) n' + [char]0x00E3 + 'o tem keep-id.') }
     'pt:installer.windows.pairing_token_present_skipping' { return 'Token de emparelhamento presente: vou saltar o assistente interativo. O contentor vai concluir o emparelhamento no primeiro arranque.' }
     'pt:installer.windows.pairing_token_saved' { return 'Token de emparelhamento guardado:' }
@@ -1303,9 +1303,9 @@ function Add-NewRegistryPathToSession {
 # the install added it) is not in that window's PATH, and a new window brings it in. No restart of the computer is needed.
 # No command to paste: a person who is not technical is told only to open a new window.
 function Write-JhtNewWindowNotice {
-  Write-Host "  $(Ts 'installer.windows.jht_podman_are_your' 'jht and podman are on your PATH from now on, but THIS PowerShell window was open before the')" -ForegroundColor Yellow
-  Write-Host "  $(Ts 'installer.windows.install_may_not_know' 'install and may not know them yet ("not recognized as the name of a cmdlet").')" -ForegroundColor Yellow
-  Write-Host "  $(Ts 'installer.windows.open_new_powershell_window' 'Open a NEW PowerShell window to use jht and podman. No restart of the computer is needed.')" -ForegroundColor Yellow
+  Write-Host "  $(Ts 'installer.windows.jht_podman_are_your' 'jht is on your PATH from now on, but THIS PowerShell window was open before the')" -ForegroundColor Yellow
+  Write-Host "  $(Ts 'installer.windows.install_may_not_know' 'install and may not know it yet ("not recognized as the name of a cmdlet").')" -ForegroundColor Yellow
+  Write-Host "  $(Ts 'installer.windows.open_new_powershell_window' 'Open a NEW PowerShell window to use jht. No restart of the computer is needed. Podman is there for jht and works through it: on its own, `podman` does not reach the JHT machine.')" -ForegroundColor Yellow
   Write-Host ""
 }
 

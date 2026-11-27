@@ -55,8 +55,12 @@ def _final(tmp_path, before="", **env):
 def test_the_end_of_the_install_says_to_open_a_new_window_and_that_no_restart_is_needed(tmp_path):
     result, out = _final(tmp_path)
     assert result.returncode == 0, out + result.stderr
-    assert "Open a NEW PowerShell window to use jht and podman." in out
+    assert "Open a NEW PowerShell window to use jht." in out
     assert "No restart of the computer is needed." in out
+    # JHT-T352 F-11: podman typed on its own reaches Podman's default connection, not the JHT machine (jht names it): the end
+    # of the install no longer promises it, and says it works through jht.
+    assert "jht and podman" not in out and "use jht and podman" not in out
+    assert "on its own, `podman` does not reach the JHT machine." in out
     assert "THIS PowerShell window was open before the" in out
     # and no command to paste
     assert PASTE_LINE not in out and "$env:Path" not in out and "GetEnvironmentVariable" not in out
@@ -102,7 +106,7 @@ def test_a_window_that_already_has_jht_and_podman_gets_no_notice(tmp_path):
 def test_a_window_without_podman_still_gets_the_notice(tmp_path):
     result, out = _final(tmp_path, before=_start_window(tmp_path, with_podman=False))
     assert result.returncode == 0, out + result.stderr
-    assert "Open a NEW PowerShell window to use jht and podman." in out and PASTE_LINE not in out
+    assert "Open a NEW PowerShell window to use jht." in out and PASTE_LINE not in out
 
 
 # A word of each language for the PATH and for pasting: none of them comes to a person.
