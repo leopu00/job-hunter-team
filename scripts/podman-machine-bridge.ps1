@@ -289,7 +289,7 @@ function Stop-JhtPodmanProcessTree {
 function Format-JhtPodmanProgress {
   param([long]$Written, [double]$BytesPerSecondInMB)
   $culture = [Globalization.CultureInfo]::InvariantCulture
-  return [string]::Format($culture, '{0} MB, {1:0.0} MB/s', [Math]::Round($Written / 1MB), [Math]::Max(0, $BytesPerSecondInMB))
+  return [string]::Format($culture, '{0} MB, {1:0.0} MB/s', [Math]::Round($Written / 1MB), [Math]::Max([double]0, $BytesPerSecondInMB))
 }
 
 function Invoke-JhtPodmanProcess {
