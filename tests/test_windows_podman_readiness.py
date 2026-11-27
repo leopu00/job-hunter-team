@@ -154,6 +154,9 @@ def assert_native_job_lifecycle(tmp_path):
     assert done.returncode == 0, done.stdout + done.stderr
     cases = [line for line in done.stdout.splitlines() if line.startswith("T205_CASE ")]
     assert len(cases) == 8 and all(line.endswith(" PASS") for line in cases), done.stdout
+    # T356: init runs past the stall bound while it writes, and stops with the real cause when nothing moves.
+    progress = [line for line in done.stdout.splitlines() if line.startswith("T356_CASE ")]
+    assert len(progress) == 2 and all(line.endswith(" PASS") for line in progress), done.stdout
     assert all(any(f"action={action} " in line and "tree_stopped=true" in line for line in cases)
                for action in ("ssh", "start", "init")), done.stdout
     assert any("inherited_pipe_incomplete=true ssh_rejected=true" in line for line in cases)

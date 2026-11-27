@@ -29,6 +29,12 @@ public sealed class JhtPodmanOwnedProcess : IDisposable {
     [DllImport("kernel32.dll", SetLastError=true)] static extern bool AssignProcessToJobObject(IntPtr job,IntPtr process);
     [DllImport("kernel32.dll", SetLastError=true)] static extern bool TerminateJobObject(IntPtr job,uint code);
     [DllImport("kernel32.dll", SetLastError=true)] static extern bool QueryInformationJobObject(IntPtr job,int kind,out Accounting info,int length,IntPtr returned);
+    // JOBOBJECT_BASIC_AND_IO_ACCOUNTING_INFORMATION (class 8): the bytes the whole tree read, wrote and moved otherwise.
+    [StructLayout(LayoutKind.Sequential)] struct IoAccounting {
+        public Accounting basic;
+        public ulong readOps,writeOps,otherOps,readBytes,writeBytes,otherBytes;
+    }
+    [DllImport("kernel32.dll", SetLastError=true, EntryPoint="QueryInformationJobObject")] static extern bool QueryIoAccounting(IntPtr job,int kind,out IoAccounting info,int length,IntPtr returned);
     [DllImport("kernel32.dll", SetLastError=true)] static extern bool CreatePipe(out IntPtr read,out IntPtr write,ref Security attributes,int size);
     [DllImport("kernel32.dll", SetLastError=true)] static extern bool SetHandleInformation(IntPtr handle,uint mask,uint flags);
     [DllImport("kernel32.dll", SetLastError=true, CharSet=CharSet.Unicode)] static extern IntPtr CreateFile(string name,uint access,uint share,ref Security attributes,uint disposition,uint flags,IntPtr template);
@@ -93,6 +99,13 @@ public sealed class JhtPodmanOwnedProcess : IDisposable {
             attributes=IntPtr.Zero; handleList=IntPtr.Zero; attributesReady=false;
         }
     }
+    // { every byte of I/O, the bytes written }, or null when the job cannot be read. Counts the processes that ended too.
+    public long[] IoBytes() {
+        if (job==IntPtr.Zero) return null;
+        IoAccounting info;
+        if (!QueryIoAccounting(job,8,out info,Marshal.SizeOf(typeof(IoAccounting)),IntPtr.Zero)) return null;
+        return new long[] { (long)(info.readBytes+info.writeBytes+info.otherBytes), (long)info.writeBytes };
+    }
     bool Empty() {
         Accounting info; Check(QueryInformationJobObject(job,1,out info,Marshal.SizeOf(typeof(Accounting)),IntPtr.Zero));
         return info.active==0;
@@ -126,6 +139,7 @@ public sealed class JhtPodmanBridgeCapture {
     private readonly StreamReader outputReader;
     private readonly StreamReader errorReader;
     private volatile bool closing;
+    private long received;
     public volatile bool Truncated;
     public volatile bool ReadFailed;
     public Task OutputDone { get; private set; }
@@ -145,6 +159,7 @@ public sealed class JhtPodmanBridgeCapture {
             for (;;) {
                 int count = await reader.ReadAsync(buffer, 0, buffer.Length).ConfigureAwait(false);
                 if (count == 0) return;
+                System.Threading.Interlocked.Add(ref received, count);
                 lock (gate) {
                     if (closing) return;
                     int room = Math.Max(0, 262144 - kept.Length);
@@ -155,6 +170,7 @@ public sealed class JhtPodmanBridgeCapture {
         } catch (IOException) { lock (gate) { if (!closing) ReadFailed = true; } }
           catch (ObjectDisposedException) { lock (gate) { if (!closing) ReadFailed = true; } }
     }
+    public long Received { get { return System.Threading.Interlocked.Read(ref received); } }
     public string Stdout { get { lock (gate) { return output.ToString(); } } }
     public string Stderr { get { lock (gate) { return error.ToString(); } } }
     public JhtPodmanBridgeSnapshot Freeze() {
@@ -268,13 +284,26 @@ function Stop-JhtPodmanProcessTree {
   return $false
 }
 
+# «312 MB, 0.5 MB/s» on the wait line of a long machine command: what its process tree wrote (the system image downloaded and
+# unpacked), and how fast over the last seconds. Numbers and units only, the same in every language.
+function Format-JhtPodmanProgress {
+  param([long]$Written, [double]$BytesPerSecondInMB)
+  $culture = [Globalization.CultureInfo]::InvariantCulture
+  return [string]::Format($culture, '{0} MB, {1:0.0} MB/s', [Math]::Round($Written / 1MB), [Math]::Max(0, $BytesPerSecondInMB))
+}
+
 function Invoke-JhtPodmanProcess {
   param(
     [Parameter(Mandatory)][string]$FilePath,
     [Parameter(Mandatory)][AllowEmptyCollection()][AllowEmptyString()][string[]]$Arguments,
     [Parameter(Mandatory)][ValidatePattern('^podman_machine_[a-z_]+$')][string]$Phase,
-    [ValidateRange(1, 600000)][int]$TimeoutMilliseconds = 300000,
-    [string]$LogPath = '', [switch]$RequireCompleteOutput
+    [ValidateRange(1, 86400000)][int]$TimeoutMilliseconds = 300000,
+    [string]$LogPath = '', [switch]$RequireCompleteOutput,
+    # With a stall bound the command runs until $TimeoutMilliseconds only while it makes progress: it is stopped when neither its
+    # process tree moves a byte of I/O (download, disk) nor it prints anything for $StallMilliseconds. 0 = the deadline alone.
+    [ValidateRange(0, 86400000)][int]$StallMilliseconds = 0,
+    # A JhtLiveWait whose line shows what the tree wrote so far and how fast.
+    $Progress = $null
   )
   $process = New-Object Diagnostics.Process
   $capture = $null
@@ -296,16 +325,44 @@ function Invoke-JhtPodmanProcess {
       $process.Dispose(); $process = $owned.Process; $started = $true
       $capture = [JhtPodmanBridgeCapture]::new($owned.Output, $owned.Error)
     } else { $started = $process.Start(); $capture = [JhtPodmanBridgeCapture]::new($process) }
-    $remaining = [Math]::Max(0, $TimeoutMilliseconds - [int]$watch.ElapsedMilliseconds)
-    if (-not $process.WaitForExit($remaining)) {
+    $exited = $false; $stalled = $false
+    $moved = [long]-1; $movedAt = [long]0; $written = [long]0; $rateAt = [long]0; $rateFrom = [long]0
+    do {
+      $remaining = [Math]::Max(0, $TimeoutMilliseconds - [int]$watch.ElapsedMilliseconds)
+      if ($StallMilliseconds -gt 0) { $remaining = [Math]::Min($remaining, 1000) }
+      if ($process.WaitForExit($remaining)) { $exited = $true; break }
+      $elapsed = [long]$watch.ElapsedMilliseconds
+      if ($elapsed -ge $TimeoutMilliseconds) { break }
+      if ($StallMilliseconds -le 0) { continue }
+      $io = if ($owned) { $owned.IoBytes() } else { $null }
+      $amount = [long]$capture.Received
+      if ($io) { $amount += $io[0]; $written = $io[1] }
+      if ($amount -ne $moved) { $moved = $amount; $movedAt = $elapsed }
+      elseif (($elapsed - $movedAt) -ge $StallMilliseconds) { $stalled = $true; break }
+      if ($Progress -and $io) {
+        if ($rateAt -eq 0 -or ($elapsed - $rateAt) -ge 10000) {
+          $speed = if ($rateAt -gt 0) { ($written - $rateFrom) / 1MB / (($elapsed - $rateAt) / 1000.0) } else { 0 }
+          if ($rateAt -gt 0) { $Progress.Detail = Format-JhtPodmanProgress -Written $written -BytesPerSecondInMB $speed }
+          $rateAt = $elapsed; $rateFrom = $written
+        }
+      }
+    } while ($true)
+    if (-not $exited) {
       $clean = Stop-JhtPodmanProcessTree -Process $process -Owner $owned
       $code = if ($clean) { 'podman_machine_timeout' } else { 'podman_machine_cleanup_failed' }
-      Write-JhtPodmanBridgeEvent -Phase $Phase -Code $code -ElapsedMilliseconds $watch.ElapsedMilliseconds -LogPath $LogPath
+      $logged = if ($stalled -and $clean) { 'podman_machine_stalled' } else { $code }
+      Write-JhtPodmanBridgeEvent -Phase $Phase -Code $logged -ElapsedMilliseconds $watch.ElapsedMilliseconds -LogPath $LogPath
       $global:LASTEXITCODE = 124
-      $detail = if ($clean) { 'The installer stopped this command. Check WSL before trying again.' } else { 'The process tree could not be stopped cleanly. Restart Windows before trying again.' }
-      $failure = [TimeoutException]::new("${code}: Podman did not respond in time. Phase: $Phase. $detail")
+      $writtenMB = [Math]::Round($written / 1MB)
+      $detail = if (-not $clean) { 'The process tree could not be stopped cleanly. Restart Windows before trying again.' }
+        elseif ($stalled) { "It made no progress for $([Math]::Round($StallMilliseconds / 60000.0, 1)) minutes: nothing was downloaded or written ($writtenMB MB written before it stopped). The download of the system image most likely stalled: check the internet connection, then run the same command again. A system image Podman already downloaded in full is taken from its cache; if the connection is fine, check that WSL responds (wsl --status)." }
+        elseif ($StallMilliseconds -gt 0) { "It was still working ($writtenMB MB written) when the limit of $([Math]::Round($TimeoutMilliseconds / 60000.0)) minutes ran out. Run the same command again: a system image Podman already downloaded in full is taken from its cache." }
+        else { 'The installer stopped this command. Check WSL before trying again.' }
+      $said = if ($stalled -and $clean) { 'Podman stopped making progress.' } else { 'Podman did not respond in time.' }
+      $failure = [TimeoutException]::new("${code}: $said Phase: $Phase. $detail")
       $failure.Data['Code'] = $code
       $failure.Data['Phase'] = $Phase
+      if ($stalled) { $failure.Data['Reason'] = 'no_progress' }
       throw $failure
     }
     # A successfully started machine can leave a helper holding its pipes. Never wait indefinitely for EOF.
@@ -638,8 +695,13 @@ function Invoke-JhtPodmanMachine {
   $human = Test-JhtHumanOutput
   if ($human) { Write-Host "  > $($announcement.Said)" -ForegroundColor Cyan }
   $wait = if ($human) { Start-JhtLiveWait -Label $announcement.Doing } else { $null }
+  # init downloads the system image of the machine (hundreds of MB): on a slow line that takes longer than any fixed bound
+  # (5 minutes stopped it at 162 MB on a 0.5 MB/s line). It runs as long as it makes progress and stops only when nothing
+  # moves for 10 minutes, under a 3-hour ceiling; start and stop keep the fixed bound.
+  $bounds = @{}
+  if ($Arguments[1] -eq 'init') { $bounds = @{ TimeoutMilliseconds = 10800000; StallMilliseconds = 600000; Progress = $wait } }
   try {
-    $result = Invoke-JhtPodmanProcess -FilePath $FilePath -Arguments $Arguments -Phase ('podman_machine_' + $Arguments[1])
+    $result = Invoke-JhtPodmanProcess -FilePath $FilePath -Arguments $Arguments -Phase ('podman_machine_' + $Arguments[1]) @bounds
   } finally {
     if ($wait) { $wait.Dispose() }
   }
