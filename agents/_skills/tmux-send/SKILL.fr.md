@@ -78,7 +78,7 @@ Types standards (voir `agents/_manual/communication-rules.md` pour la taxonomie 
 - `ACK` — accuse de reception d'un `URG` ou `REQ` que vous ne pouvez pas encore traiter
 - ~~`INFO` / `REPORT`~~ — **retirés pour le trafic entre pairs** (2026-07-27) : ils représentaient 8 des 30 messages de pur statut qui réveillaient le Capitano en ~1,5h. L'avancement se tire de `db_query.py recent-activity`, il ne se raconte pas
 
-> 💬 `[CHAT]` est reserve aux messages **utilisateur → agent** depuis la web UI (voir le protocole dans le prompt du Capitaine). Ne l'utilisez pas pour le trafic inter-agent.
+> 💬 `[CLI]` / `[CHAT]` est reserve aux messages **utilisateur → agent** depuis la web UI (voir le protocole dans le prompt du Capitaine). Ne l'utilisez pas pour le trafic inter-agent.
 
 ## Codes de sortie
 

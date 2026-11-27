@@ -1,6 +1,6 @@
 ---
 name: chat-web
-description: Reply to the user when they message you from the JHT web chat. The user reaches you with the prefix `[@utente -> @capitano] [CHAT] <body>`; reply ONLY with `jht-send` — never write to `chat.jsonl` by hand (shell quoting breaks the JSON line and the frontend silently drops the message, the user sees nothing while you think you have answered). Use this skill on every `[CHAT]` message; do NOT use it for inter-agent traffic (that's `tmux-send`).
+description: Reply to the user when they message you from the JHT web chat. The user reaches you with the prefix `[@utente -> @capitano] [CHAT] <body>` (`[CLI]` from the terminal); reply ONLY with `jht-send` — never write to `chat.jsonl` by hand (shell quoting breaks the JSON line and the frontend silently drops the message, the user sees nothing while you think you have answered). Use this skill on every `[CLI]` / `[CHAT]` message; do NOT use it for inter-agent traffic (that's `tmux-send`).
 allowed-tools: Bash(jht-send *)
 ---
 
@@ -21,6 +21,14 @@ You don't write the JSON. The wrapper `jht-send` does it for you, with timestamp
 - Reply to **the body**, not to the envelope. The user did not type the prefix; the frontend added it.
 
 > ⚠️ Common failure mode the first time you see this: you read the prefix and think "let me reply via `jht-tmux-send` to the user". `jht-tmux-send UTENTE ...` returns `exit 2` (no such session). Do not start debugging — just remember that `[CHAT]` ⇒ `jht-send`. Always.
+
+## Where the user writes from: `[CLI]`, `[CHAT]`, `[TG]`
+
+The marker after the envelope says where the person is. It is the same person and the same conversation; the marker decides only what you can show them.
+
+- `[CLI]` — the **terminal**, with `jht team chat <agent>`. You answer with `jht-send` as for `[CHAT]`, and they read it in the terminal. There are no buttons, no cards to tap, no paperclip 📎, no dragging, nothing «on the left», no app and no dashboard: give the `jht` command to type (for example `jht positions`, `jht team status`); a card you published opens with `/cards` in the same chat and is answered with its number. Slash commands of your CLI, files to edit and tools to authorise stay forbidden, as below.
+- `[CHAT]` — the **app** (desktop or web), only where there is one: there the person sees the buttons and the cards.
+- `[TG]` — **Telegram**: answer with `jht-telegram-send` (skill `telegram-send`).
 
 ## ⚠️ The user is NON-TECHNICAL — no terminal, no CLI, no slash commands
 

@@ -100,7 +100,7 @@ Ha a felhasználó olyat kérdez, amire a nyilvántartás nem tud válaszolni (p
 
 ## Amikor kevés mondanivalód van, keveset mondj
 
-Ha a `mentor-patterns` futtatása után semmi nem lépi át a küszöböt ÉS nem heti összefoglaló nap ÉS nincs függőben lévő felhasználói [CHAT] — **ne szólalj meg**. A következő menet 24 óra múlva. A csend válasz.
+Ha a `mentor-patterns` futtatása után semmi nem lépi át a küszöböt ÉS nem heti összefoglaló nap ÉS nincs függőben lévő felhasználói [CLI]/[CHAT] — **ne szólalj meg**. A következő menet 24 óra múlva. A csend válasz.
 
 ## Kézbesítés — mindig `jht-send`-en keresztül
 

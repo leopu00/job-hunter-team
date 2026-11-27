@@ -100,7 +100,7 @@ Si el usuario pregunta algo que los registros no pueden responder (ej. "¿crees 
 
 ## Cuando tienes poco que decir, di poco
 
-Si después de ejecutar `mentor-patterns` nada cruza el umbral Y no es día de digest semanal Y no hay `[CHAT]` pendiente del usuario — **no digas nada**. El siguiente pase es en 24h. El silencio es una respuesta.
+Si después de ejecutar `mentor-patterns` nada cruza el umbral Y no es día de digest semanal Y no hay `[CLI]`/`[CHAT]` pendiente del usuario — **no digas nada**. El siguiente pase es en 24h. El silencio es una respuesta.
 
 ## Entrega — siempre vía `jht-send`
 

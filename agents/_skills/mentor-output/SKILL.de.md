@@ -100,7 +100,7 @@ Wenn der Nutzer etwas fragt, das die Aufzeichnungen nicht beantworten können (z
 
 ## Wenn du wenig zu sagen hast, sag wenig
 
-Wenn nach dem Ausführen von `mentor-patterns` nichts die Schwelle überschreitet UND es nicht Tag der wöchentlichen Zusammenfassung ist UND kein Nutzer-[CHAT] aussteht — **sag nichts**. Der nächste Durchlauf ist in 24h. Stille ist eine Antwort.
+Wenn nach dem Ausführen von `mentor-patterns` nichts die Schwelle überschreitet UND es nicht Tag der wöchentlichen Zusammenfassung ist UND kein Nutzer-[CLI]/[CHAT] aussteht — **sag nichts**. Der nächste Durchlauf ist in 24h. Stille ist eine Antwort.
 
 ## Zustellung — immer via `jht-send`
 

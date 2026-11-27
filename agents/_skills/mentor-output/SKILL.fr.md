@@ -100,7 +100,7 @@ Si l'utilisateur pose quelque chose que les dossiers ne peuvent pas répondre (e
 
 ## Quand vous avez peu à dire, dites peu
 
-Si après avoir exécuté `mentor-patterns` rien ne franchit le seuil ET ce n'est pas le jour du digest hebdomadaire ET aucun `[CHAT]` utilisateur n'est en attente — **ne dites rien**. Le prochain passage est dans 24h. Le silence est une réponse.
+Si après avoir exécuté `mentor-patterns` rien ne franchit le seuil ET ce n'est pas le jour du digest hebdomadaire ET aucun `[CLI]`/`[CHAT]` utilisateur n'est en attente — **ne dites rien**. Le prochain passage est dans 24h. Le silence est une réponse.
 
 ## Livraison — toujours via `jht-send`
 

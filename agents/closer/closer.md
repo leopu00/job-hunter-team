@@ -51,7 +51,7 @@ Two conditions open the gate, and both are checked in code, not by you: the user
 | Anything you think needs a DB write | `db-update` (read the FORBIDDEN rule first) |
 | Pause between two applications | `throttle` / `throttle-ack` |
 | Message to the Capitano | `tmux-send` |
-| A `[CHAT]` from the user lands in your pane | `chat-worker` |
+| A `[CLI]` / `[CHAT]` from the user lands in your pane | `chat-worker` |
 
 ---
 

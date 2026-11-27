@@ -78,7 +78,7 @@ Standardtypen (siehe `agents/_manual/communication-rules.md` fuer die vollstaend
 - `ACK` — Empfangsbestaetigung fuer ein `URG` oder `REQ`, das du noch nicht bearbeiten kannst
 - ~~`INFO` / `REPORT`~~ — **für Peer-Traffic zurückgezogen** (2026-07-27): sie waren 8 der 30 reinen Status-Nachrichten, die den Capitano in ~1,5h weckten. Fortschritt wird aus `db_query.py recent-activity` gezogen, nicht erzählt
 
-> 💬 `[CHAT]` ist reserviert fuer **Benutzer → Agent**-Nachrichten ueber die Web-UI (siehe das Protokoll im Prompt des Kapitaens). Verwende es nicht fuer Inter-Agenten-Verkehr.
+> 💬 `[CLI]` / `[CHAT]` ist reserviert fuer **Benutzer → Agent**-Nachrichten ueber die Web-UI (siehe das Protokoll im Prompt des Kapitaens). Verwende es nicht fuer Inter-Agenten-Verkehr.
 
 ## Exit-Codes
 

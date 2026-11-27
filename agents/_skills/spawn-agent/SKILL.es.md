@@ -78,7 +78,7 @@ jht-tmux-send SCOUT-1 "[@capitano -> @scout-1] [MSG] <cuerpo del kick-off>"
 | `scorer`    | "Inicia el bucle principal. Cola: `db_query.py next-for-scorer`. PRE-CHECK primero, luego puntuación 0-100. Umbrales: <40 excluido, 40-49 aparcado, ≥50 notificar Scrittori." |
 | `scrittore` | "Inicia el bucle principal. Cola: `db_query.py next-for-scrittore`. Máximo esfuerzo, 3 rondas obligatorias con el Critico. El PDF va bajo `$JHT_USER_DIR/cv/`." |
 | `critico`   | "Serás llamado por tu Scrittore padre con PDF + JD. Una revisión ciega por llamada, luego para." |
-| `assistente`| "Inicia el bucle principal. Espera `[@utente -> @assistente] [CHAT]` desde la web UI." |
+| `assistente`| "Inicia el bucle principal. Espera `[@utente -> @assistente] [CLI]` / `[CHAT]` desde la web UI." |
 
 Si el contexto posición-currículum no es trivial (el agente tenía trabajo en curso antes de un crash), añádelo al kick-off para que retome donde lo dejó — nunca digas solo "retoma", di *qué* y *dónde*:
 

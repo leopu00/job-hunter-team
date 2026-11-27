@@ -27,7 +27,7 @@ Der Wrapper waehlt Token + chat_id aus `channels.telegram.bots.<role>` in der Ko
 
 **Nicht verwenden** fuer:
 - ❌ Inter-Agent-Nachrichten — verwende stattdessen `tmux-send`.
-- ❌ Antworten auf Web-Chat (`[@utente -> @assistente] [CHAT]`) — verwende `jht-send`.
+- ❌ Antworten auf Web-Chat (`[@utente -> @assistente] [CLI]` / `[CHAT]`) — verwende `jht-send`.
 - ❌ Grosse Anhaenge (>20 MB). Bot-API-Limit; fuer grosse Dateien verwende das Dashboard oder ein Relay (zukuenftig).
 
 ## Verwendung

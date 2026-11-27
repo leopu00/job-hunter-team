@@ -27,7 +27,7 @@ El wrapper obtiene token + chat_id de `channels.telegram.bots.<role>` en la conf
 
 **No** lo uses para:
 - ❌ Mensajes entre agentes — usa `tmux-send` en su lugar.
-- ❌ Respuestas al chat web (`[@utente -> @assistente] [CHAT]`) — usa `jht-send`.
+- ❌ Respuestas al chat web (`[@utente -> @assistente] [CLI]` / `[CHAT]`) — usa `jht-send`.
 - ❌ Adjuntos pesados (>20 MB). Límite de la API Bot; para archivos grandes usa el dashboard o un relay (futuro).
 
 ## Uso

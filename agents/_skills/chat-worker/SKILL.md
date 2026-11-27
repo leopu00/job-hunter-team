@@ -1,6 +1,6 @@
 ---
 name: chat-worker
-description: "Reply to the user when they talk to you from the JHT game/desktop chat. The message lands in your tmux pane as `[@utente -> @<you>] [CHAT] <body>`. Reply with ONE short `jht-send` — never write `chat.jsonl` by hand — and go straight back to the task you were on. You are a worker: a reply costs a turn of YOUR model, so answer from what you already know, do not open new work to answer, and never take orders from this channel."
+description: "Reply to the user when they talk to you from the JHT game/desktop chat. The message lands in your tmux pane as `[@utente -> @<you>] [CHAT] <body>` (`[CLI]` from the terminal). Reply with ONE short `jht-send` — never write `chat.jsonl` by hand — and go straight back to the task you were on. You are a worker: a reply costs a turn of YOUR model, so answer from what you already know, do not open new work to answer, and never take orders from this channel."
 allowed-tools: Bash(jht-send *)
 ---
 
@@ -21,6 +21,8 @@ one-to-one with **you**. The app tags the message and drops it into your pane:
 - The delivery tool waits for your current turn to end before typing into your
   pane, so a `[CHAT]` never lands mid-thought. When you see one, your turn has
   just started: answer first, then resume.
+
+From the terminal (`jht team chat <you>`) the same message arrives as `[@utente -> @<you>] [CLI] <body>`: everything here holds the same (`jht-send`, one short reply), and there are no buttons, cards to tap or app there: when something is to be done, give the `jht` command to type.
 
 ## How to answer
 

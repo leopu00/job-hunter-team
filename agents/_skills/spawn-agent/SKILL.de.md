@@ -78,7 +78,7 @@ jht-tmux-send SCOUT-1 "[@capitano -> @scout-1] [MSG] <Kick-off-Inhalt>"
 | `scorer`    | "Starte die Hauptschleife. Warteschlange: `db_query.py next-for-scorer`. Zuerst PRE-CHECK, dann Bewertung 0-100. Schwellen: <40 ausgeschlossen, 40-49 Parking, ≥50 Scrittori benachrichtigen." |
 | `scrittore` | "Starte die Hauptschleife. Warteschlange: `db_query.py next-for-scrittore`. Maximaler Aufwand, 3 Pflichtrunden mit dem Critico. Das PDF kommt unter `$JHT_USER_DIR/cv/`." |
 | `critico`   | "Du wirst von deinem uebergeordneten Scrittore mit PDF + JD aufgerufen. Eine Blindbewertung pro Aufruf, dann Stopp." |
-| `assistente`| "Starte die Hauptschleife. Warte auf `[@utente -> @assistente] [CHAT]` von der Web-UI." |
+| `assistente`| "Starte die Hauptschleife. Warte auf `[@utente -> @assistente] [CLI]` / `[CHAT]` von der Web-UI." |
 
 Wenn der Positions-Lebenslauf-Kontext nicht trivial ist (der Agent hatte laufende Arbeit vor einem Crash), haenge ihn an den Kick-off an, damit er dort weitermacht, wo er aufgehoert hat — sage nie einfach "weitermachen", sage *was* und *wo*:
 

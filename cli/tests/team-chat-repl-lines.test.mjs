@@ -9,6 +9,9 @@ import { chmodSync, mkdirSync, mkdtempSync, readFileSync, existsSync, writeFileS
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
+// What the agent reads: the person's words behind the terminal's own marker (JHT-T348).
+const cli = (text) => `[@utente -> @assistente] [CLI] ${text}`;
+
 const CHAT = resolve(import.meta.dirname, '../src/commands/team/chat.js');
 
 function fixture({ workSeconds = 0 } = {}) {
@@ -71,12 +74,12 @@ function runChat(script, work, chatOptions = '{}', locale = null) {
 
 test('two lines 47 ms apart and a third 3 s later are all delivered, in order', async () => {
   const r = await runChat([[300, 'one'], [47, 'two'], [3000, 'three'], [12_000, '/exit']]);
-  assert.deepEqual(r.sent, ['one', 'two', 'three'], r.out);
+  assert.deepEqual(r.sent, ['one', 'two', 'three'].map(cli), r.out);
 });
 
 test('lines typed while the agent is at work wait for it and are delivered, with a word to the person', async () => {
   const r = await runChat([[300, 'one'], [47, 'two'], [3000, 'three'], [20_000, '/exit']], { workSeconds: 6 });
-  assert.deepEqual(r.sent, ['one', 'two', 'three'], r.out);
+  assert.deepEqual(r.sent, ['one', 'two', 'three'].map(cli), r.out);
   assert.match(r.out, /still answering/, 'the person is told their line is waiting');
 });
 

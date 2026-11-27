@@ -78,7 +78,7 @@ jht-tmux-send SCOUT-1 "[@capitano -> @scout-1] [MSG] <corps du kick-off>"
 | `scorer`    | "Demarre la boucle principale. File : `db_query.py next-for-scorer`. PRE-CHECK d'abord, puis score 0-100. Seuils : <40 exclu, 40-49 parking, ≥50 notifier les Scrittori." |
 | `scrittore` | "Demarre la boucle principale. File : `db_query.py next-for-scrittore`. Effort maximum, 3 rounds obligatoires avec le Critico. Le PDF va sous `$JHT_USER_DIR/cv/`." |
 | `critico`   | "Tu seras appele par ton Scrittore parent avec PDF + JD. Une relecture a l'aveugle par appel, puis arret." |
-| `assistente`| "Demarre la boucle principale. Attends `[@utente -> @assistente] [CHAT]` depuis la web UI." |
+| `assistente`| "Demarre la boucle principale. Attends `[@utente -> @assistente] [CLI]` / `[CHAT]` depuis la web UI." |
 
 Si le contexte poste-CV n'est pas trivial (l'agent avait du travail en cours avant un crash), ajoute-le au kick-off pour qu'il reprenne la ou il s'etait arrete — ne dis jamais simplement "reprends", precise *quoi* et *ou* :
 
