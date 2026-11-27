@@ -14,6 +14,7 @@ import { registerCronCommand } from './commands/cron.js';
 import { registerExportCommand } from './commands/export.js';
 import { registerImportCommand } from './commands/import.js';
 import { registerHealthCommand } from './commands/health.js';
+import { registerRunCommand } from './commands/run.js';
 import { registerBackupCommand } from './commands/backup.js';
 import { registerMigrateCommand } from './commands/migrate.js';
 import { registerCacheCommand } from './commands/cache.js';
@@ -107,6 +108,7 @@ export function buildProgram() {
   registerImportCommand(program);
   registerHealthCommand(program);
   registerBackupCommand(program);
+  registerRunCommand(program);
   registerMigrateCommand(program);
   registerCacheCommand(program);
   registerToolsCommand(program);
