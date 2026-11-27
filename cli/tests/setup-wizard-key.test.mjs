@@ -362,7 +362,7 @@ test('the budget in the wizard: the trial of $5 for 30 minutes is the answer alr
   const t0 = Date.now();
   const { events, configText } = run(box, { select: { 'AI Provider': 'claude' }, keys: [KEY] });
   const ask = events.find((e) => e.kind === 'select' && e.message === 'How much should the team work?');
-  assert.deepEqual(ask.options, ['trial', 'night', 'days', 'none']);
+  assert.deepEqual(ask.options, ['trial', 'night', 'days', 'custom', 'none']);
   assert.equal(events.some((e) => e.kind === 'select' && e.message === 'When should the team work?'), false, 'the old hours question is not asked');
   const { budget, working_hours: hours } = JSON.parse(configText).team;
   assert.equal(budget.usd, 5);

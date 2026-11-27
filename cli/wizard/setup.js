@@ -32,7 +32,7 @@ import {
 import { formatSecretForConfig } from './secret-ref.js';
 import { promptBudget, askPace, budgetSummary, budgetPaceNote, stampedAt } from './setup-budget.js';
 import { checkPrerequisites, runHealthCheck } from './setup-checks.js';
-import { t, tf } from './i18n.js';
+import { t, tf, currentLang } from './i18n.js';
 import { askLanguage } from './setup-language.js';
 import { runProviderLoginStep, findProviderLogin } from './provider-login.js';
 import { promptHarness, updateIdFor, loginCmdFor, webSearchMissingOnPi } from './setup-harness.js';
@@ -402,20 +402,20 @@ async function runSetupSteps(prompter, state, { diskRefusal = diskLowRefusal } =
   // Asked BEFORE the config is saved, so it lands in jht.config.json at the first write and the brake of pi reads it at
   // the first tick. «No limit» asks the working hours as before.
   const asked = await promptBudget(prompter, {
-    t, tf, provider: providerChoice,
+    t, tf, provider: providerChoice, lang: currentLang(),
     askHours: () => promptWorkingHours(prompter, baseConfig.team?.working_hours),
   });
-  const { kind: budgetKind, workingHours } = asked;
+  const { kind: budgetKind, workingHours, dailyUsd } = asked;
   // the pace (spreading the spending over the period, with pauses) is the person's to ask for: off unless they say yes
   const budget = await askPace(prompter, { t, budget: asked.budget });
   const paceNote = budgetPaceNote(t, { budget });
-  await prompter.note(budgetSummary(t, tf, { budget, workingHours, kind: budgetKind }) + (paceNote ? `\n\n${paceNote}` : ''), t('wizard.budget.title'));
+  await prompter.note(budgetSummary(t, tf, { budget, workingHours, kind: budgetKind, dailyUsd }) + (paceNote ? `\n\n${paceNote}` : ''), t('wizard.budget.title'));
 
   // --- Salva e riepilogo ---
   await assembleAndSaveConfig(prompter, {
     providerChoice, authMethod, apiKey: apiKeySecret, subscriptionConfig, model,
     // a budget confirmed in the setup always opens a new period (new saved_at: the dollars and state/budget-start.json start again)
-    baseProviders: baseConfig.providers || {}, workingHours, budget: stampedAt(budget), harness,
+    baseProviders: baseConfig.providers || {}, workingHours, budget: stampedAt(budget), dailyUsd, harness,
   });
 
   // ────────────────────────────────────────────────────────────────────────
