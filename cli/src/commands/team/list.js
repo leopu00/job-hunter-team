@@ -1,8 +1,9 @@
 import { handleAgents } from '../agents.js';
 import { openAlertLines } from '../../lib/open-alerts.js';
+import { spendNowText } from '../../lib/budget-pause.js';
 // Comandi team list e team status
 import { marks, table, terminalWidth, title, wrapText } from '../../lib/ui.js';
-import { say } from '../../lib/texts.js';
+import { say, show } from '../../lib/texts.js';
 import {
   AGENTS, DEFAULT_TEAM, c,
   getActiveSessions, usingContainer, isAgentSession,
@@ -36,6 +37,9 @@ export function listAction() {
 
 export async function statusAction() {
   handleAgents();
+  // what the team has spent and at what rate, as the brake measured it at its last look: never the first figure told (JHT-T349)
+  const spend = spendNowText();
+  if (spend) console.log(`  ${show(spend)}`);
   // the alerts for the person nobody has read: on the web or Telegram only, the terminal never saw them
   for (const line of await openAlertLines()) console.log(c.yellow(`⚠ ${line}`));
 }

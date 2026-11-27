@@ -41,6 +41,14 @@ Block auf einmal.
 > keine Zahl, die hier zu entscheiden wäre, und keine Konstante: auf einer 5-Minuten-Stufe wollen
 > drei Worker 100s voneinander entfernt sein.
 
+## Mit einem Budget in Dollar (API-Schlüssel, Team-Budget in USD)
+Die Einheit ist **USD pro Minute**, und gemessen werden die echten Ausgaben des Teams, nie selbst geschätzte Kosten pro Worker (Abnahme 26.11.: 0,011 $/min geschätzt, 0,15 $/min echt):
+```
+python3 /app/shared/skills/pi_spend_cap.py now        # ausgegeben, USD/min der letzten 10 Min. pro Agent
+python3 /app/agents/_skills/scaling-calc/scaling_calc.py --unit usd-min --target <USD/min> --measured-from-spend
+```
+Das Ziel in USD/min ist der Rest des Budgets geteilt durch die verbleibenden Arbeitsminuten.
+
 ## Die zwei Hebel
 - **Worker unter dem Ziel** (1 Worker verbrennt weniger als das Ziel) → der Hebel ist die
   **Anzahl der Worker** (Parallelität), alle **am Floor**. Füge sie in Stufen hinzu.

@@ -39,6 +39,14 @@ Megadja: **hány worker**, **milyen throttle**, és egy **lépcsőzetes tervet**
 > alkalmazza spawnoláskor. Ez nem itt eldöntendő szám, és nem is állandó: egy 5 perces lépcsőn
 > három worker 100s távolságra akar lenni egymástól.
 
+## Dolláros kerettel (API-kulcs, a csapat USD-kerete)
+Az egység **USD percenként**, a mérés pedig a csapat valódi költése, soha nem általad becsült worker-költség (11/26-i átvétel: 0,011 $/perc becsült, 0,15 $/perc valós):
+```
+python3 /app/shared/skills/pi_spend_cap.py now        # elköltött összeg, az utolsó 10 perc USD/perc értéke ügynökönként
+python3 /app/agents/_skills/scaling-calc/scaling_calc.py --unit usd-min --target <USD/perc> --measured-from-spend
+```
+A cél USD/percben a keret maradéka osztva a hátralévő munkapercekkel.
+
 ## A két kar
 - **Worker a cél alatt** (1 worker kevesebbet éget a célnál) → a kar a **workerek száma**
   (párhuzamosság), mind **a flooron**. Lépcsőzetesen add hozzá őket.

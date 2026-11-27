@@ -41,6 +41,14 @@ uma vez.
 > decidir aqui, e não é uma constante: num degrau de 5 minutos, três workers querem estar a
 > 100s uns dos outros.
 
+## Com um orçamento em dólares (chave API, orçamento da equipa em USD)
+A unidade é **USD por minuto**, e a medida é o gasto real da equipa, nunca um custo por worker estimado por ti (ensaio de 26/11: 0,011 $/min estimados, 0,15 $/min reais):
+```
+python3 /app/shared/skills/pi_spend_cap.py now        # gasto, USD/min dos últimos 10 min por agente
+python3 /app/agents/_skills/scaling-calc/scaling_calc.py --unit usd-min --target <USD/min> --measured-from-spend
+```
+O alvo em USD/min é o que resta do orçamento dividido pelos minutos de trabalho que restam.
+
 ## As duas alavancas
 - **Worker abaixo do alvo** (1 worker queima menos do que o alvo) → a alavanca é o **número de
   workers** (paralelismo), todos **no floor**. Acrescenta-os por etapas.

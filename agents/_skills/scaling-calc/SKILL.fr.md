@@ -41,6 +41,14 @@ d'un coup.
 > un nombre à décider ici, et ce n'est pas une constante : sur un palier de 5 minutes, trois
 > workers veulent être à 100s les uns des autres.
 
+## Avec un budget en dollars (clé API, budget de l'équipe en USD)
+L'unité est **l'USD par minute**, et la mesure est la dépense réelle de l'équipe, jamais un coût par worker estimé par toi (recette du 26/11 : 0,011 $/min estimés, 0,15 $/min réels) :
+```
+python3 /app/shared/skills/pi_spend_cap.py now        # dépensé, USD/min des 10 dernières min par agent
+python3 /app/agents/_skills/scaling-calc/scaling_calc.py --unit usd-min --target <USD/min> --measured-from-spend
+```
+La cible en USD/min est ce qui reste du budget divisé par les minutes de travail restantes.
+
 ## Les deux leviers
 - **Worker sous la cible** (1 worker brûle moins que la cible) → le levier est le **nombre de
   workers** (parallélisme), tous **au floor**. Ajoute-les par paliers.

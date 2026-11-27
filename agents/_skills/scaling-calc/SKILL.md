@@ -40,6 +40,14 @@ in one go.
 > number to decide here, and it is not a constant: on a 5-minute step, three workers want
 > to be 100s apart from each other.
 
+## With a budget in dollars (API key, team budget in USD)
+The unit is **USD per minute**, and the measure is the team's real spending, never a cost per worker you estimate (collaudo 26/11: 0.011 $/min estimated, 0.15 $/min real):
+```
+python3 /app/shared/skills/pi_spend_cap.py now        # spent, USD/min of the last 10 min per agent
+python3 /app/agents/_skills/scaling-calc/scaling_calc.py --unit usd-min --target <USD/min> --measured-from-spend
+```
+The target in USD/min is what is left of the budget divided by the working minutes left.
+
 ## The two levers
 - **Worker under target** (1 worker burns less than the target) → the lever is the **number
   of workers** (parallelism), all **at the floor**. Add them in stages.

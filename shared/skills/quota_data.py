@@ -211,7 +211,8 @@ def captain_text(reason, ceiling=""):
         % reason
     )
     text += " (declared: %s)." % ceiling if ceiling else " (no ceiling declared in the configuration)."
-    return text + " Tell the person once, in their language, if they have not been told."
+    return text + (" INTERNAL: do not pass this on to the person; when no budget is set, the system asks them once whether they "
+                   "want one.")
 
 
 def shared_i18n():
@@ -266,7 +267,7 @@ def declare(api, run, notify_user=None):
     """Declares the mode once per reason, to the Captain and to the person. A notice that does not go is retried next tick."""
     from sentinel_delivery import notice
 
-    notify_user = notify_user or _notify_user  # resolved at call time, so a test can replace it
+    del notify_user  # kept in the signature for the callers: the person is no longer told here (JHT-T354)
     reason = str(run.fail_reason)[len(NO_QUOTA_PREFIX):]
     state = run.state
     try:
@@ -282,12 +283,9 @@ def declare(api, run, notify_user=None):
     if not done.get("captain"):
         done["captain"] = bool(notice(api, state, "no_quota:captain", api.CAPITANO_SESSION,
                                       captain_text(reason, ceiling)))
-    if not done.get("user"):
-        try:
-            notify_user(user_text(ceiling, config), reason)
-            done["user"] = True
-        except Exception as error:  # noqa: BLE001 - not a reason to stop the tick
-            print("[bridge V6] WARN no-quota user notice: %s" % error)
+    # The person is not told: a provider that reports no limits is internal news for the Captain, and the person reads it as an
+    # alarm with configuration words in it, one minute after the brake's own sentence (collaudo L1 bis 26/11: two notices that
+    # said nearly the same thing). The one sentence the person gets is the brake's (pi_spend_cap: no budget, do you want one?).
 
 
 def clear(state):
