@@ -42,8 +42,11 @@ from __future__ import annotations
 import importlib.util
 import json
 import os
+import re
 import subprocess
 import sys
+import time
+from datetime import datetime
 from pathlib import Path
 
 AGENT = "assistente"
@@ -345,6 +348,73 @@ def _nothing_left_to_ask() -> bool:
         return False
 
 
+# Back after the switch of the tools (JHT-T346). The host writes $JHT_HOME/state/tools-switch.json = {"schema":1,"at":"<ISO UTC>"}
+# just before it stops the core team (scripts/jht-tools.sh): the container goes away under the person's chat, and on the full
+# image the Assistente starts again with no word of it. At its first start after the switch (the launcher runs `settled`, or the
+# welcome runs `deliver`) one line in its name says it is back, what happens now and what the person can do: no call of the model,
+# once per switch (state/tools-switch-told keeps the `at` it was said for). A team paused (the budget brake, the person, a standby)
+# is said paused, never «working». Nothing on stdout: the one line of `settled` and `deliver` stays as it was.
+SWITCH_WINDOW_S = 600
+_ISO_UTC = re.compile(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(\.\d+)?Z")
+
+
+def _switch_at(now: float | None = None) -> str | None:
+    path = jht_home() / "state" / "tools-switch.json"
+    try:
+        if path.is_symlink() or not path.is_file() or path.stat().st_size > 512:
+            return None
+        seen = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    at = seen.get("at") if isinstance(seen, dict) and seen.get("schema") == 1 else None
+    if not isinstance(at, str) or not _ISO_UTC.fullmatch(at):
+        return None
+    try:
+        when = datetime.fromisoformat(at.replace("Z", "+00:00")).timestamp()
+    except ValueError:
+        return None
+    age = (time.time() if now is None else now) - when
+    return at if -120 <= age <= SWITCH_WINDOW_S else None
+
+
+def _team_paused() -> bool:
+    home = jht_home()
+    try:
+        halt = json.loads((home / "logs" / "daily-halt.flag").read_text(encoding="utf-8"))
+        if isinstance(halt, dict) and halt.get("reason") == "pi_spend_cap":
+            return True
+    except (OSError, ValueError):
+        pass
+    return (home / ".team-standby.flag").is_file()
+
+
+def tell_back_after_switch() -> str:
+    """`told`, `already`, `none` (no recent switch, or no welcome in the chat yet: the welcome comes first) or the reason it failed."""
+    at = _switch_at()
+    if at is None:
+        return "none"
+    marker = jht_home() / "state" / "tools-switch-told"
+    try:
+        if marker.read_text(encoding="utf-8").strip() == at:
+            return "already"
+    except OSError:
+        pass
+    if not _in_chat():
+        return "none"
+    t = _catalog()
+    text = _lookup(t, "welcome.assistente_back_paused" if _team_paused() else "welcome.assistente_back")
+    if not text:
+        return "none"
+    reason = post_to_chat(text)
+    if reason:
+        return reason
+    try:
+        marker.write_text(at + "\n", encoding="utf-8")
+    except OSError:
+        pass
+    return "told"
+
+
 def settled() -> int:
     profile = jht_home() / "profile"
     if not (profile / FLAG).is_file():
@@ -361,6 +431,11 @@ def settled() -> int:
 
 
 def main(argv: list[str]) -> int:
+    if argv in (["deliver"], ["settled"]):
+        try:
+            tell_back_after_switch()
+        except Exception:  # noqa: BLE001 — a line that cannot be said never stops the welcome or the start of the Assistente
+            pass
     if argv == ["deliver"]:
         return deliver()
     if argv == ["settled"]:

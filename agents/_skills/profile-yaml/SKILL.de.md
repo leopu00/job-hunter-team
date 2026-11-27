@@ -258,7 +258,7 @@ date -u +"%Y-%m-%dT%H:%M:%SZ" > "$JHT_HOME/profile/onboarding-done.flag"
 test -f "$JHT_HOME/profile/onboarding-done.flag" && echo FLAG_OK || echo FLAG_MISSING
 ```
 
-Nie vorher, nie um eine Frage abzukürzen, nie entfernen. Es sagt diesem Computer, dass niemand mehr mitten im Onboarding ist: erst dann wechselt das Team auf die vollständigen Werkzeuge der Scouts (ein Neustart von ein paar Minuten; der Chat kommt von selbst zurück). Der Person sagst du nichts davon.
+Nie vorher, nie um eine Frage abzukürzen, nie entfernen. Es sagt diesem Computer, dass niemand mehr mitten im Onboarding ist: erst dann wechselt das Team auf die vollständigen Werkzeuge der Scouts (ein Neustart von ein paar Minuten; der Chat kommt von selbst zurück). **Sag es VORHER, nie danach.** Auf dem Core-Image (`echo "$JHT_IMAGE_TIER"` gibt `core` aus) lässt das Flag das Team neu starten: In der Nachricht, die das Onboarding abschließt, und bevor du das Flag schreibst, sag der Person in einer Zeile ihrer Sprache, dass die Fragen vorbei sind und das Team gleich für etwa 2 Minuten neu startet, um auf die vollständigen Werkzeuge zu wechseln; der Chat hält an und verbindet sich von selbst wieder, was sie gerade schreibt, bleibt erhalten, sie muss nichts tun. Dann schreib das Flag. Auf dem vollständigen Image gibt es keinen Neustart: Sag nichts davon.
 
 ## 🎓 `has_degree` — aus der Ausbildung, nie als Platzhalter
 

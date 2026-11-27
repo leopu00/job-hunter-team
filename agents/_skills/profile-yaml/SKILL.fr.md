@@ -258,7 +258,7 @@ date -u +"%Y-%m-%dT%H:%M:%SZ" > "$JHT_HOME/profile/onboarding-done.flag"
 test -f "$JHT_HOME/profile/onboarding-done.flag" && echo FLAG_OK || echo FLAG_MISSING
 ```
 
-Jamais avant, jamais pour couper court à une question, jamais le retirer. Il dit à cet ordinateur que plus personne n'est au milieu de l'onboarding : c'est seulement alors que l'équipe passe aux outils complets des Scout (un redémarrage de quelques minutes ; le chat revient tout seul). Tu n'en dis rien à la personne.
+Jamais avant, jamais pour couper court à une question, jamais le retirer. Il dit à cet ordinateur que plus personne n'est au milieu de l'onboarding : c'est seulement alors que l'équipe passe aux outils complets des Scout (un redémarrage de quelques minutes ; le chat revient tout seul). **Dis-le AVANT, jamais après.** Sur l'image core (`echo "$JHT_IMAGE_TIER"` affiche `core`) le flag fait redémarrer l'équipe : dans le message qui clôt l'onboarding, et avant d'écrire le flag, dis à la personne en une ligne de sa langue que les questions sont finies et que dans un instant l'équipe redémarre pendant environ 2 minutes pour passer aux outils complets ; le chat s'arrête et se reconnecte tout seul, ce qu'elle est en train d'écrire est gardé, elle n'a rien à faire. Puis écris le flag. Sur l'image complète il n'y a pas de redémarrage : n'en dis rien.
 
 ## 🎓 `has_degree` — d'après les études, jamais comme valeur d'attente
 

@@ -25,6 +25,7 @@ import { blockedNoticeFor } from '../../lib/chat-blocked-notice.js';
 import { creditNotice } from '../../lib/provider-credit.js';
 import { localTimeZone } from '../../lib/local-tz.js';
 import { say, textLanguage } from '../../lib/texts.js';
+import { toolsSwitch } from '../../lib/tools-switch.js';
 
 // Escape per passare il messaggio dentro single-quote bash:
 //   ' -> '\''   $ -> \$   ` -> \`
@@ -502,6 +503,66 @@ export function unansweredQuestion(agent, rows, { home = JHT_HOME, now = () => D
   return text;
 }
 
+// ── The line being typed, through a restart ───────────────────────
+
+// The switch of the tools (and an update) removes the container under the REPL while the person may be typing (JHT-T346: the
+// notice of the wrapper was printed in the middle of the line, and the line was gone). The REPL keeps the line being typed, in the
+// team's own folder, about once a second; the chat that comes back after the restart (JHT_TEAM_CHAT_RESUMED=1) puts it back on
+// the prompt. A line sent or a chat closed by the person leaves nothing behind.
+const DRAFT_MAX_AGE_S = 30 * 60;
+const DRAFT_TICK_MS = 1000;
+
+function draftFile(agent, home) {
+  return join(home, 'state', `chat-draft-${String(agent).replace(/[^a-z0-9-]/gi, '')}.json`);
+}
+
+/** Keeps `text` as the line being typed to `agent`; an empty line keeps nothing. Never throws. */
+export function keepDraft(agent, text, { home = JHT_HOME, now = () => Date.now() / 1000 } = {}) {
+  try {
+    if (!text) { rmSync(draftFile(agent, home), { force: true }); return; }
+    mkdirSync(join(home, 'state'), { recursive: true });
+    writeFileSync(draftFile(agent, home), JSON.stringify({ text, at: now() }), { mode: 0o600 });
+  } catch {
+    /* nothing kept: the chat works as before */
+  }
+}
+
+/**
+ * The line that was being typed, or null: none kept, kept too long ago, or not a line the person could have typed (the file is in a
+ * folder the agents write: a text a terminal would obey, or longer than a message, is discarded). Read once: it is forgotten.
+ */
+export function takeDraft(agent, { home = JHT_HOME, now = () => Date.now() / 1000 } = {}) {
+  let kept;
+  try {
+    kept = JSON.parse(readFileSync(draftFile(agent, home), 'utf8'));
+  } catch {
+    return null;
+  }
+  keepDraft(agent, '', { home });
+  const raw = typeof kept?.text === 'string' ? kept.text : '';
+  const at = Number(kept?.at);
+  if (!raw.trim() || raw.replace(CONTROLS, '') !== raw || raw.length > ASKED_MAX_CHARS || !(at > 0) || now() - at > DRAFT_MAX_AGE_S) return null;
+  return raw;
+}
+
+/**
+ * Once a second: keeps the line being typed, and says on a line of its own (the line typed is drawn again below it) when the switch
+ * of the tools starts. A switch already under way when the chat opened is not said again: it is the chat that came back after it.
+ */
+export function createRestartWatch({ agent, line, say: tell, keep = keepDraft, moving = toolsSwitch }) {
+  let kept = '';
+  let seen = moving()?.at ?? null;
+  return {
+    tick() {
+      const typing = line() || '';
+      if (agent && typing !== kept) { kept = typing; keep(agent, typing); }
+      const now = moving();
+      if (now && now.at !== seen) { seen = now.at; tell(); }
+    },
+    sent() { kept = ''; if (agent) keep(agent, ''); },
+  };
+}
+
 // ── chat: REPL interattivo ─────────────────────────────────────────
 
 export async function chatAction(agentArg, options = {}) {
@@ -550,6 +611,16 @@ export async function chatAction(agentArg, options = {}) {
     if (past !== null && process.env.JHT_TEAM_CHAT_RESUMED === '1') lost = unansweredQuestion(agent, past);
   }
   printNotice(notice());
+  // The line being typed is kept, and the switch of the tools is said on a line of its own (JHT-T346).
+  const restart = createRestartWatch({
+    agent,
+    line: () => rl.line,
+    say: () => { output.write('\r\x1b[K'); console.log(c.yellow(`⏳ ${say('chat.repl.switching', {}, language)}`)); rl.prompt(true); },
+  });
+  const restartTimer = output.isTTY ? setInterval(() => restart.tick(), DRAFT_TICK_MS) : null;
+  restartTimer?.unref?.();
+  // The chat came back after a restart: the line that was being typed goes back on the prompt.
+  let typedBefore = agent && process.env.JHT_TEAM_CHAT_RESUMED === '1' ? takeDraft(agent) : null;
   // A message that arrives while the person is at the prompt is printed above it.
   let poller = null;
   if (feed && !options.quiet) {
@@ -612,9 +683,13 @@ export async function chatAction(agentArg, options = {}) {
       const sent = await ask(lost, { again: true });
       if (!sent) console.log(c.yellow(`  ${say('chat.repl.asked_again_failed', { text: lost.length > 80 ? lost.slice(0, 80) + '…' : lost }, language)}`));
     }
+    if (typedBefore) console.log(c.dim(`  ${say('chat.repl.draft_back', {}, language)}`));
     while (true) {
-      const line = await typedLines.next(c.bold('>') + ' ');
+      const next = typedLines.next(c.bold('>') + ' ');
+      if (typedBefore) { rl.write(typedBefore); typedBefore = null; }
+      const line = await next;
       if (line === null) break;
+      restart.sent();
       const msg = line.trim();
       if (!msg) continue;
       if (msg === '/exit' || msg === '/quit') break;
@@ -645,6 +720,9 @@ export async function chatAction(agentArg, options = {}) {
     }
   } finally {
     if (poller) clearInterval(poller);
+    if (restartTimer) clearInterval(restartTimer);
+    // a chat the person closes leaves nothing; one the switch of the tools ends keeps the line for the chat that comes back
+    if (!toolsSwitch()) restart.sent();
     rl.close();
     console.log(c.dim(`  ${say('chat.repl.closed')}`));
   }

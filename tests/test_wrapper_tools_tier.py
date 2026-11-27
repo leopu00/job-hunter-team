@@ -343,7 +343,7 @@ def test_a_real_state_folder_and_a_plain_old_tools_json_are_written_as_before(bo
 
 # ── tools_kick: the CLI keeps the tools moving, as the desktop app's round did ───────────────────────────────────────────────
 
-KICK_ENV = {"JHT_TOOLS_WAIT_STEP": "1", "JHT_TOOLS_SWITCH_GRACE": "0", "JHT_TOOLS_WAIT_MAX": "60", "JHT_TOOLS_QUIET_MAX": "600", "JHT_TOOLS_ONBOARDING_MAX": "0"}   # a switch that waited for nothing would miss every deadline below
+KICK_ENV = {"JHT_TOOLS_WAIT_STEP": "1", "JHT_TOOLS_SWITCH_GRACE": "0", "JHT_TOOLS_SWITCH_NOTICE_WAIT": "0", "JHT_TOOLS_WAIT_MAX": "60", "JHT_TOOLS_QUIET_MAX": "600", "JHT_TOOLS_ONBOARDING_MAX": "0"}   # a switch that waited for nothing would miss every deadline below
 
 
 def _wait_until(check, what):
@@ -492,6 +492,47 @@ def test_the_switch_says_it_is_under_way_while_it_stops_and_starts_the_team(box)
                 f"the switch did not say it was under way: {path.read_text(encoding='utf-8') if path.exists() else ''}")
     box.wait_for_pull_end()
     assert not tier.exists() and not (box.runtime / ".tools-switching").exists()
+
+
+def test_the_switch_tells_the_container_before_it_stops_the_core_team(box):
+    """JHT-T346: the chat of the person, `jht team status` and the Assistente read $JHT_HOME/state/tools-switch.json. The host writes
+    it BEFORE the down (the chat must say it and keep the line while the container is still there), whole, with the time in UTC."""
+    tier = box.tier()
+    (box.fake / "full-present").write_text("", encoding="utf-8")
+    (box.home / "profile" / "ready.flag").write_text("2026-11-14T21:00:00Z\n", encoding="utf-8")
+    notice = box.home / "state" / "tools-switch.json"
+    (box.fake / "jht-wrapper.sh").write_text(
+        f'#!/bin/sh\nif [ -f "{notice}" ]; then s=told; else s=untold; fi\necho "$1 $s" >> "$FAKE/wrapper-calls"\nexit 0\n', encoding="utf-8")
+    assert box.run("tools_kick", RUNTIME=str(box.runtime), **KICK_ENV).returncode == 0
+    path = box.fake / "wrapper-calls"
+    _wait_until(lambda: path.exists() and path.read_text(encoding="utf-8").splitlines() == ["down told", "up told"],
+                f"the container was not told before the down: {path.read_text(encoding='utf-8') if path.exists() else ''}")
+    box.wait_for_pull_end()
+    seen = json.loads(notice.read_text(encoding="utf-8"))
+    assert seen["schema"] == 1 and re.fullmatch(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ", seen["at"])
+    assert not tier.exists()
+
+
+def test_the_switch_notice_is_not_written_through_a_link(box, tmp_path):
+    elsewhere = tmp_path / "elsewhere.json"
+    elsewhere.write_text("keep\n", encoding="utf-8")
+    (box.home / "state").mkdir(exist_ok=True)
+    (box.home / "state" / "tools-switch.json").symlink_to(elsewhere)
+    assert box.run("tools_switch_notice").returncode == 0
+    assert elsewhere.read_text(encoding="utf-8") == "keep\n"
+
+
+def test_the_wrapper_says_the_switch_on_a_line_of_its_own():
+    """The REPL ended in the middle of the person's line: the notice of the wrapper starts on a new line (bash and PowerShell)."""
+    text = WRAPPER.read_text(encoding="utf-8")
+    body = re.search(r"^team_chat_through_switch\(\) \{\n.*?^\}\n", text, re.S | re.M).group(0)
+    assert body.index("[ -t 2 ] && printf '\\n' >&2") < body.index('info "$(jht_say tools.chat_reconnecting)"')
+    ps1 = (ROOT / "scripts" / "jht-wrapper.ps1").read_text(encoding="utf-8")
+    fn = ps1[ps1.index("function Invoke-JhtTeamChatThroughSwitch"):]
+    assert fn.index("Write-Host ''") < fn.index("Write-Info (Get-JhtText 'tools.chat_reconnecting')")
+    tools = (ROOT / "scripts" / "jht-tools.ps1").read_text(encoding="utf-8")
+    assert "function Write-ToolsSwitchNotice" in tools
+    assert tools.index("    Write-ToolsSwitchNotice\n") < tools.index("$null = Invoke-ToolsWrapperStep 'down'")
 
 
 def _chat_end_function() -> str:
