@@ -150,6 +150,35 @@ def record_start(home, budget, starts, spent_before=0.0):
     return starts, ends
 
 
+# The daily ceiling of an older config, `no_quota_cap`: the spending is measured in dollars (pi prices in dollars), so the
+# ceiling is one too. `usd` is the key to write. `eur`, the older key, is converted: at `eur_to_usd` when the config gives it,
+# else at EUR_TO_USD = 1.0. A euro is worth more than a dollar, so counting it as one stops the team at the ceiling or before it,
+# never after; the words say the dollars and, for `eur`, the conversion. `usd` wins when both are there.
+EUR_TO_USD = 1.0
+
+
+def _positive_number(value):
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or value <= 0:
+        return None
+    return float(value)
+
+
+def no_quota_cap_usd(config):
+    """{"usd", "declared", "currency", "rate"} for the daily ceiling of `no_quota_cap`, or None: `usd` is what the brake compares
+    with the spending; `declared` and `currency` are what the config says; `rate` the dollars per euro used (1.0 for `usd`)."""
+    cap = config.get("no_quota_cap") if isinstance(config, dict) else None
+    if not isinstance(cap, dict):
+        return None
+    usd = _positive_number(cap.get("usd"))
+    if usd is not None:
+        return {"usd": usd, "declared": usd, "currency": "USD", "rate": 1.0}
+    eur = _positive_number(cap.get("eur"))
+    if eur is None:
+        return None
+    rate = _positive_number(cap.get("eur_to_usd")) or EUR_TO_USD
+    return {"usd": round(eur * rate, 6), "declared": eur, "currency": "EUR", "rate": rate}
+
+
 def margin(usd):
     """What the brake leaves unspent: a call in flight when the brake looks still finishes and is paid."""
     return max(MARGIN_SHARE * usd, MARGIN_USD)
