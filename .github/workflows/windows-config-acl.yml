@@ -12,6 +12,7 @@ on:
       - 'scripts/podman-machine-bridge.ps1'
       - 'scripts/podman-machine-bridge-selftest.ps1'
       - 'scripts/ci/podman_machine_bridge_gate.ps1'
+      - 'scripts/ci/jht_home_acl_cross_user.ps1'
       - 'scripts/ci/windows_gate_group.ps1'
       - 'scripts/podman-windows-probe.ps1'
       - 'web/public/install.ps1'
@@ -77,6 +78,16 @@ jobs:
       - name: Host ACL and fail-closed wrapper selftest
         shell: pwsh
         run: ./scripts/windows-config-acl-selftest.ps1
+
+      # JHT-T352 F-13: /jht_home shows rwxrwxrwx in the container (the WSL mount of C: has no Linux metadata), and
+      # Windows decides every access with the ACL of %USERPROFILE%\.jht. Proved as another, non-admin Windows user, with
+      # the ACL code of both shells.
+      - name: Private ACL of ~/.jht against another Windows user (Windows PowerShell 5.1)
+        shell: powershell
+        run: ./scripts/ci/jht_home_acl_cross_user.ps1
+      - name: Private ACL of ~/.jht against another Windows user (pwsh)
+        shell: pwsh
+        run: ./scripts/ci/jht_home_acl_cross_user.ps1
 
       - name: Podman machine deadline and counter-proof on PowerShell 5.1 and 7
         shell: pwsh
