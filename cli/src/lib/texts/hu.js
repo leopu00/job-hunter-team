@@ -9,7 +9,7 @@ export default {
   "team.n_already": "{n} már aktív",
   "team.n_errors": "{n} hiba",
   "team.captain_scales": "A CAPITANO a Bridge küszöbei szerint igazítja a többi ügynököt.",
-  "team.captain_waits": "A csapat többi része magától indul, amikor az Assistentével végzett bevezetés befejeződött. Válaszolj a kérdéseire: jht team chat assistente (vagy az app Assistente-csevegésében).",
+  "team.captain_waits": "A csapat többi része magától indul, amikor az Assistentével végzett bevezetés befejeződött. Válaszolj a kérdéseire: jht team chat assistente.",
   "team.partial": "A csapat NEM indult el teljesen: {n} nem indult el (a fenti ✗ sorok megmondják, miért). Javítsd az okot, és futtasd újra: jht team start",
   "team.done": "A csapat fut: {n} elindítva {s} mp alatt",
   "team.next_agents": "Nézd meg, hogy halad: jht agents",

@@ -7,7 +7,7 @@ allowed-tools: Bash(mkdir -p *), Bash(cp *), Bash(python3 /app/shared/skills/pla
 
 # onboarding-flow — cómo el Assistente mueve la conversación
 
-El usuario te llega por primera vez en `/onboarding`. La página está dividida: chat a la derecha (tú), perfil en vivo a la izquierda (un espejo de `candidate_profile.yml` — el usuario NO puede editarlo directamente, se llena solo porque tú escribes el YAML). Tu trabajo es llenar ese perfil en conversación, no de una sola vez.
+El usuario te llega por primera vez desde el terminal (`jht team chat assistente`) o desde Telegram; en la app, solo donde la hay, en `/onboarding` (chat a la derecha, perfil en vivo a la izquierda). El perfil es un espejo de `candidate_profile.yml` — el usuario NO puede editarlo directamente, se llena solo porque tú escribes el YAML. Tu trabajo es llenar ese perfil en conversación, no de una sola vez. **Cómo te pasa un archivo depende de dónde funciona** (prompt del Assistente, § «Dónde funcionas»): desde el terminal lo pone en la carpeta de adjuntos de SU sistema (en un VPS: `mv` a la carpeta de adjuntos en el servidor, o `jht artifact upload <archivo>`), desde Telegram lo adjunta al mensaje. Clip 📎, arrastrar y «a la izquierda» solo en la app.
 
 ## El contrato — dilo (naturalmente) temprano
 
@@ -155,7 +155,7 @@ Ejemplo de estilo (adapta las palabras, mantén longitud y tono):
 
 > ¡Hola! Soy tu asistente — te ayudo a completar el perfil.
 >
-> Vamos con algunas preguntas: te actualizo el perfil a la izquierda a medida que respondas. Si tienes un **CV** u otros documentos que hablen de ti, adjúntalos con 📎: los leo en paralelo y completo muchas cosas solo.
+> Vamos con algunas preguntas: mientras tanto completo tu perfil. Si tienes un **CV** u otros documentos que hablen de ti, ponlos en la carpeta `~/Documents/Job Hunter Team/allegati` (o mándamelos por Telegram) y dímelo: los leo en paralelo y completo muchas cosas solo.
 >
 > Empezamos: **¿cómo te llamas?**
 

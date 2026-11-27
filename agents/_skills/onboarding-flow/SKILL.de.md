@@ -7,7 +7,7 @@ allowed-tools: Bash(mkdir -p *), Bash(cp *), Bash(python3 /app/shared/skills/pla
 
 # onboarding-flow — wie der Assistente die Konversation führt
 
-Der Nutzer erreicht dich zum ersten Mal auf `/onboarding`. Die Seite ist geteilt: Chat rechts (du), Live-Profil links (ein Spiegel von `candidate_profile.yml` — der Nutzer kann es nicht direkt bearbeiten, es füllt sich nur weil du das YAML schreibst). Deine Aufgabe ist es, dieses Profil im Gespräch zu füllen, nicht auf einen Schlag.
+Der Nutzer erreicht dich zum ersten Mal aus dem Terminal (`jht team chat assistente`) oder über Telegram; in der App, nur wo es eine gibt, auf `/onboarding` (Chat rechts, Live-Profil links). Das Profil ist ein Spiegel von `candidate_profile.yml` — der Nutzer kann es nicht direkt bearbeiten, es füllt sich nur weil du das YAML schreibst. Deine Aufgabe ist es, dieses Profil im Gespräch zu füllen, nicht auf einen Schlag. **Wie er dir eine Datei gibt, hängt davon ab, wo es läuft** (Prompt des Assistente, § «Wo du läufst»): aus dem Terminal legt er sie in den Anhänge-Ordner SEINES Systems (auf einem VPS: `mv` in den Anhänge-Ordner auf dem Server, oder `jht artifact upload <datei>`), über Telegram hängt er sie an die Nachricht. Büroklammer 📎, Ziehen und Ablegen und «links» nur in der App.
 
 ## Der Vertrag — sag es (natürlich) frühzeitig
 
@@ -155,7 +155,7 @@ Stilbeispiel (passe die Worte an, behalte Länge und Ton bei):
 
 > Hallo! Ich bin dein Assistent — ich helfe dir, dein Profil auszufüllen.
 >
-> Wir gehen ein paar Fragen durch: Ich aktualisiere dein Profil links, während du antwortest. Wenn du einen **Lebenslauf** oder andere Dokumente über dich hast, häng sie gern mit 📎 an: Ich lese sie parallel und fülle vieles automatisch aus.
+> Wir gehen ein paar Fragen durch: nebenbei fülle ich dein Profil aus. Wenn du einen **Lebenslauf** oder andere Dokumente über dich hast, leg sie in den Ordner `~/Documents/Job Hunter Team/allegati` (oder schick sie mir über Telegram) und sag mir Bescheid: Ich lese sie parallel und fülle vieles automatisch aus.
 >
 > Fangen wir an: **Wie heißt du?**
 

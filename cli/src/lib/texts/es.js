@@ -9,7 +9,7 @@ export default {
   "team.n_already": "{n} ya activos",
   "team.n_errors": "{n} errores",
   "team.captain_scales": "El CAPITANO ajustará los demás agentes según los umbrales del Bridge.",
-  "team.captain_waits": "El resto del equipo arranca solo cuando termina el onboarding con el Assistente. Responde a sus preguntas con: jht team chat assistente (o en el chat del Assistente de la app).",
+  "team.captain_waits": "El resto del equipo arranca solo cuando termina el onboarding con el Assistente. Responde a sus preguntas con: jht team chat assistente.",
   "team.partial": "El equipo NO está encendido del todo: {n} no arrancaron (las líneas ✗ de arriba dicen por qué). Corrige la causa y vuelve a ejecutar: jht team start",
   "team.done": "Equipo encendido: {n} arrancados en {s} s",
   "team.next_agents": "Mira cómo va con: jht agents",

@@ -7,7 +7,7 @@ allowed-tools: Bash(mkdir -p *), Bash(cp *), Bash(python3 /app/shared/skills/pla
 
 # onboarding-flow — comment l'Assistente fait avancer la conversation
 
-L'utilisateur vous contacte pour la première fois sur `/onboarding`. La page est divisée : chat à droite (vous), profil en direct à gauche (un miroir de `candidate_profile.yml` — l'utilisateur ne peut PAS l'éditer directement, il se remplit uniquement parce que vous écrivez le YAML). Votre travail est de remplir ce profil en conversation, pas en un seul coup.
+L'utilisateur vous contacte pour la première fois depuis le terminal (`jht team chat assistente`) ou depuis Telegram ; dans l'app, seulement là où il y en a une, sur `/onboarding` (chat à droite, profil en direct à gauche). Le profil est un miroir de `candidate_profile.yml` — l'utilisateur ne peut PAS l'éditer directement, il se remplit uniquement parce que vous écrivez le YAML. Votre travail est de remplir ce profil en conversation, pas en un seul coup. **Comment il vous passe un fichier dépend de l'endroit où ça tourne** (prompt de l'Assistente, § « Où tu tournes ») : depuis le terminal il le met dans le dossier des pièces jointes de SON système (sur un VPS : `mv` dans le dossier des pièces jointes sur le serveur, ou `jht artifact upload <fichier>`), depuis Telegram il le joint au message. Trombone 📎, glisser-déposer et « à gauche » seulement dans l'app.
 
 ## Le contrat — le dire (naturellement) tôt
 
@@ -155,7 +155,7 @@ Exemple de style (adapter les mots, garder la longueur et le ton) :
 
 > Bonjour ! Je suis votre assistant — je vous aide à remplir le profil.
 >
-> On procède avec quelques questions : je mets à jour le profil à gauche au fur et à mesure de vos réponses. Si vous avez un **CV** ou d'autres documents qui parlent de vous, joignez-les avec 📎 : je les lis en parallèle et remplis beaucoup de choses tout seul.
+> On procède avec quelques questions : pendant ce temps je remplis votre profil. Si vous avez un **CV** ou d'autres documents qui parlent de vous, mettez-les dans le dossier `~/Documents/Job Hunter Team/allegati` (ou envoyez-les-moi sur Telegram) et dites-le-moi : je les lis en parallèle et remplis beaucoup de choses tout seul.
 >
 > On commence : **comment vous appelez-vous ?**
 

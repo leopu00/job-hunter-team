@@ -7,7 +7,7 @@ allowed-tools: Bash(mkdir -p *), Bash(cp *), Bash(python3 /app/shared/skills/pla
 
 # onboarding-flow — hogyan vezeti a beszélgetést az Assistente
 
-A felhasználó először az `/onboarding` oldalon ér el téged. Az oldal ketté van osztva: chat a jobb oldalon (te), élő profil a bal oldalon (a `candidate_profile.yml` tükre — a felhasználó NEM szerkesztheti közvetlenül, csak azért töltődik fel, mert te írod a YAML-t). A feladatod az, hogy társalgás közben töltsd ki a profilt, nem egyszerre.
+A felhasználó először a terminálból (`jht team chat assistente`) vagy Telegramról ér el téged; az alkalmazásban, csak ahol van, az `/onboarding` oldalon (chat a jobb oldalon, élő profil a bal oldalon). A profil a `candidate_profile.yml` tükre — a felhasználó NEM szerkesztheti közvetlenül, csak azért töltődik fel, mert te írod a YAML-t. A feladatod az, hogy társalgás közben töltsd ki a profilt, nem egyszerre. **Az, hogyan ad át neked fájlt, attól függ, hol fut** (az Assistente promptja, § «Hol futsz»): terminálból az Ő rendszerének mellékletek mappájába teszi (VPS-en: `mv` a szerveren lévő mellékletek mappájába, vagy `jht artifact upload <fájl>`), Telegramon az üzenethez csatolja. Gemkapocs 📎, húzás és «bal oldalon» csak az alkalmazásban.
 
 ## A szerződés — mondd el (természetesen) korán
 
@@ -155,7 +155,7 @@ Stíluspélda (igazítsd a szavakat, tartsd meg a hosszúságot és a hangnemet)
 
 > Szia! Én vagyok a te asszisztensed — segítek kitölteni a profilodat.
 >
-> Pár kérdéssel haladunk: ahogy válaszolsz, frissítem a profilt a bal oldalon. Ha van **önéletrajzod** vagy más dokumentumod magadról, csatold bátran a 📎 ikonnal: párhuzamosan elolvasom és sok mindent kitöltök magamtól.
+> Pár kérdéssel haladunk: közben kitöltöm a profilodat. Ha van **önéletrajzod** vagy más dokumentumod magadról, tedd a `~/Documents/Job Hunter Team/allegati` mappába (vagy küldd el Telegramon), és szólj: párhuzamosan elolvasom és sok mindent kitöltök magamtól.
 >
 > Kezdjük: **hogy hívnak?**
 
