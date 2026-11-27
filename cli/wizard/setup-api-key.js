@@ -71,7 +71,11 @@ async function askKey(prompter, { t, tf, choice, check, keep, intro, onVerdict =
     }
     // the verdict of the key it keeps, for the end of the setup: «all set» is not true on an empty account
     onVerdict(verdict);
-    if (verdict.state === 'valid') await prompter.note(tf('wizard.key.accepted', verdict.label), t('wizard.key.title'));
+    if (verdict.state === 'valid') {
+      // the green check, not the grey of a note: «accepted» has to look like it
+      if (typeof prompter.success === 'function') await prompter.success(tf('wizard.key.accepted', verdict.label));
+      else await prompter.note(tf('wizard.key.accepted', verdict.label), t('wizard.key.title'));
+    }
     else if (verdict.state === 'no_credit') await prompter.note(tf('wizard.key.no_credit', verdict.label), t('wizard.key.title'));
     else await prompter.note(tf('wizard.key.unchecked', verdict.label, verdict.reason), t('wizard.key.title'));
     try {

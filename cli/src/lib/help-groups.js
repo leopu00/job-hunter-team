@@ -27,7 +27,7 @@ export const HELP_GROUPS = [
     'working-hours', 'cron', 'apply', 'ticket', 'feedback', 'directives', 'coordinator', 'enrichment', 'profile',
     'artifact', 'notifications', 'standby', 'burn', 'existing-team', 'providers',
   ]],
-  ['Your data', ['export', 'import', 'backup', 'report']],
+  ['Your data', ['export', 'import', 'backup', 'run', 'report']],
   ['Maintenance', [
     'upgrade', 'migrate', 'reset', 'cache', 'tools', 'health', 'config', 'secrets', 'keyring', 'cloud',
     'container', 'sentinella', 'download',

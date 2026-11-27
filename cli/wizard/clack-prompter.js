@@ -16,6 +16,7 @@ import {
   spinner,
   text,
   note,
+  log,
 } from '@clack/prompts';
 import pc from 'picocolors';
 import { WizardCancelledError } from './prompts.js';
@@ -54,6 +55,12 @@ export function createClackPrompter() {
     note: async (message, title) => {
       // wrapped to the terminal: a line wider than it broke the frame of the box (collaudo Linux 23/11)
       note(wrapNote(message), title);
+    },
+
+    // something that went well, said with clack's green check: an accepted key in the grey of a note was read as «maybe»
+    // (collaudo W1 26/11)
+    success: async (message) => {
+      log.success(pc.green(wrapNote(message)));
     },
 
     select: async (params) =>

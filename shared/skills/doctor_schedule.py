@@ -301,6 +301,14 @@ def _drop_spawned(state: dict, slot: str) -> None:
         spawned_table.pop(slot, None)
 
 
+def _note_done(state: dict, slot: str) -> None:
+    """Which round of each role was done last, and when: a round whose session the container recreation then took away is opened
+    again (`_reopen_after_recreation`)."""
+    table = dict(state.get("last_done") or {})
+    table[ROLE_OF_SLOT.get(slot, "dottore")] = {"slot": slot, "at": int(datetime.now().timestamp())}
+    state["last_done"] = table
+
+
 def mark(slot: str) -> None:
     with _state_lock():
         b = _bounds_now()
@@ -310,6 +318,7 @@ def mark(slot: str) -> None:
             for key in ("maint_attempts", "maint_retry_after", "maint_failed_date"):
                 state.pop(key, None)
             _drop_spawned(state, slot)
+            _note_done(state, slot)
             _save_state(state)
             return
         if slot == "FALLBACK":
@@ -318,6 +327,7 @@ def mark(slot: str) -> None:
             state.pop("fallback_claimed_at", None)
             state.pop("fallback_attempts", None)
             _drop_spawned(state, slot)
+            _note_done(state, slot)
             _save_state(state)
             return
         if b is None:
@@ -330,6 +340,7 @@ def mark(slot: str) -> None:
         for table in ("attempts", "retry_after", "failed"):
             (state.get(table) or {}).pop(slot, None)
         _drop_spawned(state, slot)
+        _note_done(state, slot)
         _save_state(state)
 
 
@@ -585,13 +596,80 @@ def _turn_verdict(slot: str, spawned_at: float, now_s: float):
     return "wait", record
 
 
+# The switch onto the full image recreates the container at the end of the onboarding (JHT-T346): the job writes this file BEFORE
+# the core goes down. A Dottore or a Mantenitore whose round was done and whose session that recreation took away was not started
+# again until its next slot (collaudo W1 26/11, F-08: both gone after 15:22). Their round is opened again, once per recreation.
+SWITCH_FILE = JHT_HOME / "state" / "tools-switch.json"
+SWITCH_LOOKBACK_SEC = 6 * 3600   # a recreation older than this is not the one that took the session away
+
+
+def _switch_at(now_s: float):
+    """The moment of the last recreation for the switch, or None: a plain small file, schema 1, an ISO time not in the future."""
+    try:
+        if SWITCH_FILE.is_symlink() or not SWITCH_FILE.is_file() or SWITCH_FILE.stat().st_size > 4096:
+            return None
+        data = json.loads(SWITCH_FILE.read_text(encoding="utf-8"))
+        if not isinstance(data, dict) or data.get("schema") != 1 or not isinstance(data.get("at"), str):
+            return None
+        at = datetime.fromisoformat(data["at"].replace("Z", "+00:00")).timestamp()
+    except (OSError, ValueError, TypeError):
+        return None
+    if at > now_s + 60 or now_s - at > SWITCH_LOOKBACK_SEC:
+        return None
+    return at
+
+
+def _reopen(state: dict, slot: str) -> None:
+    if slot == MAINT:
+        if state.get("maint_date") == _today_local():
+            state.pop("maint_date", None)
+    elif slot == "FALLBACK":
+        state.pop("fallback_done_at", None)
+        state.pop("fallback_claimed_at", None)
+    elif slot in WINDOW_SLOTS:
+        done_field, claim_field = WINDOW_SLOTS[slot]
+        state[done_field] = False
+        state[claim_field] = False
+
+
+def _reopen_after_recreation(now_s: float) -> list[str]:
+    """`REOPEN <slot> recreated` for each round done before the recreation whose session is gone since."""
+    at = _switch_at(now_s)
+    if at is None:
+        return []
+    lines = []
+    with _state_lock():
+        state = _load_state()
+        if state.get("switch_seen_at") == at:
+            return []
+        for role, done in sorted((state.get("last_done") or {}).items()):
+            if not isinstance(done, dict) or role not in SESSION_OF_ROLE or float(done.get("at") or 0) > at:
+                continue
+            record = _spawn_record(role) or {}
+            if float(record.get("ts") or 0) > at or role_alive(role):
+                continue   # started again after the recreation, or still there
+            slot = str(done.get("slot") or "")
+            if slot in WINDOW_SLOTS and state.get("window_start") is None:
+                continue
+            _reopen(state, slot)
+            lines.append(f"REOPEN {slot} recreated")
+        state["switch_seen_at"] = at
+        _save_state(state)
+    return lines
+
+
+def role_alive(role: str) -> bool:
+    return _session_alive(SESSION_OF_ROLE[role])
+
+
 def settle() -> list[str]:
     """Settle every round that was started and is waiting for its first turn. One line per round:
-    `DONE <slot>` · `PENDING <slot>` · `RETRY <slot> <reason> <wait> attempt=<n>` · `FAILED <slot> <reason> attempts=<n>`."""
+    `DONE <slot>` · `PENDING <slot>` · `RETRY <slot> <reason> <wait> attempt=<n>` · `FAILED <slot> <reason> attempts=<n>` ·
+    `REOPEN <slot> recreated` for a done round whose session the recreation of the container took away."""
     now_s = datetime.now().timestamp()
+    lines = _reopen_after_recreation(now_s)
     with _state_lock():
         pending = {k: float(v) for k, v in (_load_state().get("spawned") or {}).items()}
-    lines = []
     for slot, spawned_at in pending.items():
         if slot in WINDOW_SLOTS:
             bounds = _bounds_now()
