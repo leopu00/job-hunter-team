@@ -124,6 +124,15 @@ def test_tmux_inventory_is_read_once_and_never_sends_keys():
     assert sessions["scout-4"]["pids"] == [11]
 
 
+def test_the_usage_sensor_of_the_sentinella_is_in_the_inventory():
+    # JHT-T352 F-10: «12 of 12» with SENTINELLA-WORKER running and not listed
+    run = lambda *_a, **_kw: SimpleNamespace(returncode=0, stderr="", stdout=(
+        "SENTINELLA\t100\t10\t0\nSENTINELLA-WORKER\t101\t11\t0\nJHT-SENTINELLA-WORKER-X\t102\t12\t0\n"))
+    sessions, errors = read_sessions(run)
+    assert not errors and set(sessions) == {"sentinella", "sentinella-worker"}
+    assert sessions["sentinella-worker"]["session"] == "SENTINELLA-WORKER"
+
+
 @pytest.mark.parametrize("stderr", [
     "no server running on /tmp/tmux-501/default",
     "no sessions",
@@ -272,3 +281,11 @@ def test_invalid_session_record_keeps_inventory_and_reports_unknown_metadata(tmp
     assert result["agents"][0]["identity"] is None
     assert result["agents"][0]["state"] == "sconosciuto"
     assert "observer_session_logs_invalid" in result["errors"]
+
+
+def test_a_team_with_the_usage_sensor_counts_it_and_the_cli_reads_the_row(tmp_path):
+    usage(tmp_path, {"capitano": 1})
+    result = observer(tmp_path, ("capitano", "sentinella", "sentinella-worker")).sample(NOW, 1)
+    assert result["ok"] is True and result["running"] == 3 and result["total"] == 3
+    row = next(r for r in result["agents"] if r["id"] == "sentinella-worker")
+    assert row["session"] == "SENTINELLA-WORKER" and row["running"] is True and isinstance(row["state"], str)
