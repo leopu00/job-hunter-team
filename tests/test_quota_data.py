@@ -245,7 +245,9 @@ def test_before_tick_classifies_a_failed_fetch_for_an_api_key():
 
 def test_the_declared_ceiling_is_repeated_to_the_captain_and_to_the_person():
     cfg = dict(API_KEY, no_quota_cap={"eur": 10, "tokens_per_hour": 500000})
-    assert quota_data._declared_ceiling(cfg) == "10 EUR; 500000 tokens/hour"
+    # the dollars the brake compares, and the conversion of a ceiling written in euros
+    assert quota_data._declared_ceiling(cfg) == "10 USD a day (declared as 10 EUR, counted at 1 USD per EUR); 500000 tokens/hour"
+    assert quota_data._declared_ceiling(dict(API_KEY, no_quota_cap={"usd": 7})) == "7 USD a day"
     assert quota_data._declared_ceiling(API_KEY) == ""
     assert "declared: 10 EUR; 500000 tokens/hour" in quota_data.captain_text("api_key", "10 EUR; 500000 tokens/hour")
     assert "no ceiling declared" in quota_data.captain_text("api_key")
@@ -282,9 +284,10 @@ def test_with_a_budget_of_the_team_the_person_reads_that_the_budget_bounds_the_s
     dated = dict(API_KEY, no_quota_cap={"eur": 10}, team={"budget": {"usd": 5, "starts_at": "2026-11-16T08:00:00Z",
                                                                           "ends_at": "2026-11-17T08:00:00Z"}})
     text = quota_data.user_text("", dated)
-    assert "5 USD" in text and "10 EUR" in text and "pi_spend_cap" not in text, text
+    assert "5 USD" in text and "10 USD a day" in text and "pi_spend_cap" not in text, text
     # no budget: the notice of the ceilings declared for the key, as before
-    assert quota_data.user_text("", dict(API_KEY, no_quota_cap={"eur": 10})) == catalog["quota_mode.noquota"].replace("%s", "10 EUR")
+    assert quota_data.user_text("", dict(API_KEY, no_quota_cap={"eur": 10})) == catalog["quota_mode.noquota"].replace(
+        "%s", "10 USD a day (declared as 10 EUR, counted at 1 USD per EUR)")
 
 
 # --- the pi harness: agents that write no Codex rollout ------------------------------------------------------

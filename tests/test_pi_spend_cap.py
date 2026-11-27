@@ -1857,3 +1857,39 @@ def test_the_person_is_asked_about_a_budget_once_not_every_day(tmp_path):
     bridge.tick(state=state)
     assert len(bridge.users) == 1, "one sentence, not a doppione a day"
     assert len([s for s, _ in bridge.sent if s == "CAPITANO"]) == 2, "the Captain keeps the figure of each day"
+
+
+# --- one currency: the spending is in dollars, the daily ceiling is compared and said in dollars ----------------------------
+
+@pytest.mark.parametrize("cap, spent, halts", [
+    ({"usd": 10}, 9.99, False), ({"usd": 10}, 10.0, True),                                   # the edge, in dollars
+    ({"eur": 10}, 9.99, False), ({"eur": 10}, 10.0, True),                                   # euros counted at 1 USD per EUR
+    ({"eur": 10, "eur_to_usd": 1.2}, 11.99, False), ({"eur": 10, "eur_to_usd": 1.2}, 12.0, True),
+    ({"usd": 5, "eur": 10}, 5.0, True),                                                       # usd wins over eur
+    ({"usd": True}, 50.0, False), ({"usd": -1}, 50.0, False), ({"eur": 10, "eur_to_usd": 0}, 10.0, True),
+])
+def test_the_daily_ceiling_is_compared_in_dollars_at_its_edge(cap, spent, halts):
+    verdict = cap_decide(cap, spent)
+    assert (verdict["action"] == "halt") is halts, verdict
+
+
+def cap_decide(cap, spent):
+    measure = {"cost": spent, "hour_tokens": 0, "calls": 1, "credit": None}
+    return cap_module.decide({"no_quota_cap": cap}, measure, True, budget=None)
+
+
+cap_module = cap
+
+
+def test_the_captain_and_the_person_read_the_same_currency(tmp_path):
+    pi_calls(tmp_path, [(NOON - 600, 12.5, 100)])
+    bridge = Bridge(tmp_path, {"no_quota_cap": {"eur": 10, "eur_to_usd": 1.2}})
+    bridge.tick()
+    captain = dict(bridge.sent)["CAPITANO"]
+    assert "12.5 USD today against a ceiling of 12 USD (declared as 10 EUR, counted at 1.2 USD per EUR)" in captain
+    user = bridge.users[0][0]
+    assert "12.5 USD" in user and "12 USD" in user and "EUR" not in user
+    bridge2 = Bridge(tmp_path / "b", {"no_quota_cap": {"usd": 10}})
+    pi_calls(tmp_path / "b", [(NOON - 600, 10.0, 100)])
+    bridge2.tick()
+    assert "against a ceiling of 10 USD." in dict(bridge2.sent)["CAPITANO"] and "EUR" not in dict(bridge2.sent)["CAPITANO"]

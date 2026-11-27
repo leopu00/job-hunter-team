@@ -5,10 +5,12 @@ window to pace by, so nothing stopped the spending but the ceiling set with the 
 call in its session files (pi_sessions.py), so the spending is now measured. Here it is compared, on every tick of the
 Sentinella, with the ceiling the config declares:
 
-  "no_quota_cap": {"eur": 10, "tokens_per_hour": 500000}
+  "no_quota_cap": {"usd": 10, "tokens_per_hour": 500000}
 
-  eur               what pi spent TODAY (local day). pi prices in dollars and the figure is compared as it is, one to
-                    one. It is pi's own cost per call plus the web search fee. pi's price for a cache write is the
+  usd               what pi spent TODAY (local day), in dollars like pi's prices. The older key `eur` is converted at
+                    `eur_to_usd` (else 1 USD per EUR: a euro is worth more, so the brake stops at the ceiling or before it;
+                    team_budget.no_quota_cap_usd), and every text says the dollars. It is pi's own cost per call plus
+                    the web search fee. pi's price for a cache write is the
                     provider's (1.25x the input for the default 30 minutes), so the figure follows the invoice; it
                     falls BELOW it only for a call above 272k input tokens (the long-context tier is not in pi's cost),
                     so the brake can come late by that surcharge, never by the cache.
@@ -18,7 +20,7 @@ Sentinella, with the ceiling the config declares:
   below the ceiling    nothing.
   at the ceiling       a DECLARED pause: the Captain and the person are told, the daily-halt flag is raised (ESC to
                        every session, no forced kill, the same brake the daily cap uses), tagged with its reason. It is
-                       lifted by the same tick that sees the spending back under the ceiling (the next day for `eur`,
+                       lifted by the same tick that sees the spending back under the ceiling (the next day for `usd`,
                        less than an hour later for `tokens_per_hour`) or when a burn-intent is in force. Not a FATAL.
   no ceiling declared  the person is told once a day how much pi spent and that nothing stops it.
 
@@ -74,11 +76,13 @@ def _positive(value):
 
 
 def ceilings(config):
-    """(eur, tokens_per_hour) as declared in `no_quota_cap`; None for each that is absent or not a positive number."""
+    """(daily ceiling in USD, tokens_per_hour) as declared in `no_quota_cap`; None for each that is absent or not a positive
+    number. The daily ceiling is `usd`, or `eur` converted (team_budget.no_quota_cap_usd): the spending is in dollars."""
     cap = config.get("no_quota_cap") if isinstance(config, dict) else None
     if not isinstance(cap, dict):
         return None, None
-    return _positive(cap.get("eur")), _positive(cap.get("tokens_per_hour"))
+    daily = team_budget.no_quota_cap_usd(config)
+    return (daily["usd"] if daily else None), _positive(cap.get("tokens_per_hour"))
 
 
 def day_start(now_ts):
@@ -736,7 +740,8 @@ def captain_text(verdict, spent, burst=None, config=None, now=None):
         raise_it = "a new budget (jht setup)"
     else:
         head = "SPENDING CEILING REACHED"
-        what = ("%s USD today against a ceiling of %s EUR" % (_money(verdict["spent"]), _money(verdict["ceiling"]))
+        what = ("%s USD today against a ceiling of %s USD%s" % (_money(verdict["spent"]), _money(verdict["ceiling"]),
+                                                               _declared_as(config))
                 if verdict["why"] == "eur" else
                 "%d tokens in the last hour against a ceiling of %d per hour" % (verdict["spent"], verdict["ceiling"]))
         lift = "It lifts by itself when the spending is back under the ceiling, or if the person raises it."
@@ -746,6 +751,14 @@ def captain_text(verdict, spent, burst=None, config=None, now=None):
                 " The FIRST BURST is open and stops on this ceiling at %d of %d scored positions: say so in the chat, in "
                 "their language: how many scored positions they have, and that %s lets the burst go on to %d."
                 % (burst[0], burst[1], raise_it, burst[1])) if burst else ""))
+
+
+def _declared_as(config):
+    """« (declared as 10 EUR, counted at 1 USD per EUR)» for a ceiling written in euros, else nothing."""
+    daily = team_budget.no_quota_cap_usd(config) if config else None
+    if not daily or daily["currency"] != "EUR":
+        return ""
+    return " (declared as %s EUR, counted at %s USD per EUR)" % (_money(daily["declared"]), ("%g" % daily["rate"]))
 
 
 def _flag(api):
