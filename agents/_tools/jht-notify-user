@@ -71,6 +71,43 @@ def interpret_escapes(text: str) -> str:
     return text.replace("\\n", "\n").replace("\\t", "\t").replace("\\r", "\r")
 
 
+def ensure_messages_table(db_path: str) -> None:
+    """The table of the messages is there before the insert. A jobs.db that exists but has no schema yet (created by a reader
+    before the first agent wrote to it) answered «no such table: pending_user_messages», and the notice to the person was
+    lost (collaudo W1 26/11, F-12). The schema is the one of shared/skills/_db.py, created on THIS file: never another one."""
+    conn = sqlite3.connect(db_path, timeout=10)
+    try:
+        if conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'pending_user_messages'"
+        ).fetchone():
+            return
+    finally:
+        conn.close()
+    here = pathlib.Path(__file__).resolve()
+    for directory in (pathlib.Path("/app/shared/skills"), here.parent.parent.parent / "shared" / "skills"):
+        candidate = directory / "_db.py"
+        if candidate.exists():
+            if str(directory) not in sys.path:
+                sys.path.insert(0, str(directory))   # _db.py imports its siblings (feedback_reasons, …)
+            try:
+                spec = importlib.util.spec_from_file_location("_jht_notify_db", str(candidate))
+                db_module = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(db_module)
+                db_module.DB_PATH = db_path
+                conn = db_module.get_db()
+                try:
+                    db_module.ensure_schema(conn)
+                    conn.commit()
+                finally:
+                    conn.close()
+            except sqlite3.Error:
+                raise
+            except Exception as error:  # noqa: BLE001 - said as a DB error, with the file, never a traceback
+                raise sqlite3.OperationalError("schema of %s not created: %s" % (db_path, error)) from error
+            return
+    raise sqlite3.OperationalError("no such table: pending_user_messages (and the schema module _db.py was not found)")
+
+
 def load_agent_questions():
     """Il modulo delle domande strutturate (shared/skills/agent_questions.py), o None."""
     here = pathlib.Path(__file__).resolve()
@@ -428,6 +465,7 @@ def main() -> int:
         return 2
 
     try:
+        ensure_messages_table(db_path)
         row_id, created = insert_pending(
             db_path,
             agent=args.agent,
@@ -441,7 +479,7 @@ def main() -> int:
         if args.existing_id is not None and row_id != args.existing_id:
             raise ValueError("existing-id does not match the durable notification")
     except (sqlite3.Error, ValueError) as e:
-        print(f"jht-notify-user: insert fallita: {e}", file=sys.stderr)
+        print(f"jht-notify-user: insert fallita su {db_path}: {e}", file=sys.stderr)
         return 2
 
     delivered_via = "web"

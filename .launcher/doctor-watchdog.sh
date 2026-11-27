@@ -422,6 +422,7 @@ while true; do
       case "$s_slot" in MAINT) s_role=mantenitore ;; *) s_role=dottore ;; esac
       case "$s_verdict" in
         DONE)    log "first turn seen: $s_role round done (slot=$s_slot)"; spawn_failed "$s_role" ok ;;
+        REOPEN)  log "the container was recreated after the $s_role round (slot=$s_slot) and took its session away — round opened again, it starts at the next look" ;;
         STALE)   log "$s_role round (slot=$s_slot) belonged to a window that ended — dropped, not marked" ;;
         RETRY)   log "$s_role started but took NO TURN ($s_reason, slot=$s_slot) — round NOT done, it starts again [$s_rest]"
                  spawn_failed "$s_role" 77 "ERROR: $s_role started but took no first turn ($s_reason)" ;;

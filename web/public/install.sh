@@ -512,6 +512,9 @@ ts_table() {
     en:installer.pairing_token_saved) printf '%s' 'Pairing token saved to %s (mode 0600)' ;;
     en:installer.path_added) printf '%s' 'PATH added to %s' ;;
     en:installer.path_added_etc_profile) printf '%s' 'PATH added to /etc/profile.d/jht.sh (system-wide)' ;;
+    en:installer.path_box_new_terminals) printf '%s' 'It is only for this terminal: the new ones find jht by themselves.' ;;
+    en:installer.path_box_no_profile) printf '%s' 'No profile file could be written: new terminals will not find jht either. Add the export line above to your shell profile.' ;;
+    en:installer.path_box_title) printf '%s' 'This terminal does not know jht yet. Paste this line here:' ;;
     en:installer.podman.answers_rootful) printf '%s' 'podman answers as rootful for %s (Rootless=%s): JHT needs Podman rootless.' ;;
     en:installer.podman.apt_failed) printf '%s' 'apt-get install%s failed. To see why, run: sudo apt-get install%s' ;;
     en:installer.podman.apt_would_remove) printf '%s' 'installing%s would REMOVE other packages of this computer (often containerd.io, Docker'\''s): nothing was changed. To see which, run: sudo apt-get -s install%s. Install Podman yourself in a way that keeps them (or decide to remove them), then run this installer again.' ;;
@@ -560,7 +563,6 @@ ts_table() {
     en:installer.system_detection) printf '%s' 'System detection' ;;
     en:installer.team_running) printf '%s' 'Job Hunter Team is running on this computer (%s). If setup was interrupted, resume it with «jht setup» in this terminal; no down is needed. To reinstall instead, stop it with «jht down», run the installer again, then start it with «jht up». Nothing was changed: your profile and documents in ~/.jht and ~/Documents/Job Hunter Team stay where they are.' ;;
     en:installer.team_running_update) printf '%s' 'Job Hunter Team is running on this computer (%s). To update it, stop it with «jht down», run the installer again, then start it with «jht up». Nothing was changed: your profile and documents in ~/.jht and ~/Documents/Job Hunter Team stay where they are.' ;;
-    en:installer.terminal_run) printf '%s' 'In this terminal, run:' ;;
     en:installer.uid_1001_taken) printf '%s' 'uid 1001 on this computer is the account '\''%s'\''. The Job Hunter Team container runs as uid 1001, so that account would own ~/.jht (your data and the portal credentials). Nothing was changed. Run JHT from the account '\''%s'\'', or give '\''%s'\'' another uid, then try again.' ;;
     en:installer.uninstall_keeps_your_data) printf '%s' 'To uninstall (keeps your data in ~/.jht and ~/Documents/Job Hunter Team):' ;;
     en:installer.wrapper_dir_bad_ancestor) printf '%s' 'Host wrapper directory has a symlinked or non-canonical ancestor: %s' ;;
@@ -668,6 +670,9 @@ ts_table() {
     it:installer.pairing_token_saved) printf '%s' 'Token di abbinamento salvato in %s (permessi 0600)' ;;
     it:installer.path_added) printf '%s' 'PATH aggiunto a %s' ;;
     it:installer.path_added_etc_profile) printf '%s' 'PATH aggiunto a /etc/profile.d/jht.sh (per tutto il sistema)' ;;
+    it:installer.path_box_new_terminals) printf '%s' 'Serve solo a questo terminale: quelli nuovi trovano jht da soli.' ;;
+    it:installer.path_box_no_profile) printf '%s' 'Non è stato possibile scrivere un file di profilo: neanche i terminali nuovi troveranno jht. Aggiungi la riga export qui sopra al profilo della tua shell.' ;;
+    it:installer.path_box_title) printf '%s' 'Questo terminale non conosce ancora jht. Incolla qui questa riga:' ;;
     it:installer.podman.answers_rootful) printf '%s' 'podman risponde come rootful per %s (Rootless=%s): JHT vuole Podman rootless.' ;;
     it:installer.podman.apt_failed) printf '%s' 'apt-get install%s non e'\'' riuscito. Per vedere perche'\'', lancia: sudo apt-get install%s' ;;
     it:installer.podman.apt_would_remove) printf '%s' 'installare%s TOGLIEREBBE altri pacchetti di questo computer (spesso containerd.io, di Docker): non e'\'' stato cambiato niente. Per vedere quali, lancia: sudo apt-get -s install%s. Installa tu Podman in un modo che li tenga (o decidi di toglierli), poi rilancia questo installer.' ;;
@@ -716,7 +721,6 @@ ts_table() {
     it:installer.system_detection) printf '%s' 'Rilevamento del sistema' ;;
     it:installer.team_running) printf '%s' 'Job Hunter Team è acceso su questo computer (%s). Se il setup si era interrotto, riprendilo con «jht setup» in questo terminale; non serve spegnere niente. Per reinstallare invece: spegnilo con «jht down», rilancia l'\''installer, poi riaccendilo con «jht up». Non è stato cambiato niente: il tuo profilo e i tuoi documenti in ~/.jht e ~/Documents/Job Hunter Team restano dove sono.' ;;
     it:installer.team_running_update) printf '%s' 'Job Hunter Team è acceso su questo computer (%s). Per aggiornarlo, spegnilo con «jht down», rilancia l'\''installer, poi riaccendilo con «jht up». Non è stato cambiato niente: il tuo profilo e i tuoi documenti in ~/.jht e ~/Documents/Job Hunter Team restano dove sono.' ;;
-    it:installer.terminal_run) printf '%s' 'In questo terminale, lancia:' ;;
     it:installer.uid_1001_taken) printf '%s' 'l'\''uid 1001 su questo computer e'\'' l'\''account '\''%s'\''. Il container di Job Hunter Team gira come uid 1001, quindi quell'\''account sarebbe il proprietario di ~/.jht (i tuoi dati e le credenziali dei portali). Non e'\'' stato cambiato niente. Lancia JHT dall'\''account '\''%s'\'', o dai a '\''%s'\'' un altro uid, poi riprova.' ;;
     it:installer.uninstall_keeps_your_data) printf '%s' 'Per disinstallare (i tuoi dati in ~/.jht e ~/Documents/Job Hunter Team restano):' ;;
     it:installer.wrapper_dir_bad_ancestor) printf '%s' 'La cartella del wrapper sull'\''host ha sopra di se'\'' un collegamento o un percorso non canonico: %s' ;;
@@ -824,6 +828,9 @@ ts_table() {
     hu:installer.pairing_token_saved) printf '%s' 'A párosítási token elmentve ide: %s (mód 0600)' ;;
     hu:installer.path_added) printf '%s' 'A PATH hozzáadva ehhez: %s' ;;
     hu:installer.path_added_etc_profile) printf '%s' 'A PATH hozzáadva a /etc/profile.d/jht.sh fájlhoz (az egész rendszerre)' ;;
+    hu:installer.path_box_new_terminals) printf '%s' 'Csak erre a terminálra kell: az újak maguktól megtalálják a jht-t.' ;;
+    hu:installer.path_box_no_profile) printf '%s' 'Nem sikerült profilfájlt írni: az új terminálok sem fogják megtalálni a jht-t. Add hozzá a fenti export sort a shelled profiljához.' ;;
+    hu:installer.path_box_title) printf '%s' 'Ez a terminál még nem ismeri a jht-t. Illeszd be ide ezt a sort:' ;;
     hu:installer.podman.answers_rootful) printf '%s' 'a podman rootfulként válaszol ennek: %s (Rootless=%s): a JHT-nak Podman rootless kell.' ;;
     hu:installer.podman.apt_failed) printf '%s' 'az apt-get install%s nem sikerült. Hogy lásd, miért, futtasd: sudo apt-get install%s' ;;
     hu:installer.podman.apt_would_remove) printf '%s' 'a(z)%s telepítése ELTÁVOLÍTANA más csomagokat erről a gépről (gyakran a containerd.io-t, a Dockerét): semmi sem változott. Hogy lásd, melyeket, futtasd: sudo apt-get -s install%s. Telepítsd a Podmant magad úgy, hogy azok megmaradjanak (vagy döntsd el, hogy eltávolítod őket), majd futtasd újra ezt a telepítőt.' ;;
@@ -872,7 +879,6 @@ ts_table() {
     hu:installer.system_detection) printf '%s' 'A rendszer felismerése' ;;
     hu:installer.team_running) printf '%s' 'A Job Hunter Team fut ezen a gépen (%s). Ha a beállítás megszakadt, folytasd a «jht setup» paranccsal ebben a terminálban; nem kell leállítani. Ha inkább újratelepítenéd: állítsd le a «jht down» paranccsal, futtasd újra a telepítőt, majd indítsd el a «jht up» paranccsal. Semmi sem változott: a profilod és a dokumentumaid a ~/.jht és a ~/Documents/Job Hunter Team mappában maradnak.' ;;
     hu:installer.team_running_update) printf '%s' 'A Job Hunter Team fut ezen a gépen (%s). A frissítéshez állítsd le a «jht down» paranccsal, futtasd újra a telepítőt, majd indítsd el a «jht up» paranccsal. Semmi sem változott: a profilod és a dokumentumaid a ~/.jht és a ~/Documents/Job Hunter Team mappában maradnak.' ;;
-    hu:installer.terminal_run) printf '%s' 'Ebben a terminálban futtasd:' ;;
     hu:installer.uid_1001_taken) printf '%s' 'Ezen a gépen az uid 1001 a(z) '\''%s'\'' fiók. A Job Hunter Team konténere uid 1001-ként fut, így az a fiók lenne a ~/.jht tulajdonosa (az adataid és a portálok hitelesítő adatai). Semmi sem változott. Futtasd a JHT-t a(z) '\''%s'\'' fiókból, vagy adj a(z) '\''%s'\'' fióknak másik uid-t, majd próbáld újra.' ;;
     hu:installer.uninstall_keeps_your_data) printf '%s' 'Eltávolítás (az adataid megmaradnak a ~/.jht és a ~/Documents/Job Hunter Team mappában):' ;;
     hu:installer.wrapper_dir_bad_ancestor) printf '%s' 'A gazdagép wrapper-mappájának egyik szülőmappája link vagy nem kanonikus: %s' ;;
@@ -980,6 +986,9 @@ ts_table() {
     es:installer.pairing_token_saved) printf '%s' 'Token de emparejamiento guardado en %s (permisos 0600)' ;;
     es:installer.path_added) printf '%s' 'PATH añadido a %s' ;;
     es:installer.path_added_etc_profile) printf '%s' 'PATH añadido a /etc/profile.d/jht.sh (para todo el sistema)' ;;
+    es:installer.path_box_new_terminals) printf '%s' 'Solo hace falta en este terminal: los nuevos encuentran jht solos.' ;;
+    es:installer.path_box_no_profile) printf '%s' 'No se pudo escribir ningún archivo de perfil: tampoco los terminales nuevos encontrarán jht. Añade la línea export de arriba al perfil de tu shell.' ;;
+    es:installer.path_box_title) printf '%s' 'Este terminal todavía no conoce jht. Pega aquí esta línea:' ;;
     es:installer.podman.answers_rootful) printf '%s' 'podman responde como rootful para %s (Rootless=%s): JHT necesita Podman rootless.' ;;
     es:installer.podman.apt_failed) printf '%s' 'apt-get install%s ha fallado. Para ver por qué, ejecuta: sudo apt-get install%s' ;;
     es:installer.podman.apt_would_remove) printf '%s' 'instalar%s QUITARÍA otros paquetes de este ordenador (a menudo containerd.io, el de Docker): no se ha cambiado nada. Para ver cuáles, ejecuta: sudo apt-get -s install%s. Instala tú Podman de forma que se queden (o decide quitarlos) y luego vuelve a ejecutar este instalador.' ;;
@@ -1028,7 +1037,6 @@ ts_table() {
     es:installer.system_detection) printf '%s' 'Detección del sistema' ;;
     es:installer.team_running) printf '%s' 'Job Hunter Team está en marcha en este ordenador (%s). Si la configuración se interrumpió, retómala con «jht setup» en este terminal; no hace falta apagar nada. Para reinstalar, en cambio: detenlo con «jht down», vuelve a ejecutar el instalador y luego arráncalo con «jht up». No se ha cambiado nada: tu perfil y tus documentos en ~/.jht y ~/Documents/Job Hunter Team se quedan donde están.' ;;
     es:installer.team_running_update) printf '%s' 'Job Hunter Team está en marcha en este ordenador (%s). Para actualizarlo, detenlo con «jht down», vuelve a ejecutar el instalador y luego arráncalo con «jht up». No se ha cambiado nada: tu perfil y tus documentos en ~/.jht y ~/Documents/Job Hunter Team se quedan donde están.' ;;
-    es:installer.terminal_run) printf '%s' 'En este terminal, ejecuta:' ;;
     es:installer.uid_1001_taken) printf '%s' 'el uid 1001 en este ordenador es la cuenta '\''%s'\''. El contenedor de Job Hunter Team se ejecuta como uid 1001, así que esa cuenta sería la propietaria de ~/.jht (tus datos y las credenciales de los portales). No se ha cambiado nada. Ejecuta JHT desde la cuenta '\''%s'\'', o da a '\''%s'\'' otro uid, y vuelve a intentarlo.' ;;
     es:installer.uninstall_keeps_your_data) printf '%s' 'Para desinstalar (tus datos en ~/.jht y ~/Documents/Job Hunter Team se quedan):' ;;
     es:installer.wrapper_dir_bad_ancestor) printf '%s' 'La carpeta del wrapper en el host tiene por encima un enlace simbólico o una ruta no canónica: %s' ;;
@@ -1136,6 +1144,9 @@ ts_table() {
     de:installer.pairing_token_saved) printf '%s' 'Kopplungstoken gespeichert in %s (Modus 0600)' ;;
     de:installer.path_added) printf '%s' 'PATH zu %s hinzugefügt' ;;
     de:installer.path_added_etc_profile) printf '%s' 'PATH zu /etc/profile.d/jht.sh hinzugefügt (systemweit)' ;;
+    de:installer.path_box_new_terminals) printf '%s' 'Das gilt nur für dieses Terminal: Neue Terminals finden jht von selbst.' ;;
+    de:installer.path_box_no_profile) printf '%s' 'Es konnte keine Profildatei geschrieben werden: Auch neue Terminals finden jht nicht. Füge die export-Zeile oben in das Profil deiner Shell ein.' ;;
+    de:installer.path_box_title) printf '%s' 'Dieses Terminal kennt jht noch nicht. Füge diese Zeile hier ein:' ;;
     de:installer.podman.answers_rootful) printf '%s' 'podman antwortet für %s als rootful (Rootless=%s): JHT braucht Podman rootless.' ;;
     de:installer.podman.apt_failed) printf '%s' 'apt-get install%s fehlgeschlagen. Um zu sehen, warum, führe aus: sudo apt-get install%s' ;;
     de:installer.podman.apt_would_remove) printf '%s' 'die Installation von%s würde ANDERE Pakete dieses Computers ENTFERNEN (oft containerd.io, das von Docker): Nichts wurde geändert. Um zu sehen, welche, führe aus: sudo apt-get -s install%s. Installiere Podman selbst so, dass sie bleiben (oder entscheide dich, sie zu entfernen), dann führe diesen Installer erneut aus.' ;;
@@ -1184,7 +1195,6 @@ ts_table() {
     de:installer.system_detection) printf '%s' 'Systemerkennung' ;;
     de:installer.team_running) printf '%s' 'Job Hunter Team läuft auf diesem Computer (%s). Wenn die Einrichtung unterbrochen wurde, setze sie mit «jht setup» in diesem Terminal fort; ein down ist nicht nötig. Um stattdessen neu zu installieren, stoppe es mit «jht down», führe den Installer erneut aus und starte es dann mit «jht up». Nichts wurde geändert: Dein Profil und deine Dokumente in ~/.jht und ~/Documents/Job Hunter Team bleiben, wo sie sind.' ;;
     de:installer.team_running_update) printf '%s' 'Job Hunter Team läuft auf diesem Computer (%s). Zum Aktualisieren stoppe es mit «jht down», führe den Installer erneut aus und starte es dann mit «jht up». Nichts wurde geändert: Dein Profil und deine Dokumente in ~/.jht und ~/Documents/Job Hunter Team bleiben, wo sie sind.' ;;
-    de:installer.terminal_run) printf '%s' 'Führe in diesem Terminal aus:' ;;
     de:installer.uid_1001_taken) printf '%s' 'uid 1001 ist auf diesem Computer das Konto '\''%s'\''. Der Container von Job Hunter Team läuft als uid 1001, also würde dieses Konto ~/.jht besitzen (deine Daten und die Zugangsdaten der Portale). Nichts wurde geändert. Starte JHT vom Konto '\''%s'\'' aus, oder gib '\''%s'\'' eine andere uid, dann versuch es erneut.' ;;
     de:installer.uninstall_keeps_your_data) printf '%s' 'Zum Deinstallieren (deine Daten in ~/.jht und ~/Documents/Job Hunter Team bleiben):' ;;
     de:installer.wrapper_dir_bad_ancestor) printf '%s' 'Der Wrapper-Ordner auf dem Host hat einen übergeordneten Ordner, der ein symbolischer Link oder nicht kanonisch ist: %s' ;;
@@ -1292,6 +1302,9 @@ ts_table() {
     fr:installer.pairing_token_saved) printf '%s' 'Token d'\''appairage enregistré dans %s (permissions 0600)' ;;
     fr:installer.path_added) printf '%s' 'PATH ajouté à %s' ;;
     fr:installer.path_added_etc_profile) printf '%s' 'PATH ajouté à /etc/profile.d/jht.sh (pour tout le système)' ;;
+    fr:installer.path_box_new_terminals) printf '%s' 'C'\''est seulement pour ce terminal : les nouveaux trouvent jht tout seuls.' ;;
+    fr:installer.path_box_no_profile) printf '%s' 'Aucun fichier de profil n'\''a pu être écrit : les nouveaux terminaux ne trouveront pas jht non plus. Ajoute la ligne export ci-dessus au profil de ton shell.' ;;
+    fr:installer.path_box_title) printf '%s' 'Ce terminal ne connaît pas encore jht. Colle ici cette ligne :' ;;
     fr:installer.podman.answers_rootful) printf '%s' 'podman répond en rootful pour %s (Rootless=%s) : JHT a besoin de Podman rootless.' ;;
     fr:installer.podman.apt_failed) printf '%s' 'échec de apt-get install%s. Pour voir pourquoi, lance : sudo apt-get install%s' ;;
     fr:installer.podman.apt_would_remove) printf '%s' 'installer%s SUPPRIMERAIT d'\''autres paquets de cet ordinateur (souvent containerd.io, celui de Docker) : rien n'\''a été modifié. Pour voir lesquels, lance : sudo apt-get -s install%s. Installe Podman toi-même d'\''une façon qui les garde (ou décide de les supprimer), puis relance cet installeur.' ;;
@@ -1340,7 +1353,6 @@ ts_table() {
     fr:installer.system_detection) printf '%s' 'Détection du système' ;;
     fr:installer.team_running) printf '%s' 'Job Hunter Team tourne sur cet ordinateur (%s). Si la configuration a été interrompue, reprends-la avec «jht setup» dans ce terminal ; pas besoin d'\''arrêter quoi que ce soit. Pour réinstaller plutôt : arrête-le avec «jht down», relance l'\''installeur, puis démarre-le avec «jht up». Rien n'\''a été modifié : ton profil et tes documents dans ~/.jht et ~/Documents/Job Hunter Team restent où ils sont.' ;;
     fr:installer.team_running_update) printf '%s' 'Job Hunter Team tourne sur cet ordinateur (%s). Pour le mettre à jour, arrête-le avec «jht down», relance l'\''installeur, puis démarre-le avec «jht up». Rien n'\''a été modifié : ton profil et tes documents dans ~/.jht et ~/Documents/Job Hunter Team restent où ils sont.' ;;
-    fr:installer.terminal_run) printf '%s' 'Dans ce terminal, lance :' ;;
     fr:installer.uid_1001_taken) printf '%s' 'l'\''uid 1001 sur cet ordinateur est le compte '\''%s'\''. Le conteneur de Job Hunter Team tourne en uid 1001, donc ce compte serait propriétaire de ~/.jht (tes données et les identifiants des portails). Rien n'\''a été modifié. Lance JHT depuis le compte '\''%s'\'', ou donne à '\''%s'\'' un autre uid, puis réessaie.' ;;
     fr:installer.uninstall_keeps_your_data) printf '%s' 'Pour désinstaller (tes données dans ~/.jht et ~/Documents/Job Hunter Team restent) :' ;;
     fr:installer.wrapper_dir_bad_ancestor) printf '%s' 'Le dossier du wrapper sur l'\''hôte a au-dessus de lui un lien symbolique ou un chemin non canonique : %s' ;;
@@ -1448,6 +1460,9 @@ ts_table() {
     pt:installer.pairing_token_saved) printf '%s' 'Token de emparelhamento guardado em %s (permissões 0600)' ;;
     pt:installer.path_added) printf '%s' 'PATH acrescentado a %s' ;;
     pt:installer.path_added_etc_profile) printf '%s' 'PATH acrescentado a /etc/profile.d/jht.sh (para todo o sistema)' ;;
+    pt:installer.path_box_new_terminals) printf '%s' 'Só é preciso neste terminal: os novos encontram o jht sozinhos.' ;;
+    pt:installer.path_box_no_profile) printf '%s' 'Não foi possível escrever nenhum ficheiro de perfil: também os terminais novos não vão encontrar o jht. Acrescenta a linha export acima ao perfil da tua shell.' ;;
+    pt:installer.path_box_title) printf '%s' 'Este terminal ainda não conhece o jht. Cola aqui esta linha:' ;;
     pt:installer.podman.answers_rootful) printf '%s' 'o podman responde como rootful para %s (Rootless=%s): o JHT precisa do Podman rootless.' ;;
     pt:installer.podman.apt_failed) printf '%s' 'apt-get install%s falhou. Para ver porquê, corre: sudo apt-get install%s' ;;
     pt:installer.podman.apt_would_remove) printf '%s' 'instalar%s REMOVERIA outros pacotes deste computador (muitas vezes containerd.io, do Docker): não foi alterado nada. Para ver quais, corre: sudo apt-get -s install%s. Instala tu o Podman de uma forma que os mantenha (ou decide removê-los) e depois corre este instalador de novo.' ;;
@@ -1496,7 +1511,6 @@ ts_table() {
     pt:installer.system_detection) printf '%s' 'Deteção do sistema' ;;
     pt:installer.team_running) printf '%s' 'O Job Hunter Team está a correr neste computador (%s). Se a configuração foi interrompida, retoma-a com «jht setup» neste terminal; não é preciso desligar nada. Para reinstalar em vez disso, para-o com «jht down», corre o instalador de novo e depois inicia-o com «jht up». Não foi alterado nada: o teu perfil e os teus documentos em ~/.jht e ~/Documents/Job Hunter Team ficam onde estão.' ;;
     pt:installer.team_running_update) printf '%s' 'O Job Hunter Team está a correr neste computador (%s). Para o atualizar, para-o com «jht down», corre o instalador de novo e depois inicia-o com «jht up». Não foi alterado nada: o teu perfil e os teus documentos em ~/.jht e ~/Documents/Job Hunter Team ficam onde estão.' ;;
-    pt:installer.terminal_run) printf '%s' 'Neste terminal, corre:' ;;
     pt:installer.uid_1001_taken) printf '%s' 'o uid 1001 neste computador é a conta '\''%s'\''. O contentor do Job Hunter Team corre como uid 1001, por isso essa conta seria a proprietária de ~/.jht (os teus dados e as credenciais dos portais). Não foi alterado nada. Corre o JHT a partir da conta '\''%s'\'', ou dá a '\''%s'\'' outro uid, e depois tenta de novo.' ;;
     pt:installer.uninstall_keeps_your_data) printf '%s' 'Para desinstalar (os teus dados em ~/.jht e ~/Documents/Job Hunter Team ficam):' ;;
     pt:installer.wrapper_dir_bad_ancestor) printf '%s' 'A pasta do wrapper no anfitrião tem acima de si uma ligação simbólica ou um caminho não canónico: %s' ;;
@@ -3912,6 +3926,24 @@ main_native() {
   link_bin_native
 }
 
+# The LAST thing the installer prints, after the wizard: `curl | bash` runs in a child shell and cannot change the PATH of the
+# terminal the person typed it in, so `jht` is «command not found» there until that terminal is told (collaudo L1 bis 26/11: the
+# person pasted «jht team chat assistente» first). One line to paste, which also opens the chat; and whether new terminals find
+# jht by themselves (a profile file was written) or not.
+path_box() {
+  local line
+  line="$(printf 'export PATH=%q:"$PATH" && jht team chat assistente' "$BIN_DIR")"
+  printf "\n${YELLOW}${BOLD}══════════════════════════════════════════${RESET}\n"
+  printf "  ${BOLD}%s${RESET}\n\n" "$(ts installer.path_box_title 'This terminal does not know jht yet. Paste this line here:')"
+  printf "      ${BOLD}%s${RESET}\n\n" "$line"
+  if [ "${PATH_NEW_SHELL:-0}" -eq 1 ]; then
+    printf "  %s\n" "$(ts installer.path_box_new_terminals 'It is only for this terminal: the new ones find jht by themselves.')"
+  else
+    printf "  %s\n" "$(ts installer.path_box_no_profile 'No profile file could be written: new terminals will not find jht either. Add the export line above to your shell profile.')"
+  fi
+  printf "${YELLOW}${BOLD}══════════════════════════════════════════${RESET}\n"
+}
+
 main() {
   if [ "$PUBLISH_RUNTIME_BUNDLE" -eq 1 ]; then
     publish_runtime_candidate_bundle
@@ -3934,7 +3966,7 @@ main() {
   run_host_setup
   final_message
   maybe_onboard; local wizard_result=$?
-  [ "$path_had_bin" -eq 1 ] || printf '\n  %s export PATH=%q:"$PATH"\n' "$(ts installer.terminal_run 'In this terminal, run:')" "$BIN_DIR"
+  [ "$path_had_bin" -eq 1 ] || path_box
   return "$wizard_result"
 }
 

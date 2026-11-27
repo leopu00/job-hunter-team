@@ -16,7 +16,8 @@ from test_vps_provisioning_sequence import Server, install, source  # noqa: F401
 
 ROOT = Path(__file__).resolve().parents[1]
 INSTALLERS = [ROOT / "scripts/install.sh", ROOT / "web/public/install.sh"]
-PREFIX = "In this terminal, run: "
+PREFIX = "This terminal does not know jht yet. Paste this line here:"
+NEXT = " && jht team chat assistente"
 pytestmark = pytest.mark.skipif(os.name == "nt", reason="POSIX installer; native Windows uses install.ps1")
 
 
@@ -34,12 +35,16 @@ def output(done):
 
 
 def printed_export(text):
-    lines = [line.strip() for line in text.splitlines() if PREFIX in line]
-    assert len(lines) == 1, text
-    command = lines[0].split(PREFIX, 1)[1]
-    assert command.startswith("export PATH=")
-    assert text.rstrip().endswith(lines[0]), "the current-shell instruction must remain visible at the end"
-    return command
+    """The export of the box the installer prints LAST (JHT-T352, collaudo L1 bis 26/11): one line to paste, which also opens the
+    chat with the Assistente, and nothing printed after the box."""
+    lines = [line.strip() for line in text.rstrip().splitlines()]
+    assert lines.count(PREFIX) == 1, text
+    box = lines[lines.index(PREFIX) - 1:]
+    assert set(box[0]) == {"═"} and set(box[-1]) == {"═"}, "the box is the last thing printed"
+    pasted = [line for line in box if line.startswith("export PATH=")]
+    assert len(pasted) == 1 and pasted[0].endswith(NEXT), box
+    assert "It is only for this terminal: the new ones find jht by themselves." in box, box
+    return pasted[0][: -len(NEXT)]
 
 
 def resolves_in_original_shell(server, text):
@@ -132,3 +137,21 @@ def test_the_installer_pin_and_public_payload_match_the_canonical_bytes():
     payload = INSTALLERS[0].read_bytes()
     assert INSTALLERS[1].read_bytes() == payload
     assert (ROOT / "desktop/src-tauri/installer.sha256").read_text().strip() == hashlib.sha256(payload).hexdigest()
+
+
+def test_when_no_profile_was_written_the_box_says_new_terminals_will_not_find_jht(tmp_path):
+    script = (
+        f'JHT_INSTALLER_SOURCE_ONLY=1 . {shlex.quote(str(INSTALLERS[0]))}\n'
+        f'BIN_DIR={shlex.quote(str(tmp_path / "bin"))}; USE_DOCKER=1; RUNTIME_CHOICE=""; OS=linux\n'
+        'keep_chosen_runtime() { :; }; header() { :; }; main_docker() { PATH_READY=1; }\n'
+        'refuse_foreign_bind_uid() { :; }; save_pairing_token() { :; }; run_host_setup() { :; }\n'
+        'will_auto_onboard() { return 0; }\n'
+        'maybe_onboard() { printf "WIZARD_FINISHED\\n"; return 0; }\n'
+        'main\n'
+    )
+    done = subprocess.run(["bash", "-c", script], env={**os.environ, "HOME": str(tmp_path), "NO_COLOR": "1"},
+                          capture_output=True, text=True, timeout=10)
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert "new terminals will not find jht either" in done.stdout
+    assert "the new ones find jht by themselves" not in done.stdout
+    assert done.stdout.rstrip().endswith("═")
