@@ -974,6 +974,8 @@
   "installer.windows.podman.sshproxy": "Podman started the machine, but its connection for Docker tools (win-sshproxy.exe) did not start.",
   "installer.windows.podman.from_desktop": "The line above says why. Run the installer from the Windows desktop of this user (the Start menu, Windows PowerShell), not from ssh, a service or a scheduled task: those run without a desktop.",
   "installer.windows.podman.restart_then_again": "Only if it stops here again from the desktop: restart Windows, then run it once more.",
+  "installer.windows.podman.download_stalled": "The download of the Podman machine's system image stopped: nothing arrived for 10 minutes.",
+  "installer.windows.podman.download_stalled_todo": "Check the internet connection of this computer: a slow line is fine, one that stops is not. If the connection works, check that WSL answers: run \"wsl --status\" in PowerShell.",
   "installer.windows.podman.stopped": "The Podman setup stopped (exit code %s).",
   "installer.windows.podman.stopped_todo": "The line above says why. Run the same install command again; if it stops at the same place, keep that line and ask for help.",
   "installer.windows.branch_unresolved": "Cannot resolve branch '%s' to an immutable release commit.",

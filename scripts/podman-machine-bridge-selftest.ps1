@@ -165,11 +165,11 @@ function Test-JhtMachineProgress {
     Invoke-JhtPodmanProcess -FilePath $script:Fake -Arguments @('machine', 'init', 'jht-fixture', 'stall') -Phase podman_machine_init -TimeoutMilliseconds 60000 -StallMilliseconds 2000 -LogPath (Join-Path $case 'runtime.log') | Out-Null
   } catch { $failed = $_.Exception }
   Assert-JhtDeadlineCase ($clock.ElapsedMilliseconds -le 15000) 'A stalled command was not stopped by the stall bound.'
-  Assert-JhtDeadlineCase ($null -ne $failed -and $failed.Data['Code'] -eq 'podman_machine_timeout' -and $failed.Data['Reason'] -eq 'no_progress') 'A stalled command lost its code or its reason.'
+  Assert-JhtDeadlineCase ($null -ne $failed -and $failed.Data['Code'] -eq 'podman_machine_download_stalled' -and $failed.Data['Reason'] -eq 'no_progress') 'A stalled command lost its code or its reason.'
   Assert-JhtDeadlineCase ($LASTEXITCODE -eq 124) 'The stall lost its exit code.'
-  Assert-JhtDeadlineCase ($failed.Message.Contains('made no progress') -and $failed.Message.Contains('internet connection') -and -not $failed.Message.Contains('Check WSL before')) "The stall message does not say the real cause: $($failed.Message)"
+  Assert-JhtDeadlineCase ($failed.Message.StartsWith('podman_machine_download_stalled: ') -and $failed.Message.Contains('made no progress') -and $failed.Message.Contains('internet connection') -and -not $failed.Message.Contains('Check WSL before')) "The stall message does not say the real cause: $($failed.Message)"
   $log = [IO.File]::ReadAllText((Join-Path $case 'runtime.log'))
-  Assert-JhtDeadlineCase ($log.Contains('podman_machine_init: podman_machine_stalled')) 'Runtime log lost the stall.'
+  Assert-JhtDeadlineCase ($log.Contains('podman_machine_init: podman_machine_download_stalled')) 'Runtime log lost the stall.'
   $child = Get-JhtFixtureProcess (Join-Path $case 'parent.pid')
   if ($child) { try { Assert-JhtDeadlineCase ($child.WaitForExit(2000)) 'The stalled command survived.' } finally { $child.Dispose() } }
   [Console]::Out.WriteLine("T356_CASE engine=$($PSVersionTable.PSVersion) stalled_init_stopped=true real_cause=true PASS")

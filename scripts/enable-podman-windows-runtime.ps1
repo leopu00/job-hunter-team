@@ -1004,6 +1004,9 @@ try {
   $why = $_.Exception.Message
   # Its own code (26): the machine is there and answers, what is missing is the pipe Docker tools use.
   if ($why -clike 'podman_api_forwarding_unavailable: *') { [Console]::Error.WriteLine($why); exit 26 }
+  # Its own code (27): machine init stopped because its download made no progress for minutes. The line says why; the cause is
+  # the connection, not WSL, and the same command again takes an image already downloaded in full from Podman's cache.
+  if ($why -clike 'podman_machine_download_stalled: *') { [Console]::Error.WriteLine($why); exit 27 }
   # A failure to reach the machine while its pipe is held by another user's program: the cause, in plain words, after Podman's own.
   if ((Get-JhtPodmanPipeState -MachineName $MachineName) -ceq 'denied' -and $why -notmatch 'held by a program of another Windows user') { $why = "$why $(Get-JhtPodmanPipeAdvice -MachineName $MachineName)" }
   [Console]::Error.WriteLine("podman_machine_unavailable: $why")

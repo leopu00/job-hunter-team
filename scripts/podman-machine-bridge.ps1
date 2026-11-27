@@ -349,9 +349,9 @@ function Invoke-JhtPodmanProcess {
     } while ($true)
     if (-not $exited) {
       $clean = Stop-JhtPodmanProcessTree -Process $process -Owner $owned
-      $code = if ($clean) { 'podman_machine_timeout' } else { 'podman_machine_cleanup_failed' }
-      $logged = if ($stalled -and $clean) { 'podman_machine_stalled' } else { $code }
-      Write-JhtPodmanBridgeEvent -Phase $Phase -Code $logged -ElapsedMilliseconds $watch.ElapsedMilliseconds -LogPath $LogPath
+      # A stall has its own code, so the installer and the app say «the download stopped», not «Podman did not respond».
+      $code = if (-not $clean) { 'podman_machine_cleanup_failed' } elseif ($stalled) { 'podman_machine_download_stalled' } else { 'podman_machine_timeout' }
+      Write-JhtPodmanBridgeEvent -Phase $Phase -Code $code -ElapsedMilliseconds $watch.ElapsedMilliseconds -LogPath $LogPath
       $global:LASTEXITCODE = 124
       $writtenMB = [Math]::Round($written / 1MB)
       $detail = if (-not $clean) { 'The process tree could not be stopped cleanly. Restart Windows before trying again.' }
@@ -375,7 +375,7 @@ function Invoke-JhtPodmanProcess {
     $global:LASTEXITCODE = $process.ExitCode
     return [pscustomobject]@{ ExitCode = $process.ExitCode; Stdout = $snapshot.Stdout; Stderr = $snapshot.Stderr; OutputComplete = $snapshot.OutputComplete; ElapsedMilliseconds = $watch.ElapsedMilliseconds }
   } catch {
-    if ($_.Exception.Data['Code'] -in @('podman_machine_timeout', 'podman_machine_cleanup_failed', 'podman_machine_command_failed')) { throw }
+    if ($_.Exception.Data['Code'] -in @('podman_machine_timeout', 'podman_machine_download_stalled', 'podman_machine_cleanup_failed', 'podman_machine_command_failed')) { throw }
     throw (New-JhtPodmanCommandFailure -Process $process -Owner $owned -Started $started -Phase $Phase -ElapsedMilliseconds $watch.ElapsedMilliseconds -LogPath $LogPath)
   } finally {
     if ($capture) { $capture.Close() }
@@ -1339,7 +1339,7 @@ function Start-JhtPodmanMachineForUp {
   } catch {
     [Console]::Error.WriteLine($_.Exception.Message)
     if ($_.Exception.Message -clike 'podman_api_forwarding_unavailable: *') { exit 26 }
-    if ($_.Exception.Data['Code'] -in @('podman_machine_timeout', 'podman_machine_cleanup_failed')) { exit 124 }
+    if ($_.Exception.Data['Code'] -in @('podman_machine_timeout', 'podman_machine_download_stalled', 'podman_machine_cleanup_failed')) { exit 124 }
     exit 22
   }
 }

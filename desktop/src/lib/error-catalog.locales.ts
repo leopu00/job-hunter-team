@@ -30,6 +30,13 @@ const COPY_BY_ENGLISH_TEXT: Readonly<Record<string, ErrorTranslations>> = {
     ["A Podman gép nem állt készen időben.", "Ellenőrizd, hogy a WSL és a Podman válaszol-e, majd próbáld újra."],
     ["A máquina Podman não ficou pronta a tempo.", "Verifica se o WSL e o Podman respondem e tenta novamente."],
   ),
+  "The download of the Podman machine’s system image stopped: nothing arrived for 10 minutes.": tr(
+    ["Der Download des Systemabbilds der Podman-Maschine ist stehen geblieben: 10 Minuten lang ist nichts angekommen.", "Prüfe die Internetverbindung dieses Computers (eine langsame Leitung ist in Ordnung, eine, die abbricht, nicht) und versuche die Einrichtung erneut. Wenn die Verbindung funktioniert, prüfe, ob WSL antwortet."],
+    ["La descarga de la imagen del sistema de la máquina Podman se detuvo: no llegó nada durante 10 minutos.", "Comprueba la conexión a internet de este ordenador (una línea lenta sirve, una que se corta no) y vuelve a intentar la instalación. Si la conexión funciona, comprueba que WSL responda."],
+    ["Le téléchargement de l’image système de la machine Podman s’est arrêté : rien n’est arrivé pendant 10 minutes.", "Vérifie la connexion internet de cet ordinateur (une ligne lente convient, une ligne qui s’arrête non), puis réessaie l’installation. Si la connexion fonctionne, vérifie que WSL répond."],
+    ["A Podman-gép rendszerképének letöltése leállt: 10 percig semmi sem érkezett.", "Ellenőrizd a számítógép internetkapcsolatát (a lassú vonal rendben van, a megszakadó nem), majd próbáld újra a telepítést. Ha a kapcsolat működik, ellenőrizd, hogy a WSL válaszol-e."],
+    ["A descarga da imagem de sistema da máquina Podman parou: durante 10 minutos não chegou nada.", "Verifica a ligação à internet deste computador (uma linha lenta serve, uma que pára não) e tenta a instalação novamente. Se a ligação funcionar, verifica se o WSL responde."],
+  ),
   "Podman did not respond in time. Setup stopped.": tr(
     ["Podman hat nicht rechtzeitig geantwortet. Die Einrichtung wurde gestoppt.", "Prüfe, ob WSL antwortet, und versuche die Einrichtung erneut."],
     ["Podman no respondió a tiempo. La instalación se detuvo.", "Comprueba que WSL responda y vuelve a intentar la instalación."],
@@ -2023,6 +2030,7 @@ export const ERROR_CATALOG_LOCALES: Readonly<Record<string, ErrorTranslations>> 
   podman_other_machine_running: translated("Another Podman machine is already running: on a Mac only one can run at a time."),
   podman_other_machine_running_named: translated("The Podman machine “{machine}” is already running: on a Mac only one can run at a time."),
   podman_machine_mounts_home: translated("The JHT Podman machine sees more of the Mac’s folders than Job Hunter Team needs."),
+  podman_machine_download_stalled: translated("The download of the Podman machine’s system image stopped: nothing arrived for 10 minutes."),
   podman_machine_timeout: translated("Podman did not respond in time. Setup stopped."),
   podman_machine_unavailable: translated("The Podman machine did not become ready in time."),
   podman_machine_cleanup_failed: translated("Podman did not respond and the command’s processes could not all be stopped."),

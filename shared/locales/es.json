@@ -954,6 +954,8 @@
   "installer.windows.podman.sshproxy": "Podman ha arrancado la máquina, pero su conexión para las herramientas de Docker (win-sshproxy.exe) no ha arrancado.",
   "installer.windows.podman.from_desktop": "La línea de arriba dice por qué. Ejecuta el instalador desde el escritorio de Windows de este usuario (el menú Inicio, Windows PowerShell), no desde ssh, un servicio o una tarea programada: esos funcionan sin escritorio.",
   "installer.windows.podman.restart_then_again": "Solo si se para otra vez aquí desde el escritorio: reinicia Windows y vuelve a ejecutarlo una vez más.",
+  "installer.windows.podman.download_stalled": "La descarga de la imagen del sistema de la máquina Podman se detuvo: no llegó nada durante 10 minutos.",
+  "installer.windows.podman.download_stalled_todo": "Comprueba la conexión a internet de este ordenador: una línea lenta sirve, una que se corta no. Si la conexión funciona, comprueba que WSL responda: ejecuta \"wsl --status\" en PowerShell.",
   "installer.windows.podman.stopped": "La configuración de Podman se ha parado (código de salida %s).",
   "installer.windows.podman.stopped_todo": "La línea de arriba dice por qué. Vuelve a ejecutar el mismo comando de instalación; si se para en el mismo punto, guarda esa línea y pide ayuda.",
   "installer.windows.branch_unresolved": "No puedo resolver la rama '%s' en un commit de versión inmutable.",

@@ -954,6 +954,8 @@
   "installer.windows.podman.sshproxy": "Podman hat die Maschine gestartet, aber ihre Verbindung für Docker-Werkzeuge (win-sshproxy.exe) ist nicht gestartet.",
   "installer.windows.podman.from_desktop": "Die Zeile oben sagt, warum. Führe den Installer vom Windows-Desktop dieses Benutzers aus (Startmenü, Windows PowerShell), nicht über ssh, einen Dienst oder eine geplante Aufgabe: Die laufen ohne Desktop.",
   "installer.windows.podman.restart_then_again": "Nur wenn er auch vom Desktop aus hier wieder stoppt: Starte Windows neu und führe ihn dann noch einmal aus.",
+  "installer.windows.podman.download_stalled": "Der Download des Systemabbilds der Podman-Maschine ist stehen geblieben: 10 Minuten lang ist nichts angekommen.",
+  "installer.windows.podman.download_stalled_todo": "Prüfe die Internetverbindung dieses Computers: Eine langsame Leitung ist in Ordnung, eine, die abbricht, nicht. Wenn die Verbindung funktioniert, prüfe, ob WSL antwortet: Führe \"wsl --status\" in PowerShell aus.",
   "installer.windows.podman.stopped": "Die Podman-Einrichtung wurde abgebrochen (Exit-Code %s).",
   "installer.windows.podman.stopped_todo": "Die Zeile oben sagt, warum. Führe denselben Installationsbefehl erneut aus; wenn er an derselben Stelle stoppt, behalte diese Zeile und bitte um Hilfe.",
   "installer.windows.branch_unresolved": "Branch '%s' lässt sich keinem unveränderlichen Release-Commit zuordnen.",

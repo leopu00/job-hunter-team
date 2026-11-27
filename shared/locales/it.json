@@ -974,6 +974,8 @@
   "installer.windows.podman.sshproxy": "Podman ha avviato la macchina, ma il suo collegamento per gli strumenti Docker (win-sshproxy.exe) non e' partito.",
   "installer.windows.podman.from_desktop": "La riga sopra dice perche'. Lancia l'installer dal desktop di Windows di questo utente (il menu Start, Windows PowerShell), non da ssh, da un servizio o da un'attivita' pianificata: quelli girano senza desktop.",
   "installer.windows.podman.restart_then_again": "Solo se si ferma di nuovo qui dal desktop: riavvia Windows, poi lancialo ancora una volta.",
+  "installer.windows.podman.download_stalled": "Il download dell'immagine di sistema della macchina Podman si è fermato: per 10 minuti non è arrivato niente.",
+  "installer.windows.podman.download_stalled_todo": "Controlla la connessione a internet di questo computer: una linea lenta va bene, una che si ferma no. Se la connessione funziona, controlla che WSL risponda: esegui \"wsl --status\" in PowerShell.",
   "installer.windows.podman.stopped": "La preparazione di Podman si e' fermata (codice di uscita %s).",
   "installer.windows.podman.stopped_todo": "La riga sopra dice perche'. Rilancia lo stesso comando di installazione; se si ferma nello stesso punto, tieni quella riga e chiedi aiuto.",
   "installer.windows.branch_unresolved": "Non riesco a ricondurre il ramo '%s' a un commit di rilascio immutabile.",

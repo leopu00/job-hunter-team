@@ -955,6 +955,8 @@
   "installer.windows.podman.sshproxy": "A Podman elindította a gépet, de a Docker-eszközökhöz való kapcsolata (win-sshproxy.exe) nem indult el.",
   "installer.windows.podman.from_desktop": "A fenti sor megmondja, miért. A telepítőt ennek a felhasználónak a Windows-asztaláról futtasd (Start menü, Windows PowerShell), ne ssh-ból, szolgáltatásból vagy ütemezett feladatból: azok asztal nélkül futnak.",
   "installer.windows.podman.restart_then_again": "Csak ha az asztalról is megint itt áll meg: indítsd újra a Windowst, majd futtasd még egyszer.",
+  "installer.windows.podman.download_stalled": "A Podman-gép rendszerképének letöltése leállt: 10 percig semmi sem érkezett.",
+  "installer.windows.podman.download_stalled_todo": "Ellenőrizd a számítógép internetkapcsolatát: a lassú vonal rendben van, a megszakadó nem. Ha a kapcsolat működik, ellenőrizd, hogy a WSL válaszol-e: futtasd a \"wsl --status\" parancsot a PowerShellben.",
   "installer.windows.podman.stopped": "A Podman előkészítése leállt (kilépési kód: %s).",
   "installer.windows.podman.stopped_todo": "A fenti sor megmondja, miért. Futtasd újra ugyanazt a telepítési parancsot; ha ugyanott áll meg, őrizd meg azt a sort, és kérj segítséget.",
   "installer.windows.branch_unresolved": "A(z) '%s' ág nem vezethető vissza egy megváltoztathatatlan kiadási commitra.",
