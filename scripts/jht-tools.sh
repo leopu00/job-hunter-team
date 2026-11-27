@@ -64,6 +64,21 @@ tools_notice() {
     && [ ! -L "$TOOLS_STATE_DIR" ] && mv -f "$tmp" "$target" || rm -f "$tmp"
 }
 
+# The switch starts now: $JHT_HOME/state/tools-switch.json = {"schema":1,"at":"<ISO UTC>"}, written whole BEFORE the down of the core
+# team (JHT-T346). Inside the container the chat of the person says it on a line of its own and keeps the line being typed,
+# `jht team status` says the team is moving onto the full tools instead of «no agent», and the Assistente, started again on the full
+# image, says it is back. Only a notice, like tools.json: nothing on the host reads it back. Same care for links as tools_notice.
+tools_switch_notice() {
+  local tmp target="$TOOLS_STATE_DIR/tools-switch.json"
+  [ ! -L "$TOOLS_STATE_DIR" ] || return 0
+  mkdir -p "$TOOLS_STATE_DIR" 2>/dev/null || return 0
+  [ -d "$TOOLS_STATE_DIR" ] && [ ! -L "$TOOLS_STATE_DIR" ] || return 0
+  if [ -e "$target" ] || [ -L "$target" ]; then [ -f "$target" ] && [ ! -L "$target" ] || return 0; fi
+  tmp="$(mktemp "$TOOLS_STATE_DIR/.tools-switch.json.XXXXXX" 2>/dev/null)" || return 0
+  printf '{"schema":1,"at":"%s"}\n' "$(tools_now)" > "$tmp" && chmod 644 "$tmp" \
+    && [ ! -L "$TOOLS_STATE_DIR" ] && mv -f "$tmp" "$target" || rm -f "$tmp"
+}
+
 # state and reason as the engine and the host files say them.
 tools_state() {
   tools_engine_up || { printf 'error engine_unreachable\n'; return; }
@@ -319,6 +334,9 @@ tools_switch_auto() {
   unset JHT_IMAGE
   if [ "$stopped" -eq 0 ]; then
     printf '%s\n' "${BASHPID:-$(exec sh -c 'echo "$PPID"')}" > "$TOOLS_SWITCHING_FILE"
+    tools_switch_notice
+    # the chat of the person reads the notice every second or so: it says the restart and keeps the line before the down ends it
+    sleep "${JHT_TOOLS_SWITCH_NOTICE_WAIT:-3}"
     "$WRAPPER_PATH" down </dev/null >/dev/null 2>&1 || true
   fi
   rm -f "$RUNTIME_TIER_FILE" && rm -f "$RUNTIME_TIER_INTEGRITY" || { rm -f "$TOOLS_SWITCHING_FILE"; return 0; }

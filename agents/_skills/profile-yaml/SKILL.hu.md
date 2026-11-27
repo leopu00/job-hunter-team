@@ -258,7 +258,7 @@ date -u +"%Y-%m-%dT%H:%M:%SZ" > "$JHT_HOME/profile/onboarding-done.flag"
 test -f "$JHT_HOME/profile/onboarding-done.flag" && echo FLAG_OK || echo FLAG_MISSING
 ```
 
-Soha korábban, soha azért, hogy egy kérdést rövidre zárj, és soha ne töröld. Azt jelzi ennek a számítógépnek, hogy már senki sincs az onboarding közepén: csak ekkor áll át a csapat a felderítők (Scout) teljes eszközeire (pár perces újraindítás; a csevegés magától folytatódik). A személynek nem szólsz róla.
+Soha korábban, soha azért, hogy egy kérdést rövidre zárj, és soha ne töröld. Azt jelzi ennek a számítógépnek, hogy már senki sincs az onboarding közepén: csak ekkor áll át a csapat a felderítők (Scout) teljes eszközeire (pár perces újraindítás; a csevegés magától folytatódik). **ELŐTTE mondd, soha utána.** A core image-en (az `echo "$JHT_IMAGE_TIER"` azt írja ki, hogy `core`) a flag újraindítja a csapatot: az onboardingot lezáró üzenetben, még a flag megírása előtt, mondd meg a személynek egy sorban, az ő nyelvén, hogy a kérdéseknek vége, és a csapat mindjárt kb. 2 percre újraindul, hogy átálljon a teljes eszközökre; a csevegés megáll és magától újracsatlakozik, amit éppen ír, megmarad, nincs teendője. Utána írd meg a flaget. A teljes image-en nincs újraindítás: ne szólj róla.
 
 ## 🎓 `has_degree` — a vegzettsegbol, soha nem helykitoltonek
 

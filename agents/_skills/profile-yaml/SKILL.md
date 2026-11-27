@@ -263,7 +263,7 @@ date -u +"%Y-%m-%dT%H:%M:%SZ" > "$JHT_HOME/profile/onboarding-done.flag"
 test -f "$JHT_HOME/profile/onboarding-done.flag" && echo FLAG_OK || echo FLAG_MISSING
 ```
 
-Never before, never to cut a question short, never remove it. It tells this computer that nobody is in the middle of the onboarding any more: only then does the team move onto the Scouts' full tools (a restart of a couple of minutes; the chat comes back by itself). You say nothing about it to the person.
+Never before, never to cut a question short, never remove it. It tells this computer that nobody is in the middle of the onboarding any more: only then does the team move onto the Scouts' full tools (a restart of a couple of minutes; the chat comes back by itself). **Say it BEFORE, never after.** On the core image (`echo "$JHT_IMAGE_TIER"` prints `core`) the flag makes the team restart: in the message that closes the onboarding, and before you write the flag, tell the person in one line of their language that the questions are over and that in a moment the team restarts for about 2 minutes to move onto the full tools; the chat stops and reconnects by itself, what they are typing is kept, there is nothing to do. Then write the flag. On the full image there is no restart: say nothing about it.
 
 ## 🎓 `has_degree` — from the education, never as a placeholder
 

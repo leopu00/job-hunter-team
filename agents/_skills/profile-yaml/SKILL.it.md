@@ -264,7 +264,7 @@ date -u +"%Y-%m-%dT%H:%M:%SZ" > "$JHT_HOME/profile/onboarding-done.flag"
 test -f "$JHT_HOME/profile/onboarding-done.flag" && echo FLAG_OK || echo FLAG_MISSING
 ```
 
-Mai prima, mai per tagliare corta una domanda, mai toglierlo. Dice a questo computer che nessuno è più a metà dell'onboarding: solo allora la squadra passa agli strumenti completi degli Scout (un riavvio di un paio di minuti; la chat riprende da sola). Alla persona non ne dici niente.
+Mai prima, mai per tagliare corta una domanda, mai toglierlo. Dice a questo computer che nessuno è più a metà dell'onboarding: solo allora la squadra passa agli strumenti completi degli Scout (un riavvio di un paio di minuti; la chat riprende da sola). **Dillo PRIMA, mai dopo.** Sull'immagine core (`echo "$JHT_IMAGE_TIER"` stampa `core`) il flag fa riavviare la squadra: nel messaggio che chiude l'onboarding, e prima di scrivere il flag, di' alla persona in una riga della sua lingua che le domande sono finite e che fra poco la squadra si riavvia per circa 2 minuti per passare agli strumenti completi; la chat si ferma e si ricollega da sola, quello che sta scrivendo resta, non deve fare niente. Poi scrivi il flag. Sull'immagine completa non c'è riavvio: non ne dici niente.
 
 ## 🎓 `has_degree` — dagli studi, mai come segnaposto
 

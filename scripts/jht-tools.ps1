@@ -114,6 +114,24 @@ function Write-ToolsNotice {
   } catch { }
 }
 
+# The switch starts now: $JhtHome\state\tools-switch.json = {"schema":1,"at":"<ISO UTC>"}, written whole BEFORE the down of the core
+# team (JHT-T346), as jht-tools.sh does: the chat, `jht team status` and the Assistente inside the container read it. A notice only.
+function Write-ToolsSwitchNotice {
+  try {
+    $dir = Get-Item -LiteralPath $ToolsStateDir -Force -ErrorAction SilentlyContinue
+    if ($dir -and ((($dir.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) -or -not $dir.PSIsContainer)) { return }
+    New-Item -ItemType Directory -Path $ToolsStateDir -Force | Out-Null
+    $dir = Get-Item -LiteralPath $ToolsStateDir -Force
+    if (($dir.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) { return }
+    $file = Get-Item -LiteralPath (Join-Path $ToolsStateDir 'tools-switch.json') -Force -ErrorAction SilentlyContinue
+    if ($file -and ((($file.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) -or $file.PSIsContainer)) { return }
+    $temp = Join-Path $ToolsStateDir ".tools-switch.json.$PID-$([guid]::NewGuid().ToString('N'))"
+    $json = '{{"schema":1,"at":"{0}"}}' -f (Get-ToolsNow)
+    [IO.File]::WriteAllText($temp, "$json`n", [Text.UTF8Encoding]::new($false))
+    Move-Item -LiteralPath $temp -Destination (Join-Path $ToolsStateDir 'tools-switch.json') -Force
+  } catch { }
+}
+
 # @(state, reason) as the engine and the host files say them.
 function Get-ToolsState {
   if (-not (Test-ToolsEngineUp)) { return @('error', 'engine_unreachable') }
@@ -471,6 +489,11 @@ function Invoke-ToolsSwitchAuto {
   $up = $false
   if (-not $stopped) {
     [IO.File]::WriteAllText($ToolsSwitchingFile, "$PID`n", [Text.UTF8Encoding]::new($false))
+    Write-ToolsSwitchNotice
+    # the chat of the person reads the notice every second or so: it says the restart and keeps the line before the down ends it
+    $noticeWait = 3
+    if ($env:JHT_TOOLS_SWITCH_NOTICE_WAIT -match '^[0-9]{1,2}$') { $noticeWait = [int]$env:JHT_TOOLS_SWITCH_NOTICE_WAIT }
+    Start-Sleep -Seconds $noticeWait
     $null = Invoke-ToolsWrapperStep 'down'
   }
   try {
