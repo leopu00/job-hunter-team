@@ -258,7 +258,7 @@ date -u +"%Y-%m-%dT%H:%M:%SZ" > "$JHT_HOME/profile/onboarding-done.flag"
 test -f "$JHT_HOME/profile/onboarding-done.flag" && echo FLAG_OK || echo FLAG_MISSING
 ```
 
-Nunca antes, nunca para encurtar uma pergunta, nunca o tires. Diz a este computador que já ninguém está a meio do onboarding: só então a equipa passa para as ferramentas completas dos Scout (um reinício de alguns minutos; o chat volta sozinho). À pessoa não dizes nada sobre isso.
+Nunca antes, nunca para encurtar uma pergunta, nunca o tires. Diz a este computador que já ninguém está a meio do onboarding: só então a equipa passa para as ferramentas completas dos Scout (um reinício de alguns minutos; o chat volta sozinho). **Di-lo ANTES, nunca depois.** Na imagem core (`echo "$JHT_IMAGE_TIER"` imprime `core`) o flag faz a equipa reiniciar: na mensagem que fecha o onboarding, e antes de escreveres o flag, diz à pessoa numa linha da língua dela que as perguntas acabaram e que daqui a pouco a equipa reinicia durante cerca de 2 minutos para passar para as ferramentas completas; o chat para e volta a ligar-se sozinho, o que está a escrever fica guardado, não tem de fazer nada. Depois escreve o flag. Na imagem completa não há reinício: não digas nada.
 
 ## 🎓 `has_degree` — a partir da formacao, nunca como valor provisorio
 

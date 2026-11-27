@@ -4029,6 +4029,8 @@ team_chat_through_switch() {
     info "$(jht_say tools.chat_switched)"
     return 0
   fi
+  # on a line of its own: the REPL ended in the middle of the person's line (JHT-T346); the line itself the chat kept, and gives back
+  [ -t 2 ] && printf '\n' >&2
   info "$(jht_say tools.chat_reconnecting)"
   wait_for_tools_switch quiet
   export JHT_TEAM_CHAT_RESUME=$((round + 1)) JHT_TEAM_CHAT_RESUME_AFTER=switch

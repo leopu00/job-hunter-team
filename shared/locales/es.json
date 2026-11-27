@@ -492,6 +492,8 @@
   "welcome.assistente_file_linux": "ejecuta `jht artifact upload <archivo>` en una terminal (o ponlo en la carpeta `~/Documents/Job Hunter Team/allegati`, si puedes escribir en ella)",
   "welcome.assistente_file_macos": "ejecuta `jht artifact upload <archivo>` en una terminal (o ponlo en la carpeta `~/Documents/Job Hunter Team/allegati`; Finder puede mostrarla traducida como «Documentos», es la misma carpeta)",
   "welcome.assistente_file_windows": "ejecuta `jht artifact upload <archivo>` en una terminal (o ponlo en la carpeta `%USERPROFILE%\\Documents\\Job Hunter Team\\allegati`; el Explorador puede mostrarla traducida como «Documentos», es la misma carpeta)",
+  "welcome.assistente_back": "Ya estoy aquí otra vez. 👋 El equipo ha vuelto a arrancar con las herramientas completas y se pone de nuevo con tu búsqueda: te escribo en cuanto haya algo que ver. Mientras tanto puedes escribirme aquí cuando quieras, por ejemplo para añadir detalles a tu perfil; `jht team status` te dice cómo va el equipo.",
+  "welcome.assistente_back_paused": "Ya estoy aquí otra vez. 👋 El equipo ha vuelto a arrancar con las herramientas completas, pero ahora está en pausa: `jht team status` te dice por qué y cuándo se reanuda. Puedes escribirme aquí cuando quieras.",
   "welcome.assistente_first": "Empecemos: ¿cómo te llamas?",
   "welcome.assistente_ready_who": "Soy el Asistente del Job Hunter Team — tu punto de contacto con el equipo de IA que busca trabajo para ti.",
   "welcome.assistente_ready": "Tu perfil está listo y el equipo ya trabaja en tu búsqueda, así que ahora no tienes que enviarme nada. Escríbeme aquí cuando quieras saber cómo va, cambiar algo de tu perfil o preguntar qué pasa ahora.",

@@ -492,6 +492,8 @@
   "welcome.assistente_file_linux": "lance `jht artifact upload <fichier>` dans un terminal (ou mets-le dans le dossier `~/Documents/Job Hunter Team/allegati`, si tu peux y écrire)",
   "welcome.assistente_file_macos": "lance `jht artifact upload <fichier>` dans un terminal (ou mets-le dans le dossier `~/Documents/Job Hunter Team/allegati` ; le Finder peut l'afficher traduit, c'est le même dossier)",
   "welcome.assistente_file_windows": "lance `jht artifact upload <fichier>` dans un terminal (ou mets-le dans le dossier `%USERPROFILE%\\Documents\\Job Hunter Team\\allegati` ; l'Explorateur peut l'afficher traduit, c'est le même dossier)",
+  "welcome.assistente_back": "Je suis de retour. 👋 L'équipe a redémarré avec les outils complets et se remet au travail sur ta recherche : je t'écris dès qu'il y a quelque chose à voir. En attendant tu peux m'écrire ici quand tu veux, par exemple pour ajouter des détails à ton profil ; `jht team status` te dit comment va l'équipe.",
+  "welcome.assistente_back_paused": "Je suis de retour. 👋 L'équipe a redémarré avec les outils complets, mais elle est en pause pour l'instant : `jht team status` te dit pourquoi et quand elle reprend. Tu peux m'écrire ici quand tu veux.",
   "welcome.assistente_first": "On commence : comment t'appelles-tu ?",
   "welcome.assistente_ready_who": "Je suis l'Assistant de Job Hunter Team — ton point de contact avec l'équipe d'IA qui cherche un emploi pour toi.",
   "welcome.assistente_ready": "Ton profil est prêt et l’équipe travaille déjà sur ta recherche, tu n’as donc rien à m’envoyer pour l’instant. Écris-moi ici quand tu veux savoir comment ça avance, changer quelque chose dans ton profil ou demander ce qui se passe ensuite.",

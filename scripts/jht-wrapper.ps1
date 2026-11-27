@@ -2015,6 +2015,8 @@ function Invoke-JhtTeamChatThroughSwitch {
   $round = 0
   if ($env:JHT_TEAM_CHAT_RESUME -match '^[0-9]{1,2}$') { $round = [int]$env:JHT_TEAM_CHAT_RESUME }
   if ($round -ge 3) { Write-Info (Get-JhtText 'tools.chat_switched'); $script:JhtTeamChatCode = 0; return }
+  # on a line of its own: the REPL ended in the middle of the person's line (JHT-T346); the line itself the chat kept, and gives back
+  Write-Host ''
   Write-Info (Get-JhtText 'tools.chat_reconnecting')
   Wait-JhtToolsSwitch -Quiet
   $env:JHT_TEAM_CHAT_RESUME = [string]($round + 1)
