@@ -110,6 +110,46 @@ def tmux_has_session(name):
     ).returncode == 0
 
 
+SHELL_COMMANDS = ("", "bash", "sh", "zsh", "dash", "-bash", "-sh", "-zsh")
+
+
+def worker_cli_alive(name=WORKER_SESSION):
+    """True solo se nel pane della sessione (target ancorato) gira un CLI e non una shell.
+
+    Collaudo W1 del 26/11: il CLI era uscito sulla finestra di fiducia, la sessione restava con un bash nudo e
+    `/usage` finiva digitato nella shell («-bash: /usage: No such file or directory»)."""
+    r = subprocess.run(
+        ["tmux", "display-message", "-p", "-t", f"={name}:", "#{pane_current_command}"],
+        capture_output=True,
+    )
+    if r.returncode != 0:
+        return False
+    return r.stdout.decode("utf-8", errors="replace").strip() not in SHELL_COMMANDS
+
+
+def read_config_dict():
+    """jht.config.json letto dal bridge, o None se non si legge."""
+    bridge = _import_bridge()
+    try:
+        return bridge._read_config_json() if bridge is not None else None
+    except Exception:
+        return None
+
+
+def claude_subscription_access(config):
+    """True solo per il provider Claude con `auth_method: subscription`.
+
+    /usage del CLI legge i limiti dell'abbonamento: con una chiave API (o un altro provider) non c'e' niente da
+    leggere, e il worker con Claude Code non deve nemmeno partire (collaudo W1 del 26/11, F-06)."""
+    if not isinstance(config, dict):
+        return False
+    active = config.get("active_provider")
+    if str(active or "").lower() not in ("claude", "anthropic"):
+        return False
+    entry = (config.get("providers") or {}).get(active)
+    return isinstance(entry, dict) and entry.get("auth_method") == "subscription"
+
+
 def send_keys(name, *keys):
     subprocess.run(
         ["tmux", "send-keys", "-t", name, *keys],
@@ -317,6 +357,9 @@ def query_claude_worker():
     # Anche col fix "ultima modal in scrollback" del parser, mantenere
     # un solo formato di scrollback (modal aperta → chiusa) rende lo
     # stato più prevedibile.
+    # Niente tasti a un pane dove non gira il CLI: `/usage` in una shell e' un comando, non una lettura.
+    if not worker_cli_alive():
+        return ""
     send_keys(WORKER_SESSION, "Escape")
     time.sleep(0.5)
     send_keys(WORKER_SESSION, "/usage", "Enter")
@@ -329,8 +372,13 @@ def query_claude_worker():
 
 def check_claude():
     """TUI fallback per claude/anthropic. Spawn WORKER se serve, manda
-    /usage, parsa la modal."""
+    /usage, parsa la modal. Solo con l'abbonamento Claude: altrimenti il worker non parte."""
+    if not claude_subscription_access(read_config_dict()):
+        return None, "not_a_claude_subscription"
     spawned_now = False
+    if tmux_has_session(WORKER_SESSION) and not worker_cli_alive():
+        print(f"[check_usage] {WORKER_SESSION} holds a bare shell, not the CLI; removing it")
+        subprocess.run(["tmux", "kill-session", "-t", f"={WORKER_SESSION}"], capture_output=True)
     if not tmux_has_session(WORKER_SESSION):
         print(f"[check_usage] {WORKER_SESSION} is not active; spawning it via start-agent.sh worker...")
         if not spawn_worker():

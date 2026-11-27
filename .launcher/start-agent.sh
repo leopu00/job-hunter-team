@@ -289,7 +289,53 @@ if [ "$ROLE" = "worker" ]; then
     echo "Refusing to start $WORKER_SESSION: disk_low." >&2
     exit 1
   fi
+  # Il worker legge /usage dell'ABBONAMENTO Claude: con un altro accesso (chiave
+  # API, provider diverso) non c'e' niente da leggere, e un Claude Code acceso
+  # nel container di un accesso a consumo non deve esistere (collaudo W1 del
+  # 26/11: «API Usage Billing» nella testata del worker con `auth_method:
+  # api_key`). Config assente o illeggibile = nessun abbonamento dichiarato.
+  _spawn_stage="worker_access"
+  _w_access="$(python3 - "$JHT_HOME/jht.config.json" <<'PYEOF' 2>/dev/null || echo "unreadable"
+import json, sys
+try:
+    with open(sys.argv[1], encoding="utf-8") as handle:
+        cfg = json.load(handle)
+    active = str(cfg.get("active_provider") or "").lower()
+    entry = (cfg.get("providers") or {}).get(cfg.get("active_provider") or "") or {}
+    method = entry.get("auth_method") if isinstance(entry, dict) else None
+except Exception:
+    print("unreadable")
+    raise SystemExit(0)
+if active not in ("claude", "anthropic"):
+    print("provider:" + (active or "none"))
+elif method != "subscription":
+    print("auth_method:" + str(method or "none"))
+else:
+    print("subscription")
+PYEOF
+)"
+  if [ "$_w_access" != "subscription" ]; then
+    _spawn_stage="worker_not_subscription"
+    echo "Refusing to start $WORKER_SESSION: it reads /usage of a Claude subscription, and this access is not one ($_w_access)." >&2
+    exit 1
+  fi
   _ensure_claude_onboarding "$JHT_HOME"
+  # Fiducia sulla cartella preimpostata: la finestra «Quick safety check» ha
+  # «No, exit» come scelta predefinita, e un Enter alla cieca chiudeva il CLI.
+  python3 - "$JHT_HOME/.claude.json" "$JHT_HOME" <<'PYEOF' 2>/dev/null || true
+import json, sys
+f, folder = sys.argv[1], sys.argv[2]
+try:
+    d = json.load(open(f))
+except Exception:
+    d = {}
+projects = d.get("projects") if isinstance(d.get("projects"), dict) else {}
+entry = projects.get(folder) if isinstance(projects.get(folder), dict) else {}
+entry["hasTrustDialogAccepted"] = True
+projects[folder] = entry
+d["projects"] = projects
+json.dump(d, open(f, "w"), indent=2)
+PYEOF
   _spawn_stage="worker_tmux_new_session"
   tmux new-session -d -x 220 -y 50 -s "$WORKER_SESSION" -c "$JHT_HOME"
   tmux send-keys -t "$WORKER_SESSION" "export HOME='$JHT_HOME'" C-m
@@ -301,55 +347,54 @@ if [ "$ROLE" = "worker" ]; then
   # I percorsi /opt/jht-deps/* non sono opzionali: da quando le dipendenze
   # vivono nel volume, `providers update` installa lì i CLI.
   tmux send-keys -t "$WORKER_SESSION" "export PATH='/app/agents/_tools:/opt/jht-deps/bin:/opt/jht-deps/npm-global/bin:/opt/jht-deps/python/bin:/jht_home/.npm-global/bin:$PATH'" C-m
-  tmux send-keys -t "$WORKER_SESSION" "export IS_SANDBOX=1" C-m
   # marcatore per agent_vitals.py: il worker era l'unico senza flag
   tmux send-keys -t "$WORKER_SESSION" "export JHT_AGENT_NAME='sentinella-worker'" C-m
-  tmux send-keys -t "$WORKER_SESSION" "claude --dangerously-skip-permissions" C-m
-  # Auto-respond a TUI startup prompt: detect-and-respond invece di blind
-  # Enter. Claude Code 2.1.x mostra il "Bypass Permissions mode" warning
-  # con default "1. No, exit" → blind Enter killa claude. Fix: capture-pane,
-  # se vede il warning manda Down + Enter (sceglie "2. Yes, I accept").
-  # Vedi BACKLOG [BUG-CLAUDE-TRUST-PROMPT].
-  setsid sh -c "
-    _i=0
-    while [ \$_i -lt 6 ]; do
-      sleep 2
-      _pane=\$(tmux capture-pane -t '$WORKER_SESSION' -p -S -40 2>/dev/null)
-      if echo \"\$_pane\" | grep -q 'Bypass Permissions mode'; then
-        tmux send-keys -t '$WORKER_SESSION' Down
-        sleep 1
-        tmux send-keys -t '$WORKER_SESSION' Enter
-        exit 0
-      fi
-      if echo \"\$_pane\" | grep -qE 'trust (the files|this folder|this directory)'; then
-        tmux send-keys -t '$WORKER_SESSION' Enter
-        exit 0
-      fi
-      _i=\$((_i + 1))
-    done
-    tmux send-keys -t '$WORKER_SESSION' Enter
-  " >/dev/null 2>&1 < /dev/null &
-  # Il REPL è partito davvero? Finora questa riga stampava "✓ avviato" a
-  # prescindere: col PATH rotto il pane restava un bash nudo, il singleton
-  # sopra ("già attivo") lo rendeva DEFINITIVO — la sessione esiste, quindi non
-  # verrà mai ricreata — e i consumatori (check_usage.py, sentinel-bridge)
-  # controllano solo `tmux has-session`. Risultato: il fallback /usage esisteva
-  # solo sulla carta, e mancava proprio quando serve, cioè quando l'HTTP di
-  # Anthropic risponde 429. Un guscio va segnalato e rimosso, non ereditato.
+  # Niente --dangerously-skip-permissions (e quindi niente IS_SANDBOX): il
+  # worker scrive solo /usage, che non usa strumenti, e senza il flag non c'e'
+  # nemmeno la finestra «Bypass Permissions mode» a cui rispondere.
+  tmux send-keys -t "$WORKER_SESSION" "claude" C-m
+  # Pronto = il CLI gira E mostra il suo prompt, senza finestre aperte. Prima
+  # bastava il processo vivo nei primi 12 s: la finestra di fiducia lo tiene
+  # vivo, poi un Enter sceglieva «No, exit», il CLI usciva e restava bash, con
+  # «started» gia' stampato e /usage digitato nella shell. Una finestra si
+  # risponde portando il cursore sulla voce «Yes» (mai un Enter alla cieca);
+  # un CLI visto vivo e poi sparito e' un fallimento subito, non un'attesa.
   _w_up=0
+  _w_seen_cli=0
+  _w_answered=0
   _spawn_stage="worker_repl_wait"
-  for _i in $(seq 1 12); do
+  for _i in $(seq 1 "${JHT_WORKER_READY_TIMEOUT_S:-30}"); do
     sleep 1
     # `=NOME:`: se la sessione sparisce durante l'attesa (pane chiuso dal CLI
     # che crasha), un nome nudo risolverebbe per PREFISSO sul pane di una
     # sorella con un CLI vivo e dichiarerebbe partito un worker che non c'e'.
     case "$(tmux display-message -p -t "=$WORKER_SESSION:" '#{pane_current_command}' 2>/dev/null || echo "")" in
-      ""|bash|sh|zsh|dash|-bash|-sh|-zsh) : ;;
-      *) _w_up=1; break ;;
+      ""|bash|sh|zsh|dash|-bash|-sh|-zsh)
+        [ "$_w_seen_cli" -eq 1 ] && break
+        continue ;;
     esac
+    _w_seen_cli=1
+    # Solo lo schermo visibile: nello scrollback la finestra gia' risposta resterebbe per sempre.
+    _w_pane="$(tmux capture-pane -p -t "=$WORKER_SESSION:" 2>/dev/null || echo "")"
+    if printf '%s\n' "$_w_pane" | grep -qE 'No, exit|trust (the files|this folder|this directory)|Bypass Permissions mode'; then
+      [ "$_w_answered" -lt 3 ] || continue
+      _w_answered=$((_w_answered + 1))
+      _w_cur="$(printf '%s\n' "$_w_pane" | grep -oE '❯ *[0-9]+\.' | grep -oE '[0-9]+' | tail -1 || true)"
+      _w_yes="$(printf '%s\n' "$_w_pane" | grep -oE '[0-9]+\. *Yes' | grep -oE '^[0-9]+' | tail -1 || true)"
+      [ -n "$_w_cur" ] && [ -n "$_w_yes" ] || continue
+      while [ "$_w_cur" -lt "$_w_yes" ]; do tmux send-keys -t "$WORKER_SESSION" Down; _w_cur=$((_w_cur + 1)); done
+      while [ "$_w_cur" -gt "$_w_yes" ]; do tmux send-keys -t "$WORKER_SESSION" Up; _w_cur=$((_w_cur - 1)); done
+      sleep 0.3
+      tmux send-keys -t "$WORKER_SESSION" Enter
+      continue
+    fi
+    if printf '%s\n' "$_w_pane" | grep -qE 'for shortcuts|^([[:space:]]|│)*(>|❯)( |$)'; then
+      _w_up=1
+      break
+    fi
   done
   if [ "$_w_up" -ne 1 ]; then
-    echo "✗ $WORKER_SESSION: REPL did not start (pane remains a shell) — session removed" >&2
+    echo "✗ $WORKER_SESSION: REPL did not start (no ready Claude prompt: the pane is a shell or a dialog) — session removed" >&2
     # `=`: un kill e' distruttivo e non deve mai poter atterrare su una
     # sessione sorella per prefisso. Qui la nostra esiste (l'abbiamo appena
     # creata) e l'exact match vincerebbe comunque, ma la regola vale sulla

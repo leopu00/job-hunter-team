@@ -2944,6 +2944,29 @@ def _log_worker_spawn_result(result, status=None):
             print(f"[bridge V5] worker spawn {stream}: {line}", file=sys.stderr)
 
 
+def _claude_worker_allowed():
+    """True solo per Claude con `auth_method: subscription` nel config (config illeggibile = no)."""
+    try:
+        cfg = _read_config_json()
+    except (OSError, ValueError):
+        return False
+    if not isinstance(cfg, dict):
+        return False
+    active = cfg.get("active_provider")
+    if str(active or "").lower() not in ("claude", "anthropic"):
+        return False
+    entry = (cfg.get("providers") or {}).get(active)
+    return isinstance(entry, dict) and entry.get("auth_method") == "subscription"
+
+
+def _worker_session_exists():
+    try:
+        return subprocess.run(["tmux", "has-session", "-t", f"={WORKER_SESSION}"],
+                              capture_output=True, timeout=5).returncode == 0
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+
+
 def _try_claude_tui_parser():
     """Primario per Claude: capture-pane SENTINELLA-WORKER + parse.
 
@@ -3016,7 +3039,13 @@ def _try_claude_tui_parser():
 
     # ── 3. Detect "Loading…" failure: parsed=None + Loading nel buf ──
     if parsed is None:
-        if buf and "Loading usage data" in buf:
+        if not buf:
+            # Nessun CLI nel pane (uscito, resta la shell): la sessione va tolta, o has-session la terrebbe
+            # «viva» per sempre e il prossimo tick non la rifarebbe.
+            print("[bridge V5] no Claude CLI in SENTINELLA-WORKER (a bare shell): kill+respawn worker")
+            _kill_worker()
+            _worker_last_restart_ts = now
+        elif "Loading usage data" in buf:
             print("[bridge V5] TUI in 'Loading...' loop, kill+respawn worker")
             _kill_worker()
             _worker_last_restart_ts = now  # forza re-spawn dopo
@@ -3156,10 +3185,16 @@ def _do_fetch(provider):
         return (p, None) if p else (None, "kimi_api_none")
 
     if provider in ("anthropic", "claude"):
-        # 1. PRIMARIO: TUI parser (no rate-limit, fragile a cambi modal)
-        p = _try_claude_tui_parser()
-        if p:
-            return p, None
+        # 1. PRIMARIO: TUI parser (no rate-limit, fragile a cambi modal). Solo con l'abbonamento: con una chiave
+        #    API il worker con Claude Code non deve esistere, ne' all'avvio ne' nel rilancio periodico (collaudo
+        #    W1 del 26/11, F-06/F-07); uno rimasto da un accesso precedente si spegne.
+        if _claude_worker_allowed():
+            p = _try_claude_tui_parser()
+            if p:
+                return p, None
+        elif _worker_session_exists():
+            print("[bridge V5] the access is not a Claude subscription: stopping SENTINELLA-WORKER")
+            _kill_worker()
         # 2. FALLBACK: HTTP /oauth/usage (rate-limit possibile)
         r = fetch_claude_api()
         if r == "RATE_LIMIT":

@@ -367,9 +367,20 @@ def test_fetcher_senza_dato_e_fetch_empty(cu, vuoto):
 def tmux_finto(cu, monkeypatch):
     """Sostituisce i tre seam verso tmux e azzera le attese."""
     state = {"pane": "", "sessione": True, "spawn_ok": True, "spawnata": False,
-             "keys": []}
+             "keys": [], "cli": True, "killed": False,
+             "config": {"active_provider": "claude", "providers": {"claude": {"auth_method": "subscription"}}}}
 
     monkeypatch.setattr(cu.time, "sleep", lambda _s: None)
+    monkeypatch.setattr(cu, "read_config_dict", lambda: state["config"])
+    monkeypatch.setattr(cu, "worker_cli_alive", lambda name=None: state["cli"] and state["sessione"])
+
+    def _run(cmd, **_kw):
+        if cmd[:2] == ["tmux", "kill-session"]:
+            state["killed"] = True
+            state["sessione"] = False
+        return cu.subprocess.CompletedProcess(cmd, 0, b"", b"")
+
+    monkeypatch.setattr(cu.subprocess, "run", _run)
     monkeypatch.setattr(cu, "tmux_has_session", lambda name: state["sessione"])
     monkeypatch.setattr(cu, "capture_pane", lambda name, lines=None: state["pane"])
     monkeypatch.setattr(cu, "send_keys", lambda name, *keys: state["keys"].append(keys))
@@ -451,3 +462,56 @@ def test_check_claude_non_propaga_il_weekly_della_modal(cu, tmux_finto):
     tmux_finto["pane"] = MODAL_V2
     res, _err = cu.check_claude()
     assert res["weekly"] is None
+
+
+# ── Solo con l'abbonamento Claude (JHT-T350, collaudo W1 F-06/F-07) ──────
+
+@pytest.mark.parametrize("config", [
+    {"active_provider": "claude", "providers": {"claude": {"auth_method": "api_key"}}},
+    {"active_provider": "claude", "providers": {"claude": {}}},
+    {"active_provider": "openai", "providers": {"openai": {"auth_method": "subscription"}}},
+    None,
+])
+def test_check_claude_senza_abbonamento_non_spawna_e_non_digita(cu, tmux_finto, config):
+    tmux_finto["config"] = config
+    tmux_finto["sessione"] = False
+    res, err = cu.check_claude()
+    assert res is None and err == "not_a_claude_subscription"
+    assert tmux_finto["spawnata"] is False
+    assert tmux_finto["keys"] == []
+
+
+def test_check_claude_non_digita_usage_in_una_shell(cu, tmux_finto):
+    """La sessione esiste ma il CLI e' uscito: resta bash. Va tolta e rifatta, mai `/usage` nella shell."""
+    tmux_finto["cli"] = False
+    tmux_finto["pane"] = MODAL_V2
+    original_spawn = cu.spawn_worker
+
+    def _spawn():
+        tmux_finto["cli"] = True
+        return original_spawn()
+
+    cu.spawn_worker = _spawn
+    res, err = cu.check_claude()
+    assert tmux_finto["killed"] is True
+    assert tmux_finto["spawnata"] is True
+    assert err is None and res["usage"] == 36
+
+
+def test_query_non_manda_tasti_se_nel_pane_non_gira_il_cli(cu, tmux_finto):
+    tmux_finto["cli"] = False
+    assert cu.query_claude_worker() == ""
+    assert tmux_finto["keys"] == []
+
+
+@pytest.mark.parametrize("config,expected", [
+    ({"active_provider": "claude", "providers": {"claude": {"auth_method": "subscription"}}}, True),
+    ({"active_provider": "anthropic", "providers": {"anthropic": {"auth_method": "subscription"}}}, True),
+    ({"active_provider": "claude", "providers": {"claude": {"auth_method": "api_key"}}}, False),
+    ({"active_provider": "claude", "providers": {"claude": {"auth_method": "subscription", "api_key": "x"}}}, True),
+    ({"active_provider": "kimi", "providers": {"kimi": {"auth_method": "subscription"}}}, False),
+    ({"active_provider": "claude"}, False),
+    ("non un dict", False),
+])
+def test_accesso_ad_abbonamento_claude(cu, config, expected):
+    assert cu.claude_subscription_access(config) is expected

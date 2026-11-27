@@ -597,6 +597,9 @@ def test_the_sentinel_worker_repl_probe_never_reads_a_sibling(capable_bash, tmp_
         tmux.add("SENTINELLA-WORKER-OLD", "claude")
         home = tmp_path / "home"
         home.mkdir()
+        # Il worker parte solo con l'abbonamento Claude (JHT-T350).
+        (home / "jht.config.json").write_text(
+            '{"active_provider": "claude", "providers": {"claude": {"auth_method": "subscription"}}}', encoding="utf-8")
         script = (
             _self_timer(95)
             + f"export T_SESSIONS='{tmux.state}' T_CALLS='{tmux.calls}' T_NEW=SENTINELLA-WORKER\n"
