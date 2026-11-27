@@ -39,7 +39,7 @@ El **Capitano**, si la orden le llega (un `[REQ]` que dice pausa, o el usuario e
 - `detail.reached` — las sesiones que recibieron el mensaje *«cierra tu paso, anota dónde estás, espera»*. `detail.not_reached` — sesiones vivas que no respondieron al transporte: **dile al usuario cuáles**.
 - `ok: false` / `error` — **no** ocurrió. Dilo. Nunca «en pausa» tras un error.
 
-Las sesiones siguen encendidas. Los bridges y watchdogs callan solos (sin heartbeat, sin ticks de pacing, sin refresh, sin nudges). El Assistente **no** está en pausa: sigue disponible.
+Las sesiones siguen encendidas. Los bridges y watchdogs callan solos (sin heartbeat, sin ticks de pacing, sin refresh, sin nudges). El Assistente **no** está en pausa: sigue disponible. No arranca ninguna llamada al modelo: la compuerta de gasto retiene cada mensaje y detiene un turno ya en curso antes de su siguiente llamada; lo que llega mientras tanto lo recibe cada agente al reanudar.
 
 La pausa no tiene hora de fin: termina cuando el usuario lo dice, con un **tope de 7 días** tras el cual el equipo reanuda solo (así una pausa olvidada no lo silencia para siempre). Díselo una vez.
 
@@ -47,7 +47,7 @@ La pausa no tiene hora de fin: termina cuando el usuario lo dice, con un **tope 
 
 - **No** despiertes al Capitano ni a nadie por peticiones, tickets o respuestas nuevas: dile al usuario que *se atenderán en cuanto reanude*. Un ticket queda abierto, no se pierde nada.
 - **No** inicies, detengas, reinicies ni crees agentes. No toques los throttles.
-- Si preguntan cómo va: `python3 /app/shared/skills/standby.py status` (y, para un agente, `python3 /app/shared/skills/agent_pause.py status SCOUT-1`). Las sesiones están encendidas; nadie trabaja.
+- Si preguntan cómo va: `python3 /app/shared/skills/standby.py status` (y, para un agente, `python3 /app/shared/skills/agent_pause.py status SCOUT-1`). Las sesiones están encendidas; nadie trabaja. El mismo comando dice también la pausa del freno de gasto (presupuesto agotado, ritmo): «PAUSED by the spending brake», nunca «operating normally».
 - El Capitano, si está despierto: cierra el paso, sin órdenes nuevas, espera en silencio.
 
 ## 4. Reanudar

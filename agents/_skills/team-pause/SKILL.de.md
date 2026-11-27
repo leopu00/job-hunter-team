@@ -39,7 +39,7 @@ Der **Capitano**, wenn der Auftrag ihn erreicht (ein `[REQ]`, der Pause sagt, od
 - `detail.reached` — die Sitzungen, die die Nachricht *„schließe deinen Schritt ab, notiere, wo du bist, warte“* erhielten. `detail.not_reached` — lebende Sitzungen, die dem Transport nicht antworteten: **sag dem Nutzer, welche**.
 - `ok: false` / `error` — es ist **nicht** passiert. Sag es. Niemals „pausiert“ nach einem Fehler.
 
-Die Sitzungen bleiben an. Bridges und Watchdogs schweigen von selbst (kein Heartbeat, keine Pacing-Ticks, kein Refresh, keine Nudges). Der Assistente ist **nicht** pausiert: Er bleibt erreichbar.
+Die Sitzungen bleiben an. Bridges und Watchdogs schweigen von selbst (kein Heartbeat, keine Pacing-Ticks, kein Refresh, keine Nudges). Der Assistente ist **nicht** pausiert: Er bleibt erreichbar. Kein Modellaufruf startet: Das Ausgabentor hält jede Nachricht zurück und stoppt einen laufenden Zug vor seinem nächsten Aufruf; was in der Zwischenzeit ankommt, erhält jeder Agent bei der Wiederaufnahme.
 
 Die Pause hat keine Endzeit: Sie endet, wenn der Nutzer es sagt, mit einer **Obergrenze von 7 Tagen**, nach der das Team von selbst weitermacht (eine vergessene Pause bringt es so nicht für immer zum Schweigen). Sag das einmal.
 
@@ -47,7 +47,7 @@ Die Pause hat keine Endzeit: Sie endet, wenn der Nutzer es sagt, mit einer **Obe
 
 - Wecke den Capitano oder sonst jemanden **nicht** für neue Anfragen, Tickets oder Antworten: Sag dem Nutzer, dass *sie bearbeitet werden, sobald er fortsetzt*. Ein Ticket bleibt offen, nichts geht verloren.
 - Agenten **nicht** starten, stoppen, neu starten oder erzeugen. Throttles nicht anfassen.
-- Wenn nach dem Stand gefragt wird: `python3 /app/shared/skills/standby.py status` (und für einen Agenten `python3 /app/shared/skills/agent_pause.py status SCOUT-1`). Die Sitzungen sind an; niemand arbeitet.
+- Wenn nach dem Stand gefragt wird: `python3 /app/shared/skills/standby.py status` (und für einen Agenten `python3 /app/shared/skills/agent_pause.py status SCOUT-1`). Die Sitzungen sind an; niemand arbeitet. Derselbe Befehl zeigt auch die Pause der Ausgabenbremse (Budget aufgebraucht, Tempo): «PAUSED by the spending brake», nie «operating normally».
 - Der Capitano, wenn wach: Schritt abschließen, keine neuen Aufträge, still warten.
 
 ## 4. Fortsetzen

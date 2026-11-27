@@ -227,6 +227,57 @@ def read(home=None) -> Optional[dict]:
     return data
 
 
+BRAKE_REASON = "pi_spend_cap"
+BRAKE_FLAG_MAX_BYTES = 1024 * 1024
+
+
+def brake(home=None) -> Optional[dict]:
+    """The pause of the spending brake (pi_spend_cap.py: logs/daily-halt.flag with reason «pi_spend_cap»), or None.
+
+    It is not a standby and nothing here lifts it, but it is a pause all the same: the sessions stay on and nobody works.
+    `status` without it said «operating normally» to an Assistente whose team had been stopped by its budget for minutes
+    (collaudo L1 bis 26/11). {why, spent, ceiling, budget_usd, ends_at, resumes_at}; the dollars as the brake wrote them."""
+    try:
+        base = Path(home) if home is not None else _path("JHT_HOME")
+        flag = base / "logs" / "daily-halt.flag"
+        if not flag.is_file() or flag.is_symlink() or flag.stat().st_size > BRAKE_FLAG_MAX_BYTES:
+            return None
+        data = json.loads(flag.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, ValueError):
+        return None
+    if not isinstance(data, dict) or data.get("reason") != BRAKE_REASON:
+        return None
+    rec = data.get("pi_spend_cap") if isinstance(data.get("pi_spend_cap"), dict) else {}
+    out = {"why": rec.get("why") if isinstance(rec.get("why"), str) else None}
+    for key in ("spent", "ceiling", "budget_usd"):
+        value = rec.get(key)
+        out[key] = float(value) if isinstance(value, (int, float)) and not isinstance(value, bool) else None
+    for key in ("ends_at", "resumes_at"):
+        out[key] = rec.get(key) if isinstance(rec.get(key), str) else None
+    return out
+
+
+def _usd(value) -> str:
+    return "?" if value is None else ("%.2f" % value)
+
+
+def brake_line(b: dict) -> str:
+    why = b.get("why")
+    if why == "budget":
+        head = f"budget spent: {_usd(b['spent'])} USD of {_usd(b['budget_usd'] or b['ceiling'])} USD; it lifts with a new budget (jht setup)"
+    elif why == "period":
+        head = f"budget period over at {b.get('ends_at') or '?'} ({_usd(b['spent'])} USD of {_usd(b['budget_usd'] or b['ceiling'])} USD)"
+    elif why == "pace":
+        when = b.get("resumes_at")
+        head = (f"ahead of the budget pace: {_usd(b['spent'])} USD of {_usd(b['budget_usd'])} USD; "
+                + (f"it resumes by itself at {when}" if when else "no resume before the period ends"))
+    elif why == "credit":
+        head = "the provider's credit is exhausted; it resumes when a call goes through again"
+    else:
+        head = f"spending ceiling reached ({_usd(b['spent'])} of {_usd(b['ceiling'])})"
+    return f"PAUSED by the spending brake — {head}. Sessions stay on; nobody works."
+
+
 def status(now: Optional[datetime] = None, home=None) -> dict:
     """Stato leggibile: {active, state, since, until, wake_on, reason, ...}."""
     base = {"active": False, "state": STATE_OFF, "since": None, "until": None,
@@ -604,9 +655,14 @@ def main(argv: list[str]) -> int:
 
     if args.cmd == "status":
         st = status()
+        held = brake()
         if args.json:
-            print(json.dumps(st, ensure_ascii=False))
-        elif st["state"] == STATE_ACTIVE:
+            print(json.dumps(dict(st, brake=held), ensure_ascii=False))
+            return 0
+        if held is not None:
+            # the brake's pause first: it is the one that holds the team whatever the standby says
+            print(brake_line(held))
+        if st["state"] == STATE_ACTIVE:
             cond = []
             if st.get("until"):
                 cond.append(f"until {st['until']}")
@@ -622,7 +678,7 @@ def main(argv: list[str]) -> int:
         elif st["state"] == STATE_INVALID:
             print("INVALID standby flag (no exit condition): it does not count "
                   "as standby and sentinel-bridge will remove it.")
-        else:
+        elif held is None:
             print("STANDBY off — the team is operating normally.")
         return 0
 

@@ -39,7 +39,7 @@ Le **Capitano**, si l'ordre lui parvient (un `[REQ]` qui dit pause, ou l'utilisa
 - `detail.reached` — les sessions qui ont reçu le message *« termine ton étape, note où tu en es, attends »*. `detail.not_reached` — sessions vivantes qui n'ont pas répondu au transport : **dis à l'utilisateur lesquelles**.
 - `ok: false` / `error` — cela **n'a pas** eu lieu. Dis-le. Jamais « en pause » après une erreur.
 
-Les sessions restent allumées. Les bridges et watchdogs se taisent d'eux-mêmes (pas de heartbeat, pas de ticks de pacing, pas de refresh, pas de nudges). L'Assistente n'est **pas** en pause : il reste joignable.
+Les sessions restent allumées. Les bridges et watchdogs se taisent d'eux-mêmes (pas de heartbeat, pas de ticks de pacing, pas de refresh, pas de nudges). L'Assistente n'est **pas** en pause : il reste joignable. Aucun appel au modèle ne part : la porte de dépense retient chaque message et arrête un tour déjà en cours avant son appel suivant ; ce qui arrive entre-temps, chaque agent le reçoit à la reprise.
 
 La pause n'a pas d'heure de fin : elle se termine quand l'utilisateur le dit, avec un **plafond de 7 jours** après lequel l'équipe reprend seule (une pause oubliée ne la fait pas taire pour toujours). Dis-le une fois.
 
@@ -47,7 +47,7 @@ La pause n'a pas d'heure de fin : elle se termine quand l'utilisateur le dit, av
 
 - **Ne** réveille **pas** le Capitano ni personne pour des demandes, tickets ou réponses nouvelles : dis à l'utilisateur que *ce sera traité dès la reprise*. Un ticket reste ouvert, rien n'est perdu.
 - **Ne** démarre, n'arrête, ne redémarre ni ne crée d'agents. Ne touche pas aux throttles.
-- Si on demande où on en est : `python3 /app/shared/skills/standby.py status` (et, pour un agent, `python3 /app/shared/skills/agent_pause.py status SCOUT-1`). Les sessions sont allumées ; personne ne travaille.
+- Si on demande où on en est : `python3 /app/shared/skills/standby.py status` (et, pour un agent, `python3 /app/shared/skills/agent_pause.py status SCOUT-1`). Les sessions sont allumées ; personne ne travaille. La même commande dit aussi la pause du frein de dépense (budget épuisé, rythme) : « PAUSED by the spending brake », jamais « operating normally ».
 - Le Capitano, s'il est éveillé : termine l'étape, pas d'ordres nouveaux, attends en silence.
 
 ## 4. Reprendre
