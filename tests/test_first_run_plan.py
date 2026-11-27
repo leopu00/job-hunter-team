@@ -300,3 +300,13 @@ def test_the_first_burst_targets_twenty_scored_positions_and_lets_the_scouts_fin
              **({} if eur is None else {"no_quota_cap": {"eur": eur}})}), encoding="utf-8")
         roster = plan_registry.burst_roster(host_cap=99)
         assert roster["target_scored"] == 20 and roster["scout_cap_first_pass"] == (50 if eur == 30 else 30), eur
+
+
+def test_the_start_of_the_run_keeps_the_profile_as_it_is_then(first_run, jht_home):
+    # JHT-T355: a fresh replay starts from the profile of the start of the run, not from the one changed afterwards
+    (jht_home / "profile").mkdir(exist_ok=True)
+    (jht_home / "profile" / "candidate_profile.yml").write_text("target_role: Backend Engineer\n", encoding="utf-8")
+    assert first_run.begin_burst()["ok"] is True
+    kept = jht_home / "profile-at-start"
+    assert (kept / "candidate_profile.yml").read_text(encoding="utf-8") == "target_role: Backend Engineer\n"
+    assert json.loads((kept / ".saved.json").read_text(encoding="utf-8"))["files"] >= 1

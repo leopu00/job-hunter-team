@@ -304,6 +304,8 @@ def begin_burst() -> dict:
         "capped_by_host": info.get("capped_by_host", False),
     })
     _write(state)
+    with contextlib.suppress(Exception):  # the run begins: its profile is kept as it is now (JHT-T355); never a reason to stop
+        _load_module("launch_profile", "launch_profile.py").save(force=True)
     registry = _load_module("plan_registry", "plan_registry.py")
     return dict(state, ok=True, **registry.report_assumed(info))
 
