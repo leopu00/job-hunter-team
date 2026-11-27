@@ -131,7 +131,7 @@ def test_at_the_ceiling_the_team_is_paused_and_both_are_told(tmp_path):
     payload = json.loads(bridge.flag.read_text(encoding="utf-8"))
     assert payload["reason"] == "pi_spend_cap" and payload["pi_spend_cap"] == {"why": "eur", "spent": 10.0, "ceiling": 10.0}
     assert payload["consumed_pct"] == 100.0
-    assert sorted(s for s, _ in bridge.sent) == ["CAPITANO", "SENTINELLA"]
+    assert sorted(s for s, _ in bridge.sent) == ["ASSISTENTE", "CAPITANO", "SENTINELLA"]
     assert all("SPENDING CEILING REACHED" in t and "not FATAL" in t and "10 USD" in t and "10 EUR" in t
                for t in bridge.texts())
     assert [r.split("-")[0] for _, r in bridge.users] == ["pi_spend_cap"] and "10 USD" in bridge.users[0][0]
@@ -144,7 +144,7 @@ def test_over_the_ceiling_is_the_same_pause_and_it_is_not_repeated_every_tick(tm
     for _ in range(4):
         bridge.tick(state=state)
         bridge.clock["now"] += 300
-    assert bridge.esc == 1 and len(bridge.sent) == 2 and len(bridge.users) == 1
+    assert bridge.esc == 1 and len(bridge.sent) == 3 and len(bridge.users) == 1
 
 
 def test_the_tokens_per_hour_ceiling_counts_the_last_hour_only(tmp_path):
@@ -181,7 +181,10 @@ def test_no_ceiling_in_the_no_quota_mode_is_a_declared_warning_not_a_pause(tmp_p
     bridge.tick()
     assert bridge.esc == 0 and not bridge.flag.exists()
     assert "2.5 USD" in bridge.texts()[0] and "nothing else stops the spending" in bridge.texts()[0]
-    assert "2.5 USD" in bridge.users[0][0], "the person reads it too, in their language"
+    # JHT-T354: the person reads one plain sentence that asks them to decide, in USD terms, with no figure that goes stale in the
+    # chat (W1 F-09), no «pi» and no configuration key
+    user = bridge.users[0][0]
+    assert "jht setup" in user and "%s" not in user and " pi " not in user and "no_quota_cap" not in user and "EUR" not in user
 
 
 def test_the_warning_is_once_a_day_not_once_a_tick(tmp_path):
@@ -353,7 +356,7 @@ def test_a_missing_or_broken_burst_state_does_not_stop_the_alert(tmp_path):
     (tmp_path / "state" / "first-run.json").write_text("{broken", encoding="utf-8")
     bridge = Bridge(tmp_path, {"no_quota_cap": EUR})
     bridge.tick()
-    assert bridge.esc == 1 and sorted(s for s, _ in bridge.sent) == ["CAPITANO", "SENTINELLA"]
+    assert bridge.esc == 1 and sorted(s for s, _ in bridge.sent) == ["ASSISTENTE", "CAPITANO", "SENTINELLA"]
 
 
 # --- the budget of the setup: dollars over a period, spread over the working hours (JHT-T322) ------------------------
@@ -927,7 +930,7 @@ def test_the_gate_of_the_agents_is_closed_before_anyone_is_told(tmp_path):
     assert bridge.esc == 1
     assert bridge.gate_at_esc["reason"] == "pi_spend_cap" and bridge.gate_at_esc["pi_spend_cap"]["why"] == "pace"
     assert bridge.told_at_esc == 0, "someone was told before the gate closed"
-    assert sorted(s for s, _ in bridge.sent) == ["CAPITANO", "SENTINELLA"] and len(bridge.users) == 1
+    assert sorted(s for s, _ in bridge.sent) == ["ASSISTENTE", "CAPITANO", "SENTINELLA"] and len(bridge.users) == 1
 
 
 def _paused_at_13_30(tmp_path):
@@ -1777,3 +1780,80 @@ def test_a_resume_after_the_person_stopped_the_team_tells_the_truth_and_wakes_no
     said = [text for text, _ in bridge.users]
     assert said and "jht team start" in said[-1] and "stays stopped" in said[-1], said
     assert not any("is resuming" in text for text in said), said
+
+
+# --- JHT-T349: the stop the Captain commits to, the measured rate, the figure that never goes stale ------------------
+
+def stop_at(home: Path, usd):
+    (home / "state").mkdir(parents=True, exist_ok=True)
+    (home / "state" / "spend-stop-at.json").write_text(json.dumps({"usd": usd, "set_at": "2026-11-09T11:00:00+00:00",
+                                                                   "by": "capitano"}), encoding="utf-8")
+
+
+def test_the_stop_the_captain_committed_to_is_a_ceiling_the_system_applies(tmp_path):
+    # W1 F-04: «I stop at ~2.4 $» and the team was at 3.06 $: the promise is now the brake's
+    pi_calls(tmp_path, [(NOON - 900, 2.0, 100), (NOON - 120, 0.5, 100)])
+    stop_at(tmp_path, 2.4)
+    bridge = Bridge(tmp_path, {})
+    bridge.tick(no_quota=False)
+    assert bridge.esc == 1
+    record = json.loads(bridge.flag.read_text(encoding="utf-8"))["pi_spend_cap"]
+    assert record["why"] == "stop_at" and record["ceiling"] == 2.4 and record["spent"] == 2.5
+    user = bridge.users[0][0]
+    assert "2.5 USD" in user and "2.4 USD" in user and " pi " not in user
+    told = dict(bridge.sent)
+    assert "YOUR SPENDING STOP REACHED" in told["CAPITANO"]
+    assert "NOT TO RELAY" in told["ASSISTENTE"] and "jht team status" in told["ASSISTENTE"]
+
+
+def test_under_the_stop_nothing_and_raising_it_lifts_the_pause(tmp_path):
+    pi_calls(tmp_path, [(NOON - 900, 2.0, 100)])
+    stop_at(tmp_path, 1.5)
+    bridge = Bridge(tmp_path, {})
+    state: dict = {}
+    bridge.tick(no_quota=False, state=state)
+    assert bridge.flag.exists()
+    stop_at(tmp_path, 5.0)
+    bridge.clock["now"] += 60
+    bridge.tick(no_quota=False, state=state)
+    assert not bridge.flag.exists(), "the Captain raised the stop on the person's word: the team works again"
+
+
+@pytest.mark.parametrize("body", ["{broken", json.dumps({"usd": -1}), json.dumps({"usd": True}), json.dumps([2.4])])
+def test_a_stop_file_that_cannot_be_read_is_no_stop(tmp_path, body):
+    pi_calls(tmp_path, [(NOON - 900, 2.0, 100)])
+    (tmp_path / "state").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "state" / "spend-stop-at.json").write_text(body, encoding="utf-8")
+    bridge = Bridge(tmp_path, {})
+    bridge.tick(no_quota=False)
+    assert bridge.esc == 0 and not bridge.flag.exists()
+
+
+def test_every_look_writes_the_figure_and_the_measured_rate(tmp_path):
+    # W1 F-09: «0.06 USD» stayed for the afternoon; the rate is the last ten minutes, in dollars per minute
+    pi_calls(tmp_path, [(NOON - 3000, 2.0, 100), (NOON - 300, 1.5, 100)])
+    pi_calls(tmp_path, [(NOON - 200, 0.5, 100)], name="c.jsonl", agent="capitano")
+    bridge = Bridge(tmp_path, {})
+    bridge.tick(no_quota=False)
+    now = json.loads((tmp_path / "state" / "spend-now.json").read_text(encoding="utf-8"))
+    assert now["spent_usd"] == 4.0 and now["counts"] == "today" and now["window_min"] == 10.0
+    assert now["usd_per_min"] == pytest.approx(0.2) and now["workers"] == 1
+    assert now["workers_usd_per_min"] == pytest.approx(0.15) and now["stop_at_usd"] is None
+    pi_calls(tmp_path, [(NOON - 3000, 2.0, 100), (NOON - 300, 1.5, 100), (NOON + 30, 1.0, 100)])
+    bridge.clock["now"] += 60
+    bridge.tick(no_quota=False)
+    assert json.loads((tmp_path / "state" / "spend-now.json").read_text(encoding="utf-8"))["spent_usd"] == 5.0
+
+
+def test_the_person_is_asked_about_a_budget_once_not_every_day(tmp_path):
+    pi_calls(tmp_path, [(NOON - 600, 2.5, 100)])
+    bridge = Bridge(tmp_path, {})
+    state: dict = {}
+    bridge.tick(state=state)
+    pi_calls(tmp_path, [(NOON + 86400 - 600, 2.5, 100)], name="t.jsonl")
+    tomorrow = next((tmp_path / ".pi").rglob("t.jsonl"))
+    os.utime(tomorrow, (NOON + 86400 - 5, NOON + 86400 - 5))
+    bridge.clock["now"] += 86400
+    bridge.tick(state=state)
+    assert len(bridge.users) == 1, "one sentence, not a doppione a day"
+    assert len([s for s, _ in bridge.sent if s == "CAPITANO"]) == 2, "the Captain keeps the figure of each day"

@@ -39,7 +39,7 @@ Il **Capitano**, se l'ordine arriva a lui (un `[REQ]` che dice pausa, o l'utente
 - `detail.reached` — le sessioni che hanno ricevuto il messaggio *«chiudi il passo, annota dove sei, aspetta»*. `detail.not_reached` — sessioni vive che non hanno risposto al trasporto: **di' all'utente quali**.
 - `ok: false` / `error` — **non** è successo. Dillo. Mai «in pausa» dopo un errore.
 
-Le sessioni restano accese. Bridge e watchdog tacciono da soli (niente heartbeat, niente tick di pacing, niente refresh, niente nudge). L'Assistente **non** è in pausa: resta raggiungibile.
+Le sessioni restano accese. Bridge e watchdog tacciono da soli (niente heartbeat, niente tick di pacing, niente refresh, niente nudge). L'Assistente **non** è in pausa: resta raggiungibile. Nessuna chiamata al modello parte: il cancello di spesa trattiene ogni messaggio e ferma un turno già in corso prima della sua chiamata successiva; quello che arriva nel frattempo ogni agente lo riceve alla ripresa.
 
 La pausa non ha un'ora di fine: finisce quando lo dice l'utente, con un **tetto di 7 giorni** dopo il quale la squadra riprende da sola (così una pausa dimenticata non la zittisce per sempre). Dillo una volta.
 
@@ -47,7 +47,7 @@ La pausa non ha un'ora di fine: finisce quando lo dice l'utente, con un **tetto 
 
 - **Non** svegliare il Capitano né nessun altro per richieste, ticket o risposte nuove: di' all'utente che *saranno gestite appena riprende*. Un ticket resta aperto, niente va perso.
 - **Non** avviare, fermare, riavviare o creare agenti. Non toccare i throttle.
-- Se ti chiedono com'è la situazione: `python3 /app/shared/skills/standby.py status` (e, per un agente, `python3 /app/shared/skills/agent_pause.py status SCOUT-1`). Le sessioni sono accese; nessuno lavora.
+- Se ti chiedono com'è la situazione: `python3 /app/shared/skills/standby.py status` (e, per un agente, `python3 /app/shared/skills/agent_pause.py status SCOUT-1`). Le sessioni sono accese; nessuno lavora. Lo stesso comando dice anche la pausa del freno di spesa (budget finito, ritmo): «PAUSED by the spending brake», mai «operating normally».
 - Il Capitano, se sveglio: chiudi il passo, niente ordini nuovi, aspetta in silenzio.
 
 ## 4. Riprendere

@@ -29,7 +29,14 @@ Uso:
   scaling_calc.py --self-test
 
 Le unità di --target e --measured devono COINCIDERE (sono in rapporto): passa
-entrambe in % weekly / h (preferito) o entrambe in % finestra-5h / h.
+entrambe in % weekly / h, entrambe in % finestra-5h / h, oppure, con un accesso a
+consumo (chiave API, budget in dollari), entrambe in USD al minuto con
+`--unit usd-min`. Con `--measured-from-spend` il burn misurato e il numero di
+worker li prende dalla spesa VERA degli ultimi 10 minuti (pi_spend_cap.py now):
+mai un costo per worker stimato a mano (collaudo W1 26/11: 0,011 $/min stimati,
+0,15 $/min veri).
+
+  scaling_calc.py --unit usd-min --target 0.05 --measured-from-spend
 """
 import argparse
 import sys
@@ -111,13 +118,32 @@ def recommend(target_burn, measured_burn, workers_observed=1, throttle_observed=
     }
 
 
-def _fmt(r) -> str:
+UNITS = {"pct-h": "/h", "usd-min": " USD/min"}
+
+
+def measured_from_spend():
+    """(USD/min of the workers in the last 10 minutes, how many workers spent) from the brake's own measure, or None."""
+    for folder in (Path("/app/shared/skills"), Path(__file__).resolve().parents[3] / "shared" / "skills"):
+        if (folder / "pi_spend_cap.py").is_file():
+            sys.path.insert(0, str(folder))
+            break
+    try:
+        import time
+        import pi_spend_cap
+        r = pi_spend_cap.report(pi_spend_cap._cli_home(), time.time())
+    except Exception:  # noqa: BLE001 - no measure: the caller says so
+        return None
+    return r["workers_usd_per_min"], r["workers"]
+
+
+def _fmt(r, unit="pct-h") -> str:
+    u = UNITS.get(unit, "/h")
     if not r.get("ok"):
         return f"⚠️  {r['reason']}\n→ tieni {r['workers']} worker @ {r['throttle_s']}s."
     out = []
-    out.append(f"🎯 target burn = {r['target_burn']}/h  |  misurato/worker = {r['measured_per_worker']}/h")
+    out.append(f"🎯 target burn = {r['target_burn']}{u}  |  misurato/worker = {r['measured_per_worker']}{u}")
     out.append(f"📐 CONSIGLIO: {r['workers']} worker @ throttle {r['throttle_s']}s "
-               f"({r['throttle_min']}min) → burn atteso ≈ {r['burn_expected']}/h")
+               f"({r['throttle_min']}min) → burn atteso ≈ {r['burn_expected']}{u}")
     out.append(f"   ({r['note']})")
     out.append("📈 piano a scaglioni (NON spawnare in blocco):")
     for s in r["plan"]:
@@ -169,21 +195,34 @@ def main():
     ap.add_argument("--measured", type=float, help="burn misurato dei worker osservati (%%/h)")
     ap.add_argument("--workers", type=int, default=1, help="quanti worker hanno prodotto --measured (default 1)")
     ap.add_argument("--throttle", type=float, default=FLOOR, help="throttle dei worker osservati in s (default floor 300)")
+    ap.add_argument("--unit", choices=sorted(UNITS), default="pct-h",
+                    help="unit of --target and --measured: pct-h (%%/h, default) or usd-min (USD per minute)")
+    ap.add_argument("--measured-from-spend", action="store_true",
+                    help="burn and workers measured from the spending of the last 10 min (pi_spend_cap.py now); implies --unit usd-min")
     ap.add_argument("--json", action="store_true", help="output JSON")
     ap.add_argument("--self-test", action="store_true")
     args = ap.parse_args()
 
     if args.self_test:
         return _self_test()
+    if args.measured_from_spend:
+        args.unit = "usd-min"
+        seen = measured_from_spend()
+        if seen is None:
+            ap.error("measured spending unreadable: pass --measured in USD/min (pi_spend_cap.py now)")
+        args.measured, observed = seen
+        if observed:
+            args.workers = observed
     if args.target is None or args.measured is None:
-        ap.error("servono --target e --measured (oppure --self-test)")
+        ap.error("servono --target e --measured (oppure --measured-from-spend, oppure --self-test)")
 
     r = recommend(args.target, args.measured, args.workers, args.throttle)
+    r["unit"] = args.unit
     if args.json:
         import json
         print(json.dumps(r, indent=2))
     else:
-        print(_fmt(r))
+        print(_fmt(r, args.unit))
     return 0
 
 

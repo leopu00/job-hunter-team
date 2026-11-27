@@ -39,7 +39,7 @@ The **Capitano**, if the order reaches it (a `[REQ]` that says pause, or the use
 - `detail.reached` — the sessions that got the message *«close your step, note where you are, wait»*. `detail.not_reached` — live sessions that did not answer the transport: **tell the user which**.
 - `ok: false` / `error` — it did **not** happen. Say that. Never say «paused» after an error.
 
-The sessions stay on. The bridges and watchdogs go quiet by themselves (no heartbeat, no pacing ticks, no refresh, no nudges). The Assistente is **not** paused: it stays reachable.
+The sessions stay on. The bridges and watchdogs go quiet by themselves (no heartbeat, no pacing ticks, no refresh, no nudges). The Assistente is **not** paused: it stays reachable. No model call starts: the spending gate holds every message and stops a turn already running before its next call; what arrives meanwhile reaches each agent at the resume.
 
 The pause has no end time: it ends when the user says so, with a **hard cap of 7 days** after which the team resumes by itself (so a forgotten pause cannot silence it forever). Say that once.
 
@@ -47,7 +47,7 @@ The pause has no end time: it ends when the user says so, with a **hard cap of 7
 
 - Do **not** wake the Capitano or anyone else for new requests, tickets or answers: tell the user *it will be handled as soon as they resume*. A ticket stays open, nothing is lost.
 - Do **not** start, stop, restart or spawn agents. Do not touch throttles.
-- If asked how things are: `python3 /app/shared/skills/standby.py status` (and, for one agent, `python3 /app/shared/skills/agent_pause.py status SCOUT-1`). The sessions are on; nobody is working.
+- If asked how things are: `python3 /app/shared/skills/standby.py status` (and, for one agent, `python3 /app/shared/skills/agent_pause.py status SCOUT-1`). The sessions are on; nobody is working. The same command also says the pause of the spending brake (budget spent, pace): «PAUSED by the spending brake», never «operating normally».
 - The Capitano, if awake: close the step, no new orders, wait silently.
 
 ## 4. Resuming

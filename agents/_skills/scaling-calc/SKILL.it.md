@@ -41,6 +41,14 @@ blocco in una volta.
 > qui, e non è una costante: su un gradino da 5 minuti, tre worker vogliono stare a 100s l'uno
 > dall'altro.
 
+## Con un budget in dollari (chiave API, budget del team in USD)
+L'unità è **USD al minuto**, e la misura è la spesa vera del team, mai un costo per worker stimato da te (collaudo 26/11: 0,011 $/min stimati, 0,15 $/min veri):
+```
+python3 /app/shared/skills/pi_spend_cap.py now        # speso, USD/min degli ultimi 10 min per agente
+python3 /app/agents/_skills/scaling-calc/scaling_calc.py --unit usd-min --target <USD/min> --measured-from-spend
+```
+Il target in USD/min è quello che resta del budget diviso i minuti di lavoro che restano.
+
 ## Le due leve
 - **Worker sotto target** (1 worker brucia meno del target) → la leva è il **numero di
   worker** (parallelismo), tutti **al floor**. Aggiungili a scaglioni.

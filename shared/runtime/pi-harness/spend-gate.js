@@ -20,6 +20,13 @@
  * line, the notices, the Dottore) reaches it as an input, so one place covers them all. What was held is not lost: it goes to the
  * session, summarised, inside the message that wakes it. A queue that cannot be read, or that nobody has touched for two hours, holds
  * nobody: a broken file never stops a team.
+ *
+ * And the same gate holds the team while it is PAUSED or in STANDBY ($JHT_HOME/.team-standby.flag, standby.py: the person's «pause»
+ * from the Assistente or `agent_control.py pause`, the zero-spend standby of the quota). That pause was only a message asking each
+ * session to close its step and wait: a worker in the middle of a turn went on calling the model (collaudo W1 26/11: from 3.06 to
+ * 3.45 $ in twelve minutes «paused»). What arrives meanwhile is held and summarised into the [RIPRENDI] that ends the pause, the way
+ * the queue of the pace does; the pause notice itself is not repeated there. A flag with no exit condition, or past its `until`, holds
+ * nobody: standby.py reads it the same way.
  */
 const fs = require("node:fs");
 const path = require("node:path");
@@ -51,6 +58,40 @@ function paused() {
     return false;
   }
 }
+
+const STANDBY_FLAG = ".team-standby.flag";
+
+/** True while the team is paused or in standby: the flag is a plain file with an exit condition (an `until` still ahead, or a
+ * `wake_on.weekly_below`), as standby.py `status()` reads it. */
+function standby() {
+  try {
+    const home = process.env.JHT_HOME;
+    if (!home) return false;
+    const file = path.join(home, STANDBY_FLAG);
+    const info = fs.lstatSync(file);
+    if (!info.isFile() || info.size <= 0 || info.size > FLAG_MAX_BYTES)
+      return false;
+    const data = JSON.parse(fs.readFileSync(file, "utf8"));
+    if (!data || typeof data !== "object" || Array.isArray(data)) return false;
+    const weekly = data.wake_on && data.wake_on.weekly_below;
+    const wakes = typeof weekly === "number" && Number.isFinite(weekly);
+    let until = NaN;
+    if (typeof data.until === "string" && data.until) {
+      // standby.py reads an ISO time with no zone as UTC
+      const text = /([zZ]|[+-]\d\d:?\d\d)$/.test(data.until)
+        ? data.until
+        : data.until + "Z";
+      until = Date.parse(text);
+    }
+    if (Number.isFinite(until)) return Date.now() < until;
+    return wakes;
+  } catch (_error) {
+    return false;
+  }
+}
+
+/** The notice that opens a pause or a standby: held like the rest, never handed back at the resume. */
+const PAUSE_NOTICE = /^\s*(\[(STANDBY|SENTINELLA)\]\s*)?\[PAUSA( TEAM)?\]/;
 
 const QUEUE_STALE_MS = 2 * 3600 * 1000;
 const HELD_MAX = 20;
@@ -88,6 +129,7 @@ function heldSummary() {
   const seen = new Set();
   const lines = [];
   for (const text of held.splice(0)) {
+    if (PAUSE_NOTICE.test(text)) continue;
     const one = text.replace(/\s+/g, " ").trim().slice(0, HELD_CHARS);
     if (one && !seen.has(one)) {
       seen.add(one);
@@ -95,7 +137,7 @@ function heldSummary() {
     }
   }
   return lines.length
-    ? "\n\n[HELD WHILE YOU WAITED FOR THE PACE: messages that reached you before your turn, once each]\n" +
+    ? "\n\n[HELD WHILE YOU WAITED: messages that reached you during the pause, once each]\n" +
         lines.join("\n")
     : "";
 }
@@ -134,6 +176,11 @@ module.exports = function spendGate(pi) {
         logLine({ event: "input_held", length: text.length });
         return { action: "handled" };
       }
+      if (standby()) {
+        if (held.length < HELD_MAX) held.push(text);
+        logLine({ event: "input_held_for_the_pause", length: text.length });
+        return { action: "handled" };
+      }
       if (queued()) {
         if (held.length < HELD_MAX) held.push(text);
         logLine({ event: "input_held_for_the_pace", length: text.length });
@@ -151,7 +198,7 @@ module.exports = function spendGate(pi) {
 
   pi.on("before_provider_request", (_event, ctx) => {
     try {
-      if ((paused() || queued()) && ctx && typeof ctx.abort === "function") {
+      if ((paused() || standby() || queued()) && ctx && typeof ctx.abort === "function") {
         logLine({ event: "request_stopped" });
         ctx.abort();
       }

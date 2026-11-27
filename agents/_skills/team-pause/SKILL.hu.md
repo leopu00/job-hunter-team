@@ -39,7 +39,7 @@ A **Capitano**, ha az utasítás hozzá érkezik (egy `[REQ]`, ami szünetet mon
 - `detail.reached` — azok a munkamenetek, amelyek megkapták az üzenetet: *„zárd le a lépésed, jegyezd fel, hol tartasz, várj”*. `detail.not_reached` — élő munkamenetek, amelyek nem válaszoltak a szállításra: **mondd meg a felhasználónak, melyek**.
 - `ok: false` / `error` — **nem** történt meg. Mondd el. Hiba után soha ne mondd, hogy „szünetel”.
 
-A munkamenetek bekapcsolva maradnak. A bridge-ek és watchdogok maguktól elhallgatnak (nincs heartbeat, nincs pacing tick, nincs refresh, nincs nudge). Az Assistente **nem** szünetel: elérhető marad.
+A munkamenetek bekapcsolva maradnak. A bridge-ek és watchdogok maguktól elhallgatnak (nincs heartbeat, nincs pacing tick, nincs refresh, nincs nudge). Az Assistente **nem** szünetel: elérhető marad. Egyetlen modellhívás sem indul: a költési kapu minden üzenetet visszatart, és a már futó kört a következő hívása előtt leállítja; ami közben érkezik, azt minden ügynök a folytatáskor kapja meg.
 
 A szünetnek nincs végideje: akkor ér véget, amikor a felhasználó mondja, **7 napos felső határral**, amely után a csapat magától folytatja (így egy elfelejtett szünet nem némítja el örökre). Ezt egyszer mondd el.
 
@@ -47,7 +47,7 @@ A szünetnek nincs végideje: akkor ér véget, amikor a felhasználó mondja, *
 
 - **Ne** ébreszd fel a Capitanót vagy bárki mást új kérések, jegyek vagy válaszok miatt: mondd meg a felhasználónak, hogy *a folytatáskor intézik*. A jegy nyitva marad, semmi sem vész el.
 - **Ne** indíts, állíts le, indíts újra vagy hozz létre ügynököket. A throttle-hoz ne nyúlj.
-- Ha az állásról kérdeznek: `python3 /app/shared/skills/standby.py status` (és egy ügynökre `python3 /app/shared/skills/agent_pause.py status SCOUT-1`). A munkamenetek be vannak kapcsolva; senki sem dolgozik.
+- Ha az állásról kérdeznek: `python3 /app/shared/skills/standby.py status` (és egy ügynökre `python3 /app/shared/skills/agent_pause.py status SCOUT-1`). A munkamenetek be vannak kapcsolva; senki sem dolgozik. Ugyanez a parancs a költési fék szünetét is mutatja (elfogyott keret, ütem): „PAUSED by the spending brake”, soha nem „operating normally”.
 - A Capitano, ha ébren van: zárd le a lépést, új utasítás nélkül, várj csendben.
 
 ## 4. Folytatás

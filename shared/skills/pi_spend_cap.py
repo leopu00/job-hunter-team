@@ -144,6 +144,59 @@ def note_resume(home, moment):
     _write_state(Path(home) / RESUMES_FILE, (_read_resumes(home) + [float(moment)])[-50:])
 
 
+SPEND_NOW_FILE = Path("state") / "spend-now.json"         # what the team has spent and at what rate, written at every look of the brake
+STOP_AT_FILE = Path("state") / "spend-stop-at.json"       # {"usd", "set_at", "by"}: the stop the Captain committed to, applied as a ceiling
+MEASURE_WINDOW_SEC = 600   # the rate the Captain projects with: the measured spending of the last ten minutes, not a unit cost
+
+
+def measured(home, now_ts, window_sec=MEASURE_WINDOW_SEC):
+    """What the team spent in the last `window_sec`, in dollars and dollars per minute, per session too. The Captain's projections
+    were made with a cost per worker he made up (0.011 $/min) when the team spent 0.15 $/min (collaudo W1 26/11): this is the measure."""
+    since = now_ts - window_sec
+    by_agent = {}
+    for event in list(pi_sessions.usage_events(home, since)) + list(pi_sessions.search_events(home, since)):
+        if event["ts"] < since or event["ts"] > now_ts:
+            continue
+        name = (event.get("agent") or "?").upper()
+        by_agent[name] = by_agent.get(name, 0.0) + event["cost"]
+    minutes = window_sec / 60.0
+    usd = sum(by_agent.values())
+    workers = {name: cost for name, cost in by_agent.items() if _WORKER_SESSION.match(name)}
+    return {"window_min": round(minutes, 1), "usd": round(usd, 6), "usd_per_min": round(usd / minutes, 6),
+            "by_agent_usd_per_min": {name: round(cost / minutes, 6) for name, cost in sorted(by_agent.items())},
+            "workers": len(workers), "workers_usd_per_min": round(sum(workers.values()) / minutes, 6)}
+
+
+def read_stop_at(home):
+    """The stop the Captain committed to, or None. A file that cannot be read, or a figure that is not a positive number, is no stop."""
+    data = _read_state(Path(home) / STOP_AT_FILE)
+    if not isinstance(data, dict):
+        return None
+    usd = _positive(data.get("usd"))
+    if usd is None:
+        return None
+    return {"usd": float(usd), "set_at": data.get("set_at") if isinstance(data.get("set_at"), str) else None,
+            "by": data.get("by") if isinstance(data.get("by"), str) else None}
+
+
+def counted(spent, budget):
+    """The figure the person reads and the stop is set on: since the start of the budget when there is one, else today."""
+    if budget is not None and spent.get("budget_cost") is not None:
+        return float(spent["budget_cost"]), "budget"
+    return float(spent.get("cost") or 0.0), "today"
+
+
+def write_spend_now(home, now_ts, spent, budget, rate, stop):
+    """state/spend-now.json, at every look: the figure of `jht team status` and of the chat is never the first one told (W1 F-09:
+    «0.06 USD» stayed for the whole afternoon)."""
+    figure, counts = counted(spent, budget)
+    _write_state(Path(home) / SPEND_NOW_FILE, {
+        "at": int(now_ts), "spent_usd": round(figure, 6), "counts": counts, "today_usd": round(float(spent.get("cost") or 0.0), 6),
+        "budget_usd": budget["usd"] if budget is not None else None, "usd_per_min": rate["usd_per_min"],
+        "window_min": rate["window_min"], "workers": rate["workers"], "workers_usd_per_min": rate["workers_usd_per_min"],
+        "stop_at_usd": stop["usd"] if stop else None})
+
+
 def _sound(x):
     return isinstance(x, (int, float)) and not isinstance(x, bool) and math.isfinite(x) and x >= 0
 
@@ -531,7 +584,7 @@ def _budget_verdict(config, budget, spent, now, held_by_pace=False, restart_esti
     return stop if over else None
 
 
-def decide(config, spent, no_quota_mode, now=None, budget=None, held_by_pace=False, restart_estimate=0.0):
+def decide(config, spent, no_quota_mode, now=None, budget=None, held_by_pace=False, restart_estimate=0.0, stop_at=None):
     """{"action": "none" | "halt" | "warn", ...}. Pure: a config, a measure and a moment in, a verdict out. `budget` is
     the one team_budget.read gave with the start of a duration resolved; None reads it from the config alone."""
     # Before the mode: the bridge declares the no-quota mode at the END of its first tick, so a team that found the
@@ -544,6 +597,14 @@ def decide(config, spent, no_quota_mode, now=None, budget=None, held_by_pace=Fal
     # the full image) read «no mode yet» as «nothing to stop» and lifted a pause of a spent budget (giro Windows 16/11:
     # «cleared» at 2.05 $ of 2, then 2.81 $).
     budget = budget if budget is not None else team_budget.read(config)
+    # the stop the Captain committed to («I stop at 2.4 $»: W1 F-04, it was at 3.06 $ by then) is a ceiling the system applies,
+    # on the figure the person reads, one margin before it and looking ahead like the budget
+    if stop_at is not None:
+        figure, _counts = counted(spent, budget)
+        ahead = (spent.get("recent_cost") or 0.0) / RATE_WINDOW_SEC * CHECK_EVERY_SEC
+        if figure + ahead >= stop_at["usd"] - team_budget.margin(stop_at["usd"]):
+            return {"action": "halt", "why": "stop_at", "spent": figure, "ceiling": stop_at["usd"],
+                    "set_at": stop_at.get("set_at")}
     if budget is not None and now is not None:
         verdict = _budget_verdict(config, budget, spent, now, held_by_pace, restart_estimate)
         if verdict:
@@ -593,7 +654,7 @@ def user_text(verdict, spent, config=None, now=None):
     clock = lambda moment, cfg, today: person_clock(moment, cfg, today, i18n)  # noqa: E731 - here the hour is the person's, not the Captain's
 
     if verdict["action"] == "warn":
-        return i18n.tf("pi_cap.no_ceiling", "%s USD" % _money(spent["cost"]))
+        return i18n.t("pi_cap.no_ceiling")
     if verdict["why"] == "credit":
         return i18n.tf("pi_cap.halt_credit", PROVIDER_NAMES.get(verdict["provider"], verdict["provider"] or "the provider"))
     if verdict["why"] == "budget":
@@ -607,8 +668,10 @@ def user_text(verdict, spent, config=None, now=None):
     if verdict["why"] == "pace":
         return i18n.tf("pi_cap.halt_pace", "%s USD" % _money(verdict["spent"]), "%s USD" % _money(verdict["usd"]),
                        clock(verdict["resumes"], config, now))
+    if verdict["why"] == "stop_at":
+        return i18n.tf("pi_cap.halt_stop_at", "%s USD" % _money(verdict["spent"]), "%s USD" % _money(verdict["ceiling"]))
     if verdict["why"] == "eur":
-        return i18n.tf("pi_cap.halt_eur", "%s USD" % _money(verdict["spent"]), "%s EUR" % _money(verdict["ceiling"]))
+        return i18n.tf("pi_cap.halt_eur", "%s USD" % _money(verdict["spent"]), "%s USD" % _money(verdict["ceiling"]))
     return i18n.tf("pi_cap.halt_tokens", "%d" % verdict["spent"], "%d" % verdict["ceiling"])
 
 
@@ -655,13 +718,19 @@ def _budget_captain_text(verdict, config, now):
 def captain_text(verdict, spent, burst=None, config=None, now=None):
     if verdict["action"] == "warn":
         return ("[BRIDGE INFO] pi spent %s USD today (its own estimate) and no spending ceiling is declared "
-                "(no_quota_cap in the configuration): this access has no quota data, so nothing else stops the "
-                "spending. Tell the person once, in their language, if they have not been told." % _money(spent["cost"]))
+                "(no budget, no no_quota_cap in the configuration): this access has no quota data, so nothing else stops the "
+                "spending. INTERNAL: the person has been asked once by the system whether to set a budget (jht setup); do not "
+                "pass this on to them, and never in these words." % _money(spent["cost"]))
     if verdict["why"] == "credit":
         return ("[BRIDGE ALERT] PROVIDER CREDIT GONE (pi harness): %s answered that the credit of the account is exhausted. "
                 "The team is PAUSED: ESC to every session, no forced kill. This is a declared pause, not an outage and not "
                 "FATAL. It lifts by itself when a call goes through again (the person tops up the account with the provider). "
-                "Tell the person once, in their language." % PROVIDER_NAMES.get(verdict["provider"], verdict["provider"]))
+                "The person is told by the system in one sentence: do not repeat it to them." % PROVIDER_NAMES.get(verdict["provider"], verdict["provider"]))
+    if verdict["why"] == "stop_at":
+        return ("[BRIDGE ALERT] YOUR SPENDING STOP REACHED: %s USD spent, the stop you committed to is %s USD. The team is PAUSED: "
+                "no new model call starts (the gate of the agents holds it). It lifts when you raise or clear the stop "
+                "(python3 /app/shared/skills/pi_spend_cap.py stop-at <usd> | --clear), and only on the person's word. The person "
+                "is told by the system: do not repeat it to them." % (_money(verdict["spent"]), _money(verdict["ceiling"])))
     if verdict["why"] in ("budget", "period", "pace"):
         head, what, lift = _budget_captain_text(verdict, config, now)
         raise_it = "a new budget (jht setup)"
@@ -673,7 +742,7 @@ def captain_text(verdict, spent, burst=None, config=None, now=None):
         lift = "It lifts by itself when the spending is back under the ceiling, or if the person raises it."
         raise_it = "raising the ceiling (no_quota_cap in the configuration)"
     return ("[BRIDGE ALERT] %s (pi harness): %s. The team is PAUSED: ESC to every session, no forced kill. This is a "
-            "declared pause, not an outage and not FATAL. %s Tell the person once, in their language.%s" % (head, what, lift, (
+            "declared pause, not an outage and not FATAL. %s The person is told by the system in one sentence: do not repeat it to them.%s" % (head, what, lift, (
                 " The FIRST BURST is open and stops on this ceiling at %d of %d scored positions: say so in the chat, in "
                 "their language: how many scored positions they have, and that %s lets the burst go on to %d."
                 % (burst[0], burst[1], raise_it, burst[1])) if burst else ""))
@@ -692,16 +761,32 @@ def _flag_reason(api):
     return payload.get("reason") if payload else None
 
 
-def _tell(api, run, key, text, user, notify_user):
-    """The Captain and the Sentinella through the delivery notice, the person through the notifier. Each goes once per
-    `key`: what did not go (a session absent, a notifier down) is tried again on the next tick, what went is not repeated."""
+ASSISTENTE_SESSION = "ASSISTENTE"
+
+
+def assistant_text(text):
+    """What the Assistente reads of a pause or a resume: the state, for when the person asks, never a message to pass on (the person
+    has the notifier's sentence already). Without it the Assistente read the tmux sessions and said «the team is active» to a person
+    whose team had been paused by its budget for seven minutes (collaudo L1 bis 26/11)."""
+    return ("[BRIDGE INFO] FOR YOUR KNOWLEDGE, NOT TO RELAY: the state of the team changed. %s The person has already been told by "
+            "the system in one sentence: do not repeat it unasked. When they ask how the team is, the source is `jht team status` "
+            "(python3 /app/shared/skills/standby.py status in the container), never the tmux sessions." % text)
+
+
+def _tell(api, run, key, text, user, notify_user, assistant=False):
+    """The Captain and the Sentinella through the delivery notice, the person through the notifier, and with `assistant` the
+    Assistente too (its own text: the state, not an alarm to relay). Each goes once per `key`: what did not go (a session absent, a
+    notifier down) is tried again on the next tick, what went is not repeated."""
     from sentinel_delivery import notice
 
     done = run.state.setdefault("pi_spend_cap", {})
-    for session in (api.CAPITANO_SESSION, api.SENTINELLA_SESSION):
+    to = [(api.CAPITANO_SESSION, text), (api.SENTINELLA_SESSION, text)]
+    if assistant:
+        to.append((getattr(api, "ASSISTENTE_SESSION", ASSISTENTE_SESSION), assistant_text(text)))
+    for session, words in to:
         if not done.get("%s:%s" % (key, session)):
-            done["%s:%s" % (key, session)] = bool(notice(api, run.state, "pi_cap:%s:%s" % (key, session), session, text))
-    if not done.get(key):
+            done["%s:%s" % (key, session)] = bool(notice(api, run.state, "pi_cap:%s:%s" % (key, session), session, words))
+    if user is not None and not done.get(key):
         try:
             # one source id per notice: the tool refuses a second notice under the same id with another text (exit 2), so only
             # the first pause of a team was ever told to the person (giro Windows 16/11: «jht-notify-user failed with exit 2»)
@@ -722,6 +807,8 @@ def _iso(moment, config):
 def _record(verdict, config):
     """What the flag says of the pause, for `jht team status`, `jht team start` and `jht doctor`."""
     record = {"why": verdict["why"], "spent": verdict["spent"], "ceiling": verdict["ceiling"]}
+    if verdict["why"] == "stop_at":
+        record["set_at"] = verdict.get("set_at")
     if verdict["why"] in ("budget", "period", "pace"):
         record.update(budget_usd=verdict["usd"], starts_at=_iso(verdict["starts"], config),
                       ends_at=_iso(verdict["ends"], config),
@@ -749,6 +836,8 @@ def _halt_key(verdict, day, home=None):
         return "halt:period:%d%s" % (int(verdict["ends"]), again)
     if verdict["why"] == "pace":
         return "halt:pace:%d" % int(verdict["resumes"] // 60)
+    if verdict["why"] == "stop_at":
+        return "halt:stop_at:%s:%s" % (_money(verdict["ceiling"]), verdict.get("set_at") or day)
     return "halt:%s:%s" % (day, verdict["why"])
 
 
@@ -774,7 +863,7 @@ def _halt(api, run, verdict, spent, day, notify_user, config=None, now=None, esc
           % (run.now_h, verdict["why"], verdict["spent"], verdict["ceiling"]))
     burst = first_burst_progress(api._path("JHT_HOME"))
     _tell(api, run, _halt_key(verdict, day, api._path("JHT_HOME")), captain_text(verdict, spent, burst, config, now),
-          user_text(verdict, spent, config, now), notify_user)
+          user_text(verdict, spent, config, now), notify_user, assistant=True)
 
 
 # A resume time that moves (spending after the pause: a turn already running, a welcome at `jht up`) is written in the flag
@@ -814,7 +903,7 @@ def _resume_moved(api, run, verdict, spent, day, notify_user, config, now, flag)
         print("[bridge V6] %s PI-SPEND-CEILING pause moved: resumes %s (was %s)"
               % (run.now_h, fresh["resumes_at"], record.get("resumes_at")))
         _tell(api, run, _halt_key(verdict, day), captain_text(verdict, spent, None, config, now),
-              user_text(verdict, spent, config, now), notify_user)
+              user_text(verdict, spent, config, now), notify_user, assistant=True)
 
 
 def _held_by_the_budget(flag, budget):
@@ -962,6 +1051,9 @@ def _resume(api, run, day, notify_user, ctx=None):
     if was in ("budget", "period", "pace"):
         text = "[BRIDGE INFO] The budget the person declared allows work again: the team can resume; ticks are restarting."
         user = i18n.t("pi_cap.resume_budget")
+    elif was == "stop_at":
+        text = "[BRIDGE INFO] The spending stop was raised or cleared: the team can resume; ticks are restarting."
+        user = i18n.t("pi_cap.resume")
     else:
         text = "[BRIDGE INFO] The pi spending ceiling allows work again: the team can resume; ticks are restarting."
         user = i18n.t("pi_cap.resume")
@@ -992,7 +1084,7 @@ def _resume(api, run, day, notify_user, ctx=None):
         note_wake(home, moment, stage.estimate, stage.woken)
         set_pending(home, stage.pending, moment)
         _tell_the_captain_the_queue(api, run, "stage:%s:%d" % (day, int(moment)), woken, stage.pending)
-    _tell(api, run, "resume:%s:%d" % (day, int(api.time.time())), text, user, notify_user)
+    _tell(api, run, "resume:%s:%d" % (day, int(api.time.time())), text, user, notify_user, assistant=True)
     print("[bridge V6] %s PI-SPEND-CEILING cleared: spending back under the ceiling%s" % (run.now_h, " · [RIPRENDI] to %s" % ", ".join(woken) if woken else ""))
 
 
@@ -1153,18 +1245,23 @@ def step(api, run, notify_user=None):
         if budget is not None and budget["starts"] is None and spent["first_worker"] is not None:
             budget = _start(home, budget, spent["first_worker"], run, api, spent.get("before_start") or 0.0)
         day = datetime.fromtimestamp(now).strftime("%Y-%m-%d")
+        stop = read_stop_at(home)
+        try:    # the figure and the rate of the status, the chat and the Captain's projections: never a reason to miss a look
+            write_spend_now(home, now, spent, budget, measured(home, now), stop)
+        except Exception as error:  # noqa: BLE001
+            print("[bridge V6] WARN pi spend cap spend-now: %s" % error)
         flag = _flag(api)
         mine = bool(flag) and flag.get("reason") == REASON
         held_by_pace = mine and (flag.get("pi_spend_cap") or {}).get("why") == "pace" and api._daily_halt_active()
         estimate = first_stage_cost(home, now, (flag or {}).get("sessions")) if held_by_pace else 0.0
         ctx = {"config": config, "budget": budget, "spent": spent, "now": now}
-        verdict = decide(config, spent, bool(run.state.get("no_quota_declared")), now, budget, held_by_pace, estimate)
+        verdict = decide(config, spent, bool(run.state.get("no_quota_declared")), now, budget, held_by_pace, estimate, stop)
         if held_by_pace or (verdict["action"] == "halt" and verdict.get("why") == "pace"):
             # the hour told at the first pause is the hour the lift will find, and the hour of a later look is the same: both reckon the reload
             # of the sessions of the team (the flag's, the ones that spent in the last day, the live ones) and the work after it. The hour moved
             # after every pause when the first one reckoned the tenth of the budget (retest 8d5f09a2b)
             estimate = first_stage_cost(home, now, _team_sessions(api, home, now, flag))
-            verdict = decide(config, spent, bool(run.state.get("no_quota_declared")), now, budget, held_by_pace, estimate)
+            verdict = decide(config, spent, bool(run.state.get("no_quota_declared")), now, budget, held_by_pace, estimate, stop)
         if verdict["action"] == "halt":
             if run._bi_on:
                 print("[bridge V6] %s BURN-INTENT: pi spending ceiling reached, the team stays active (user override)"
@@ -1179,13 +1276,122 @@ def step(api, run, notify_user=None):
                 _halt(api, run, verdict, spent, day, notify_user, config, now, escape=False)
             elif mine and verdict["why"] == "pace":
                 _resume_moved(api, run, verdict, spent, day, notify_user, config, now, flag)
-        elif mine and (budget is not None or run.state.get("no_quota_declared")) and not _held_by_the_budget(flag, budget):
+        elif mine and (budget is not None or run.state.get("no_quota_declared")
+                       or (flag.get("pi_spend_cap") or {}).get("why") == "stop_at") and not _held_by_the_budget(flag, budget):
             # Lifted only by a tick that looked: without a budget and before the no-quota mode is declared (the first tick
             # of a bridge started again) the ceilings were not read, and «nothing to stop» is not «back under».
             _resume(api, run, day, notify_user, ctx)
         elif verdict["action"] != "halt" and not api._daily_halt_active():
             _wake_pending(api, run, ctx)
         if verdict["action"] == "warn":
-            _tell(api, run, "warn:%s" % day, captain_text(verdict, spent), user_text(verdict, spent), notify_user)
+            # the person once, not once a day: a sentence that asks them to decide, with no figure that goes stale in the chat
+            # (W1 F-09); the figure of the day is in `jht team status`, written at every look (state/spend-now.json)
+            done = run.state.setdefault("pi_spend_cap", {})
+            told = bool(done.get("warn"))
+            _tell(api, run, "warn:%s" % day, captain_text(verdict, spent), None if told else user_text(verdict, spent),
+                  notify_user)
+            if not told and done.get("warn:%s" % day):
+                done["warn"] = True
     except Exception as error:  # noqa: BLE001 - a brake that fails to read must not stop the Sentinella
         print("[bridge V6] WARN pi spend cap: %s" % error)
+
+
+# --- the Captain's tool: the measured spending and the stop he commits to (JHT-T349) -------------------------------------
+#
+#   python3 /app/shared/skills/pi_spend_cap.py now [--json]          what was spent, at what rate (last 10 min), when the stop or
+#                                                                    the budget is reached at that rate
+#   python3 /app/shared/skills/pi_spend_cap.py stop-at <usd>         «I stop at X $» becomes a ceiling the brake applies
+#   python3 /app/shared/skills/pi_spend_cap.py stop-at --clear       only on the person's word
+
+def _cli_home():
+    home = os.environ.get("JHT_HOME")
+    return Path(home) if home else Path.home() / ".jht"
+
+
+def _cli_config(home):
+    data = _read_state(home / "jht.config.json", 4 * 1024 * 1024)
+    return data if isinstance(data, dict) else {}
+
+
+def report(home, now_ts):
+    """The figures of `now`: spent (budget or today), the measured rate, the stop, and the minutes to the stop and to the budget at
+    that rate (None when the rate is zero or the line is already behind)."""
+    config = _cli_config(home)
+    budget = team_budget.read(config, home)
+    spent = spend(home, now_ts, budget["counts_from"] if budget else None, budget["starts"] if budget else None)
+    figure, counts = counted(spent, budget)
+    rate = measured(home, now_ts)
+    stop = read_stop_at(home)
+
+    def minutes_to(line):
+        if line is None or rate["usd_per_min"] <= 0 or figure >= line:
+            return None
+        return round((line - figure) / rate["usd_per_min"], 1)
+
+    return {"spent_usd": round(figure, 4), "counts": counts, "budget_usd": budget["usd"] if budget else None,
+            "usd_per_min": rate["usd_per_min"], "window_min": rate["window_min"], "workers": rate["workers"],
+            "workers_usd_per_min": rate["workers_usd_per_min"], "by_agent_usd_per_min": rate["by_agent_usd_per_min"],
+            "stop_at_usd": stop["usd"] if stop else None, "minutes_to_stop": minutes_to(stop["usd"] if stop else None),
+            "minutes_to_budget": minutes_to(budget["usd"] if budget else None)}
+
+
+def _report_text(r):
+    where = "since the budget started" if r["counts"] == "budget" else "today"
+    lines = ["Spent %s USD %s%s." % (_money(r["spent_usd"]), where,
+                                     " of a %s USD budget" % _money(r["budget_usd"]) if r["budget_usd"] else ""),
+             "Measured rate, last %g min: %.4f USD/min (workers: %d, %.4f USD/min)." % (
+                 r["window_min"], r["usd_per_min"], r["workers"], r["workers_usd_per_min"])]
+    for name, value in r["by_agent_usd_per_min"].items():
+        lines.append("  %s: %.4f USD/min" % (name, value))
+    if r["stop_at_usd"] is not None:
+        lines.append("Your stop: %s USD%s." % (_money(r["stop_at_usd"]), "" if r["minutes_to_stop"] is None else
+                                               ", reached in ~%g min at this rate" % r["minutes_to_stop"]))
+    if r["minutes_to_budget"] is not None:
+        lines.append("The budget is reached in ~%g min at this rate." % r["minutes_to_budget"])
+    lines.append("Project with THESE figures (scaling_calc.py --unit usd-min), never with a cost per worker of your own.")
+    return "\n".join(lines)
+
+
+def main(argv=None):
+    import argparse
+    import sys
+    import time as _time
+
+    parser = argparse.ArgumentParser(prog="pi_spend_cap.py")
+    sub = parser.add_subparsers(dest="cmd", required=True)
+    now_p = sub.add_parser("now", help="spent, measured rate in USD/min, time to the stop and to the budget")
+    now_p.add_argument("--json", action="store_true")
+    stop_p = sub.add_parser("stop-at", help="the stop you commit to, applied by the brake as a ceiling")
+    stop_p.add_argument("usd", nargs="?", type=float)
+    stop_p.add_argument("--clear", action="store_true")
+    stop_p.add_argument("--by", default="capitano")
+    args = parser.parse_args(argv)
+    home = _cli_home()
+    if args.cmd == "now":
+        r = report(home, _time.time())
+        print(json.dumps(r) if args.json else _report_text(r))
+        return 0
+    path = home / STOP_AT_FILE
+    if args.clear:
+        try:
+            path.unlink()
+        except FileNotFoundError:
+            pass
+        print("Stop cleared: the brake lifts its pause at its next look (about a minute) if nothing else holds the team.")
+        return 0
+    if args.usd is None or _positive(args.usd) is None or math.isinf(args.usd):
+        print("stop-at needs a positive amount in USD, or --clear", file=sys.stderr)
+        return 2
+    _write_state(path, {"usd": round(float(args.usd), 4), "set_at": datetime.now().astimezone().isoformat(timespec="seconds"),
+                        "by": str(args.by)[:40]})
+    if read_stop_at(home) is None:
+        print("the stop could not be written", file=sys.stderr)
+        return 1
+    r = report(home, _time.time())
+    print("Stop set at %s USD: the brake pauses the team there (one margin before, looking one minute ahead)." % _money(args.usd))
+    print(_report_text(r))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

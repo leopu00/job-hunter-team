@@ -10,7 +10,7 @@ import { join } from 'node:path';
 import { JHT_HOME } from '../jht-paths.js';
 import { later } from './texts.js';
 
-const WHYS = new Set(['budget', 'period', 'pace']);
+const WHYS = new Set(['budget', 'period', 'pace', 'stop_at']);
 const money = (value) => (Number.isFinite(Number(value)) ? Number(value).toFixed(2) : '?');
 
 /** The zone the person chose for the budget (the one every time the CLI says is written in). */
@@ -53,7 +53,7 @@ function staleForTheSavedBudget(home, flagPath, cap) {
   } catch { return false; }
 }
 
-/** @returns {{ why: 'budget'|'period'|'pace', spent: number, ceiling: number, budgetUsd: number, endsAt: string|null, resumesAt: string|null } | null} */
+/** @returns {{ why: 'budget'|'period'|'pace'|'stop_at', spent: number, ceiling: number, budgetUsd: number, endsAt: string|null, resumesAt: string|null } | null} */
 export function budgetPause({ home = JHT_HOME } = {}) {
   try {
     const flagPath = join(home, 'logs', 'daily-halt.flag');
@@ -76,9 +76,74 @@ export function budgetPauseText(options = {}) {
   const zone = zoneOf(options.home ?? JHT_HOME);
   const vars = { spent: money(pause.spent), ceiling: money(pause.ceiling), budget: money(pause.budgetUsd), end: whenOf(pause.endsAt, now, zone) ?? '?' };
   if (pause.why === 'budget') return later('budget.paused_budget', vars);
+  if (pause.why === 'stop_at') return later('budget.paused_stop_at', vars);
   if (pause.why === 'period') return later('budget.paused_period', vars);
   const at = whenOf(pause.resumesAt, now, zone);
   return at ? later('budget.paused_pace', { ...vars, at }) : later('budget.paused_pace_late', vars);
+}
+
+/**
+ * The person's pause or the technical standby ($JHT_HOME/.team-standby.flag, shared/skills/standby.py), read the way standby.py reads
+ * it: an object with an exit condition (an `until` still ahead, or `wake_on.weekly_below`). Null otherwise.
+ * @returns {{ kind: 'user'|'standby', since: number|null, until: string|null, byUser: boolean } | null}
+ */
+export function standbyPause({ home = JHT_HOME, now = new Date() } = {}) {
+  try {
+    const flag = JSON.parse(readFileSync(join(home, '.team-standby.flag'), 'utf8'));
+    if (!flag || typeof flag !== 'object' || Array.isArray(flag)) return null;
+    const weekly = flag.wake_on?.weekly_below;
+    const wakes = typeof weekly === 'number' && Number.isFinite(weekly);
+    let until = NaN;
+    if (typeof flag.until === 'string' && flag.until) until = Date.parse(/([zZ]|[+-]\d\d:?\d\d)$/.test(flag.until) ? flag.until : `${flag.until}Z`);
+    if (Number.isFinite(until) ? now.getTime() >= until : !wakes) return null;
+    return { kind: flag.mode === 'pause' ? 'user' : 'standby', since: Number.isFinite(Number(flag.since)) ? Number(flag.since) : null,
+      until: typeof flag.until === 'string' ? flag.until : null, byUser: flag.mode === 'pause' };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The one pause of the team, whatever holds it (JHT-T349/T354): the spending brake first (it holds the team whatever the standby
+ * says), then the person's pause, then the technical standby. The same object for `jht team status --json` (`pause`) and its text.
+ */
+export function teamPause(options = {}) {
+  const brake = budgetPause(options);
+  if (brake) return { kind: 'budget', ...brake };
+  return standbyPause(options);
+}
+
+/** The line of `jht team status` for the pause, or null when the team is not paused. */
+export function teamPauseText(options = {}) {
+  const pause = teamPause(options);
+  if (!pause) return null;
+  if (pause.kind === 'budget') return budgetPauseText(options);
+  if (pause.kind === 'user') return later('agents.paused_user', {});
+  const now = options.now ?? new Date();
+  return later('agents.paused_standby', { until: whenOf(pause.until, now, zoneOf(options.home ?? JHT_HOME)) ?? '?' });
+}
+
+const SPEND_NOW_MAX_AGE_MS = 24 * 3600 * 1000;
+
+/**
+ * What the team has spent and at what rate, as the brake wrote it at its last look ($JHT_HOME/state/spend-now.json, every minute):
+ * the figure is never the first one told (W1 F-09: «0.06 USD» for a whole afternoon). Null without the file or when it is a day old.
+ */
+export function spendNowText({ home = JHT_HOME, now = new Date() } = {}) {
+  try {
+    const seen = JSON.parse(readFileSync(join(home, 'state', 'spend-now.json'), 'utf8'));
+    const at = Number(seen?.at) * 1000;
+    const spent = Number(seen?.spent_usd);
+    if (!Number.isFinite(at) || !Number.isFinite(spent) || now.getTime() - at > SPEND_NOW_MAX_AGE_MS || at > now.getTime() + 3600 * 1000) return null;
+    const clock = new Date(at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+    const rate = Number(seen.usd_per_min);
+    const vars = { spent: money(spent), rate: Number.isFinite(rate) ? rate.toFixed(3) : '?', window: String(Number(seen.window_min) || 10), at: clock };
+    const budget = Number(seen.budget_usd);
+    if (seen.counts === 'budget' && budget > 0) return later('budget.spend_now_budget', { ...vars, budget: money(budget) });
+    return later('budget.spend_now_today', vars);
+  } catch {
+    return null;
+  }
 }
 
 /**

@@ -178,7 +178,7 @@ def test_failure_branch_declares_instead_of_failing(no_real_user_notice):
     assert [s for s, _ in wire.sent] == ["CAPITANO"]  # declared once, not every tick, and the Sentinella is not woken
     assert "NO-QUOTA MODE" in texts[0] and "NOT an outage" in texts[0]
     assert run.fail_streak == 0 and not run.capitano_alerted
-    assert len(users) == 1 and users[0][1] == "api_key"
+    assert users == [], "JHT-T354: internal news, never a notice to the person (the brake asks them once about a budget)"
 
 
 def test_a_burn_intent_in_force_is_not_touched_by_the_mode():
@@ -203,11 +203,11 @@ def test_a_failed_notice_is_retried_and_the_state_resets_when_data_returns(monke
     monkeypatch.setattr(quota_data, "_notify_user", user)
     run.fail_reason = "no_quota_data:api_key"
     loop._failure(wire.api, run)
-    assert not run.state["no_quota_declared"].get("user") and not run.state["no_quota_declared"].get("captain")
+    assert not run.state["no_quota_declared"].get("captain")
     wire.ok = True
     wire.clock["now"] += 600
     loop._failure(wire.api, run)
-    assert run.state["no_quota_declared"]["user"] and run.state["no_quota_declared"]["captain"]
+    assert run.state["no_quota_declared"]["captain"] and attempts == []
     quota_data.clear(run.state)
     assert "no_quota_declared" not in run.state
 

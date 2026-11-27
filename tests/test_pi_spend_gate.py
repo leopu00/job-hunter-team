@@ -32,6 +32,12 @@ for (const step of JSON.parse(fs.readFileSync(0, "utf8"))) {
     else { fs.mkdirSync(process.env.JHT_HOME + "/logs", { recursive: true }); fs.writeFileSync(file, step.flag); }
     continue;
   }
+  if (step.standby !== undefined) {
+    const file = process.env.JHT_HOME + "/.team-standby.flag";
+    if (step.standby === null) { try { fs.unlinkSync(file); } catch (e) {} }
+    else fs.writeFileSync(file, typeof step.standby === "string" ? step.standby : JSON.stringify(step.standby));
+    continue;
+  }
   if (step.queue !== undefined) {
     const file = process.env.JHT_HOME + "/state/pace-wake-queue.json";
     fs.mkdirSync(process.env.JHT_HOME + "/state", { recursive: true });
@@ -155,3 +161,59 @@ def test_a_queue_nobody_touched_for_two_hours_holds_nobody(tmp_path):
 def test_the_assistente_is_not_held_by_the_queue_either(tmp_path):
     results, _ = run(tmp_path, "assistente", [_queue(["ASSISTENTE"]), MESSAGE, REQUEST])
     assert results[0]["handlers"] == 0 and results[1]["aborted"] == 0, "no handler at all: it is the person's voice"
+
+
+# The person's pause and the technical standby (standby.py, .team-standby.flag): collaudo W1 26/11, the spending went on during
+# «PAUSA TEAM» because the pause was only a message. Flags written the way standby.enter writes them.
+def _standby(hours=1.0, **extra):
+    from datetime import datetime, timedelta, timezone
+    now = datetime.now(timezone.utc)
+    payload = {"since": int(now.timestamp()), "until": (now + timedelta(hours=hours)).isoformat(timespec="seconds"),
+               "wake_on": None, "reason": "user pause", "requested_by": "assistente", "mode": "pause", "manual": True}
+    payload.update(extra)
+    return {"standby": payload}
+
+
+@pytest.mark.parametrize("agent", ["capitano", "scout-1", "analista-2", "scorer-1", "sentinella"])
+def test_during_the_persons_pause_no_message_reaches_the_model_and_a_running_turn_stops(tmp_path, agent):
+    results, home = run(tmp_path, agent, [_standby(), MESSAGE, REQUEST])
+    assert results[0]["out"] == {"action": "handled"}, "the message does not reach the model"
+    assert results[1]["aborted"] == 1, "a turn already running stops before its next request: the spending stops"
+    log = (home / "logs" / "pi-spend-gate.log").read_text(encoding="utf-8")
+    assert "input_held_for_the_pause" in log and "synthetic" not in log
+
+
+def test_the_technical_standby_with_only_a_weekly_wake_holds_the_team_too(tmp_path):
+    results, _ = run(tmp_path, "scout-1", [_standby(until=None, wake_on={"weekly_below": 100.0}, mode=None), MESSAGE, REQUEST])
+    assert results[0]["out"] == {"action": "handled"} and results[1]["aborted"] == 1
+
+
+def test_at_the_resume_what_was_held_arrives_once_without_the_pause_notice(tmp_path):
+    steps = [_standby(),
+             {"event": "input", "text": "[PAUSA] The user has paused the team. This is a PAUSE, not a shutdown"},
+             {"event": "input", "text": "[WAKE] positions waiting"},
+             {"event": "input", "text": "[WAKE] positions waiting"},
+             {"standby": None},                                # standby.wake removes the flag BEFORE the [RIPRENDI]
+             {"event": "input", "text": "[RIPRENDI] The pause is over"},
+             MESSAGE, REQUEST]
+    results, _ = run(tmp_path, "scout-1", steps)
+    assert [r["out"]["action"] for r in results[:3]] == ["handled"] * 3
+    woken = results[3]["out"]
+    assert woken["action"] == "transform" and woken["text"].startswith("[RIPRENDI] The pause is over")
+    assert woken["text"].count("[WAKE] positions waiting") == 1 and "[PAUSA]" not in woken["text"]
+    assert results[4]["out"] == {"action": "continue"} and results[5]["aborted"] == 0, "after the resume the team works"
+
+
+def test_the_assistente_answers_the_person_during_the_pause(tmp_path):
+    results, _ = run(tmp_path, "assistente", [_standby(), MESSAGE, REQUEST])
+    assert results[0]["handlers"] == 0 and results[1]["handlers"] == 0
+
+
+@pytest.mark.parametrize("flag", [
+    {"standby": "{broken"}, {"standby": ""}, {"standby": "[]"},
+    {"standby": {"since": 1, "until": None, "wake_on": None}},              # no exit condition: standby.py calls it invalid
+    _standby(hours=-1),                                                     # past its until: expired, nobody is held
+])
+def test_a_standby_flag_that_is_broken_expired_or_without_exit_holds_nobody(tmp_path, flag):
+    results, _ = run(tmp_path, "scout-1", [flag, MESSAGE, REQUEST])
+    assert results[0]["out"] == {"action": "continue"} and results[1]["aborted"] == 0
