@@ -11,7 +11,7 @@ FATAL cascade (L4 soft pause of the whole team). Here the two are told apart:
 
 The mode only declares. It does not measure or stop spending: the ceiling is the one set with the provider for
 the key, plus the guards that never depended on quota (host cap, SC-09, burn-intent). A user-declared ceiling
-can be written in the config as `no_quota_cap` ({"eur": 10, "tokens_per_hour": 500000}) and is repeated in the
+can be written in the config as `no_quota_cap` ({"usd": 10, "tokens_per_hour": 500000}; the older `eur` is converted) and is repeated in the
 notice, so the person and the Captain read the same number.
 """
 
@@ -175,13 +175,18 @@ def _team_budget(config):
 
 
 def _provider_caps(config):
-    """The ceilings declared for the key in the configuration (no_quota_cap): '10 EUR', '500000 tokens/hour'."""
+    """The ceilings declared for the key in the configuration (no_quota_cap), in the dollars the brake compares: '10 USD a day',
+    '10 USD a day (declared as 10 EUR, counted at 1 USD per EUR)', '500000 tokens/hour'."""
     parts = []
     cap = config.get("no_quota_cap") if isinstance(config, dict) else None
     if not isinstance(cap, dict):
         return parts
-    if isinstance(cap.get("eur"), (int, float)) and not isinstance(cap.get("eur"), bool) and cap["eur"] > 0:
-        parts.append("%g EUR" % cap["eur"])
+    import team_budget  # the skills folder is on the path wherever this module is
+
+    daily = team_budget.no_quota_cap_usd(config)
+    if daily:
+        parts.append("%g USD a day%s" % (daily["usd"], "" if daily["currency"] == "USD" else
+                                        " (declared as %g EUR, counted at %g USD per EUR)" % (daily["declared"], daily["rate"])))
     tph = cap.get("tokens_per_hour")
     if isinstance(tph, (int, float)) and not isinstance(tph, bool) and tph > 0:
         parts.append("%d tokens/hour" % int(tph))

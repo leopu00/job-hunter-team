@@ -400,16 +400,22 @@ def _setup_budget(cfg: dict) -> Optional[dict]:
 
 def spend_ceiling_eur(cfg: dict) -> Optional[float]:
     """The spending allowed per day: the budget of the setup spread over its period (a period shorter than a day counts
-    as one day), else the `no_quota_cap.eur` of an older config. Dollars both (pi prices in dollars; `eur` is compared
-    one to one)."""
+    as one day), else the daily ceiling of an older config (`no_quota_cap.usd`, or `eur` converted: team_budget.no_quota_cap_usd).
+    Dollars both (pi prices in dollars)."""
     budget = _setup_budget(cfg)
     if budget is not None:
         length = budget["duration"] if budget["duration"] is not None else budget["ends"] - budget["starts"]
         return budget["usd"] / max(1.0, length / 86400.0)
-    cap = cfg.get("no_quota_cap")
-    eur = cap.get("eur") if isinstance(cap, dict) else None
-    ok = isinstance(eur, (int, float)) and not isinstance(eur, bool) and eur > 0 and eur == eur and eur != float("inf")
-    return float(eur) if ok else None
+    here = str(Path(__file__).resolve().parent)
+    if here not in sys.path:
+        sys.path.insert(0, here)
+    try:
+        import team_budget
+
+        daily = team_budget.no_quota_cap_usd(cfg)
+    except Exception:  # noqa: BLE001 - an unreadable ceiling: none
+        return None
+    return daily["usd"] if daily else None
 
 
 def api_key_plan(cfg: dict, prov: str) -> Optional[dict]:
