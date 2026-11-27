@@ -219,3 +219,29 @@ test('jht run is a command of the CLI, with its help in the person\'s language',
   assert.match(help.stdout, /snapshot/);
   assert.match(help.stdout, /Confronta due run salvati/);
 });
+
+test('a fresh restore starts from the profile of the start of the run, not from the one changed afterwards', async () => {
+  const w = world();
+  // the copy first_run.py begin-burst keeps (shared/skills/launch_profile.py), then the person changes the profile
+  mkdirSync(join(w.home, 'profile-at-start'), { recursive: true });
+  writeFileSync(join(w.home, 'profile-at-start', 'candidate_profile.yml'), 'name: Synthetic Candidate\nskills: [python]\n');
+  writeFileSync(join(w.home, 'profile-at-start', '.saved.json'), JSON.stringify({ saved_at: '2026-11-20T10:00:00+00:00', files: 1 }));
+  writeFileSync(join(w.home, 'profile', 'candidate_profile.yml'), 'name: Synthetic Candidate\nskills: [python, rust]\nsalary: changed later\n');
+  const { manifest } = await snap(w, 'run-a');
+  assert.deepEqual(manifest.profile_at_start, { saved_at: '2026-11-20T10:00:00+00:00', files: 1 });
+  await lib.restoreSnapshot({ name: 'run-a', fresh: true, ...w.deps });
+  assert.equal(readFileSync(join(w.home, 'profile', 'candidate_profile.yml'), 'utf8'), 'name: Synthetic Candidate\nskills: [python]\n');
+  assert.ok(!existsSync(join(w.home, 'profile', '.saved.json')), 'the mark of the copy is not part of the profile');
+  assert.ok(existsSync(join(w.home, 'profile-at-start', '.saved.json')), 'the copy stays, for the next replay');
+  // a plain restore puts back the profile of the end of the run
+  await lib.restoreSnapshot({ name: 'run-a', ...w.deps });
+  assert.match(readFileSync(join(w.home, 'profile', 'candidate_profile.yml'), 'utf8'), /changed later/);
+});
+
+test('a snapshot without the copy keeps the fresh restore as before', async () => {
+  const w = world();
+  const { manifest } = await snap(w, 'run-a');
+  assert.equal(manifest.profile_at_start, null);
+  await lib.restoreSnapshot({ name: 'run-a', fresh: true, ...w.deps });
+  assert.match(readFileSync(join(w.home, 'profile', 'candidate_profile.yml'), 'utf8'), /Synthetic Candidate/);
+});

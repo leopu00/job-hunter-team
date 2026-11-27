@@ -32,6 +32,9 @@ export const HOME_ENTRIES = [
   { path: 'jobs.db', role: 'result', db: true },
   { path: 'jht.config.json', role: 'input', config: true },
   { path: 'profile', role: 'input' },
+  // the profile as it was when the run began (shared/skills/launch_profile.py, first_run.py begin-burst): a fresh restore starts
+  // from it, not from the profile the person changed afterwards
+  { path: 'profile-at-start', role: 'input' },
   { path: 'state', role: 'result' },
   { path: 'logs', role: 'result' },
   { path: 'agents', role: 'result' },
@@ -120,13 +123,23 @@ function copyTree(src, dst, counts) {
   return true;
 }
 
+const LAUNCH_PROFILE = 'profile-at-start';
+const LAUNCH_MARK = '.saved.json';
+
+/** {saved_at, files} of the profile kept when the run began, or null when the home has none. */
+export function launchProfileOf(home) {
+  const mark = readJson(join(home, LAUNCH_PROFILE, LAUNCH_MARK));
+  return mark && typeof mark === 'object' ? { saved_at: typeof mark.saved_at === 'string' ? mark.saved_at : null,
+    files: Number.isFinite(Number(mark.files)) ? Number(mark.files) : null } : null;
+}
+
 /** Raw copy back, for the restore: the snapshot is already clean. */
-function copyBack(src, dst) {
+function copyBack(src, dst, skip = new Set()) {
   const info = lstatSync(src);
   if (info.isSymbolicLink()) return;
   if (info.isDirectory()) {
     mkdirSync(dst, { recursive: true, mode: 0o700 });
-    for (const entry of readdirSync(src)) copyBack(join(src, entry), join(dst, entry));
+    for (const entry of readdirSync(src)) if (!skip.has(entry)) copyBack(join(src, entry), join(dst, entry));
     return;
   }
   if (info.isFile()) {
@@ -286,6 +299,7 @@ export async function takeSnapshot({
     run: { started_at: iso(usage[0]?.ts), ended_at: iso(usage.at(-1)?.ts) },
     ...runFacts(readJson(join(home, 'jht.config.json')), { where: where(), version, pin }),
     inputs: [...HOME_ENTRIES, ...USER_ENTRIES].filter((e) => e.role === 'input').map((e) => e.path.split(sep).join('/')),
+    profile_at_start: launchProfileOf(join(dir, 'home')),
     secrets_left_out: { files: counts.secretFiles, folders: counts.secretDirs, values: counts.secretValues, db_columns: counts.secretColumns },
     files,
   };
@@ -356,19 +370,28 @@ export async function restoreSnapshot({
   const hasData = [...HOME_ENTRIES.map((e) => join(home, e.path)), ...USER_ENTRIES.map((e) => join(userDir, e.path))].some(existsSync);
   if (hasData) {
     const stamp = now().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-    kept = (await takeSnapshot({ name: `before-restore-${stamp}`, home, userDir, root, version, now })).dir;
+    // two restores in the same second would name the same safety snapshot: the second gets -2, -3…
+    let safety = `before-restore-${stamp}`;
+    for (let n = 2; existsSync(join(root, safety)); n += 1) safety = `before-restore-${stamp}-${n}`;
+    kept = (await takeSnapshot({ name: safety, home, userDir, root, version, now })).dir;
   }
   const liveConfig = readJson(join(home, 'jht.config.json'));
   for (const [entries, base, part] of [[HOME_ENTRIES, home, 'home'], [USER_ENTRIES, userDir, 'user']]) {
     for (const entry of entries) {
       removeEntry(base, entry);
       if (fresh && entry.role !== 'input') continue;
-      const src = join(dir, part, entry.path);
+      let src = join(dir, part, entry.path);
+      let skip;
+      // a replay starts from the profile of the start of the run, when the snapshot has it
+      if (fresh && part === 'home' && entry.path === 'profile' && launchProfileOf(join(dir, 'home'))) {
+        src = join(dir, 'home', LAUNCH_PROFILE);
+        skip = new Set([LAUNCH_MARK]);
+      }
       if (!existsSync(src)) continue;
       if (entry.config) {
         const saved = readJson(src);
         writePrivate(join(base, entry.path), JSON.stringify(mergeLiveSecrets(saved, liveConfig), null, 2) + '\n');
-      } else copyBack(src, join(base, entry.path));
+      } else copyBack(src, join(base, entry.path), skip);
     }
   }
   const started = (await startTeam()) !== false;
