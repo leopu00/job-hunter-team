@@ -24,7 +24,7 @@ export const HIDDEN_COMMANDS = new Set([
 export const HELP_GROUPS = [
   ['Every day', ['status', 'agents', 'monitor', 'team', 'positions', 'doctor', 'logs', 'setup']],
   ['Your team', [
-    'working-hours', 'cron', 'apply', 'ticket', 'feedback', 'directives', 'coordinator', 'enrichment', 'profile',
+    'working-hours', 'budget', 'cron', 'apply', 'ticket', 'feedback', 'directives', 'coordinator', 'enrichment', 'profile',
     'artifact', 'notifications', 'standby', 'burn', 'existing-team', 'providers',
   ]],
   ['Your data', ['export', 'import', 'backup', 'run', 'report']],
