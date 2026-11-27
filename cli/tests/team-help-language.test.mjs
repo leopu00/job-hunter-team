@@ -40,6 +40,7 @@ test('in English the help is the one of before, without the default commander ad
   const out = help(['team', '--help'], 'en');
   assert.match(out, /^Usage: jht team \[options\] \[command\]/);
   assert.match(out, /Manage the Job Hunter Team agents/);
-  assert.match(out, /Commands:[\s\S]*status\s+Show currently active agents/);
+  // `status [options]`: --json is what the Assistente reads for the state of the team (JHT-T354)
+  assert.match(out, /Commands:[\s\S]*status \[options\]\s+Show currently active agents/);
   assert.match(help(['team', 'start', '--help'], 'en'), /-m, --mode <mode>\s+mode: default \(when not given\) or fast\n/);
 });

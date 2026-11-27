@@ -1,19 +1,27 @@
 import { errorBlock } from '../lib/ui.js';
 import { say, show } from '../lib/texts.js';
-import { budgetPauseText, onboardingSpendText, quotaWallText, ramGuardText } from '../lib/budget-pause.js';
+import { onboardingSpendText, quotaWallText, ramGuardText, spendNow, teamPause, teamPauseText } from '../lib/budget-pause.js';
+import { hostWhere } from '../lib/host-where.js';
 import { readObservation } from '../lib/agent-observation.js';
 import { errorText, renderObservation } from '../lib/agent-observation-view.js';
 import { appendDiagnostic } from '../lib/runtime-diagnostic.js';
 import { readActiveProvider } from '../lib/agent-observation-provider.js';
 import { spawnFailureTexts } from '../lib/spawn-failed.js';
 
-export function handleAgents(options = {}, read = readObservation) {
+/**
+ * `--json` is what the Assistente reads for the state of the team (JHT-T354): the sessions stay open in a pause, so the pause
+ * (of the budget, of the person, technical; null when the team works), the spending the brake measured last and
+ * where the team runs are in it, from the same files the text of `jht team status` reads.
+ */
+export function handleAgents(options = {}, read = readObservation, { pauseOf = teamPause, whereOf = hostWhere, spendOf = spendNow } = {}) {
   try {
     const snapshot = read();
-    if (options.json) console.log(JSON.stringify(snapshot, null, 2));
+    if (options.json) {
+      console.log(JSON.stringify({ ...snapshot, pause: pauseOf() ?? null, spend_now: spendOf() ?? null, where: whereOf() }, null, 2));
+    }
     else {
-      // the pause of the brake of pi on the budget (JHT-T322): read again at every status, the reason can change
-      const pause = budgetPauseText();
+      // the pause of the team (the brake of pi on the budget JHT-T322, the person, a technical standby): read again at every status
+      const pause = teamPauseText();
       process.stdout.write(renderObservation(snapshot, { usage: Boolean(options.usage), provider: readActiveProvider(), paused: Boolean(pause) }));
       const paused = pause ?? onboardingSpendText();
       if (paused) console.log(`⚠ ${show(paused)}`);

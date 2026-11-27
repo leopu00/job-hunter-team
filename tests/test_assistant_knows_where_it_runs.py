@@ -43,7 +43,7 @@ def test_the_state_of_the_team_has_one_source_with_the_pause_never_the_tmux_sess
     text = _prompt(lang)
     a04 = next(p for p in text.split("\n\n") if p.startswith("**A-04**"))
     assert "`jht team status --json`" in a04
-    for field in ("`pause`", "`spent`", "`ceiling`", "`why`"):
+    for field in ("`pause`", "`spent`", "`ceiling`", "`why`", "`spend_now`", "`spentUsd`"):
         assert field in a04, field
     # a team paused on the budget is said paused, with the dollars: never «active»
     assert "`spent` $" in a04 and "`ceiling` $" in a04

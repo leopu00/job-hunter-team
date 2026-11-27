@@ -33,6 +33,7 @@ export function registerTeamCommand(program) {
   team
     .command('status')
     .description(say('team.help.status'))
+    .option('--json', say('option.json'))
     .action(statusAction);
 
   // no default on --mode: commander would add an English «(default: "default")»; startAction takes default itself

@@ -129,18 +129,29 @@ const SPEND_NOW_MAX_AGE_MS = 24 * 3600 * 1000;
  * What the team has spent and at what rate, as the brake wrote it at its last look ($JHT_HOME/state/spend-now.json, every minute):
  * the figure is never the first one told (W1 F-09: «0.06 USD» for a whole afternoon). Null without the file or when it is a day old.
  */
-export function spendNowText({ home = JHT_HOME, now = new Date() } = {}) {
+export function spendNowText(options = {}) {
+  const seen = spendNow(options);
+  if (!seen) return null;
+  const clock = new Date(seen.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+  const vars = { spent: money(seen.spentUsd), rate: seen.usdPerMin === null ? '?' : seen.usdPerMin.toFixed(3), window: String(seen.windowMin), at: clock };
+  if (seen.budgetUsd !== null) return later('budget.spend_now_budget', { ...vars, budget: money(seen.budgetUsd) });
+  return later('budget.spend_now_today', vars);
+}
+
+/**
+ * The same look of the brake as data, for `jht team status --json` (the same in every language): at (ISO), spentUsd, usdPerMin,
+ * windowMin, budgetUsd (null when the figure is of today and not of a budget). Null like the text.
+ */
+export function spendNow({ home = JHT_HOME, now = new Date() } = {}) {
   try {
     const seen = JSON.parse(readFileSync(join(home, 'state', 'spend-now.json'), 'utf8'));
     const at = Number(seen?.at) * 1000;
     const spent = Number(seen?.spent_usd);
     if (!Number.isFinite(at) || !Number.isFinite(spent) || now.getTime() - at > SPEND_NOW_MAX_AGE_MS || at > now.getTime() + 3600 * 1000) return null;
-    const clock = new Date(at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
     const rate = Number(seen.usd_per_min);
-    const vars = { spent: money(spent), rate: Number.isFinite(rate) ? rate.toFixed(3) : '?', window: String(Number(seen.window_min) || 10), at: clock };
     const budget = Number(seen.budget_usd);
-    if (seen.counts === 'budget' && budget > 0) return later('budget.spend_now_budget', { ...vars, budget: money(budget) });
-    return later('budget.spend_now_today', vars);
+    return { at: new Date(at).toISOString(), spentUsd: spent, usdPerMin: Number.isFinite(rate) ? rate : null,
+      windowMin: Number(seen.window_min) || 10, budgetUsd: seen.counts === 'budget' && budget > 0 ? budget : null };
   } catch {
     return null;
   }

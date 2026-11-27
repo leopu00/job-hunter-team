@@ -35,8 +35,9 @@ export function listAction() {
   console.log('');
 }
 
-export async function statusAction() {
-  handleAgents();
+export async function statusAction(options = {}) {
+  handleAgents({ json: Boolean(options.json) });
+  if (options.json) return;
   // what the team has spent and at what rate, as the brake measured it at its last look: never the first figure told (JHT-T349)
   const spend = spendNowText();
   if (spend) console.log(`  ${show(spend)}`);
