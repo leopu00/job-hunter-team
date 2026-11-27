@@ -38,6 +38,12 @@ def _catalog(lang: str) -> dict:
 EN = _catalog("en")
 
 
+def _welcome(catalog: dict, kind: str = "unknown") -> str:
+    """The welcome as the person reads it: {file_way} is the way to hand over a file where the team runs (JHT-T354). A test
+    environment (no JHT_HOST_TYPE, no /jht_user mounted) is one that cannot be told: the upload command only."""
+    return catalog["welcome.assistente"].replace("{file_way}", catalog[f"welcome.assistente_file_{kind}"])
+
+
 class Home:
     def __init__(self, path: Path):
         self.path = path
@@ -97,14 +103,14 @@ def test_with_no_telegram_the_welcome_is_in_the_chat_and_the_flag_is_written(hom
     assert done.stdout.strip() == "WELCOME_DELIVERED chat=posted telegram=skipped flag=ok"
     [line] = home.lines()
     assert line["role"] == "assistant" and line["done"] is True
-    assert line["text"].startswith(EN["welcome.assistente"])
+    assert line["text"].startswith(_welcome(EN))
     assert home.flag.exists()
 
 
 def test_the_first_question_is_in_the_same_message_while_the_profile_is_not_ready(home):
     home.deliver()
     [line] = home.lines()
-    assert line["text"] == EN["welcome.assistente"] + "\n\n" + EN["welcome.assistente_first"]
+    assert line["text"] == _welcome(EN) + "\n\n" + EN["welcome.assistente_first"]
     assert "Telegram" not in line["text"]
 
 
@@ -129,7 +135,7 @@ def test_the_delivered_welcome_follows_the_selected_language(home, lang, source,
         greeting = catalog["welcome.assistente"].split("\n\n")[0]
         expected = greeting + "\n\n" + catalog["welcome.assistente_ready_who"] + "\n\n" + catalog["welcome.assistente_ready"]
     else:
-        expected = catalog["welcome.assistente"] + "\n\n" + catalog["welcome.assistente_first"]
+        expected = _welcome(catalog) + "\n\n" + catalog["welcome.assistente_first"]
 
     done = home.deliver()
 
@@ -291,13 +297,62 @@ def test_a_wrong_call_changes_nothing(home, args):
 # --- the words ------------------------------------------------------------------------------------
 
 
+KINDS = ("unknown", "vps", "linux", "macos", "windows")
+
+
 @pytest.mark.parametrize("lang", LANGS)
-def test_the_welcome_names_the_upload_command_that_works_on_every_host_before_the_folder(lang):
+@pytest.mark.parametrize("kind", KINDS)
+def test_the_welcome_names_the_upload_command_that_works_on_every_host_before_the_folder(lang, kind):
     """P2-3 of the Linux CLI gate (02/11): on Linux the folder named by the welcome is the container's (1001:1001, 700)
     and the person cannot write in it; `jht artifact upload <file>` works there and on the Mac."""
-    text = _catalog(lang)["welcome.assistente"]
-    assert "jht artifact upload" in text
-    assert text.index("jht artifact upload") < text.index("Job Hunter Team/allegati")
+    text = _welcome(_catalog(lang), kind)
+    assert "jht artifact upload" in text and "{file_way}" not in text
+    if kind != "unknown":
+        assert text.index("jht artifact upload") < text.index("allegati")
+
+
+@pytest.mark.parametrize("lang", LANGS)
+def test_the_welcome_gives_only_the_way_of_the_place_where_the_team_runs(lang):
+    """JHT-T354, a test on a Linux VPS from the terminal: the first message gave the Mac and Linux folder, the Windows one,
+    Finder and Explorer together, and the person on the server did not know which way was theirs. Now one way, the one of
+    the place: on the server the upload or `mv` into the folder of the server; at home the folder of that system; and when
+    the place cannot be told, only the upload command, never the list of every system."""
+    catalog = _catalog(lang)
+    way = {kind: catalog[f"welcome.assistente_file_{kind}"] for kind in KINDS}
+    assert catalog["welcome.assistente"].count("{file_way}") == 1
+    assert "allegati" not in catalog["welcome.assistente"] and "jht artifact upload" not in catalog["welcome.assistente"]
+    assert "Documents" not in way["unknown"] and "%USERPROFILE%" not in way["unknown"]
+    assert "`mv`" in way["vps"] and "`~/Documents/Job Hunter Team/allegati`" in way["vps"]
+    for other in ("%USERPROFILE%", "Finder", "Explorer", "Esplora", "Explorador", "Explorateur", "Fájlkezelő"):
+        assert other not in way["vps"] and other not in way["linux"], other
+    assert "`~/Documents/Job Hunter Team/allegati`" in way["linux"] and "`~/Documents/Job Hunter Team/allegati`" in way["macos"]
+    assert "Finder" in way["macos"] and "%USERPROFILE%" not in way["macos"]
+    assert "`%USERPROFILE%\\Documents\\Job Hunter Team\\allegati`" in way["windows"] and "~/Documents" not in way["windows"]
+    assert "Finder" not in way["windows"]
+
+
+MOUNT = "600 500 0:50 / /jht_home rw - ext4 /dev/vda1 rw\n601 500 0:51 /u/Documents/Job\\040Hunter\\040Team /jht_user rw - {fs} share rw\n"
+
+
+@pytest.mark.parametrize(("setting", "kind"), [
+    ({"JHT_HOST_TYPE": "vps"}, "vps"),
+    ({"host.env": "JHT_LANG=en\nJHT_HOST_TYPE=vps\n"}, "vps"),
+    ({"mount": "virtiofs"}, "macos"),
+    ({"mount": "9p"}, "windows"),
+    ({"mount": "ext4"}, "linux"),
+    ({}, "unknown"),
+])
+def test_the_delivered_welcome_reads_where_the_team_runs(home, setting, kind):
+    if "JHT_HOST_TYPE" in setting:
+        home.env_extra["JHT_HOST_TYPE"] = setting["JHT_HOST_TYPE"]
+    if "host.env" in setting:
+        (home.path / "host.env").write_text(setting["host.env"], encoding="utf-8")
+    mountinfo = home.path / "mountinfo"
+    mountinfo.write_text(MOUNT.format(fs=setting["mount"]) if "mount" in setting else "600 500 0:50 / /jht_home rw - ext4 x rw\n", encoding="utf-8")
+    home.env_extra["JHT_WELCOME_MOUNTINFO"] = str(mountinfo)
+    assert home.deliver().returncode == 0
+    [line] = home.lines()
+    assert line["text"] == _welcome(EN, kind) + "\n\n" + EN["welcome.assistente_first"]
 
 
 @pytest.mark.parametrize("lang", LANGS)
@@ -307,8 +362,10 @@ def test_the_catalog_welcome_does_not_send_the_user_to_telegram_and_asks_the_nam
     # the chat of the app takes text, not files: the welcome must not promise a format it cannot receive
     for promised in ("PDF", "DOC", "photo", "foto", "fénykép", "Foto"):
         assert promised not in catalog["welcome.assistente"], promised
-    # the one other way in is the drop-zone the Assistente reads (skill onboarding-flow): named by its real folder
-    assert "Job Hunter Team/allegati" in catalog["welcome.assistente"]
+    # the one other way in is the drop-zone the Assistente reads (skill onboarding-flow): named by its real folder, in the
+    # way of every place that can be told (JHT-T354)
+    for kind in ("vps", "linux", "macos", "windows"):
+        assert "Job Hunter Team" in catalog[f"welcome.assistente_file_{kind}"] and "allegati" in catalog[f"welcome.assistente_file_{kind}"]
     assert catalog["welcome.assistente_first"].strip().endswith("?")
     assert "\n" not in catalog["welcome.assistente_first"]
 
@@ -431,7 +488,7 @@ def test_a_start_after_another_start_still_posts_nothing(home):
 @pytest.mark.parametrize("lang", LANGS)
 def test_a_welcome_posted_in_any_language_is_the_welcome_whatever_language_the_catalog_speaks_now(home, lang):
     # the chat holds the welcome in `lang`; the catalog in use is English
-    _chat_after_a_restart(home, _catalog(lang)["welcome.assistente"])
+    _chat_after_a_restart(home, _welcome(_catalog(lang)))
     assert "chat=already" in home.deliver().stdout
     assert len(home.lines()) == 4
 
@@ -441,7 +498,7 @@ def test_the_welcome_is_still_the_welcome_with_the_first_question_or_the_ready_l
     catalog = _catalog(lang)
     for tail in (catalog["welcome.assistente_first"], catalog["welcome.assistente_ready"]):
         home.chat.parent.mkdir(parents=True, exist_ok=True)
-        home.chat.write_text(json.dumps({"role": "assistant", "text": catalog["welcome.assistente"] + "\n\n" + tail}) + "\n", encoding="utf-8")
+        home.chat.write_text(json.dumps({"role": "assistant", "text": _welcome(catalog, "vps") + "\n\n" + tail}) + "\n", encoding="utf-8")
         assert "chat=already" in home.deliver().stdout
 
 

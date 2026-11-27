@@ -118,13 +118,69 @@ def looks_like_the_welcome(text: str, greetings: set[str] | None = None) -> bool
     return first in (greetings if greetings is not None else _greetings()) and _BRAND in text[:_BRAND_WITHIN]
 
 
+# Where the team runs, for the way the welcome gives to hand over a file (JHT-T354): the same reading as `jht team status --json`
+# (cli/src/lib/host-where.js). On a VPS the folder is on the server and the person is in its terminal; at home the folder of
+# the person is mounted at /jht_user from the share of the machine (virtiofs = macOS, 9p/drvfs = Windows, a disk = Linux).
+# When it cannot be told the welcome gives only the upload command, never the paths of every system together.
+_MAC_SHARES = {"virtiofs", "fakeowner", "fuse.grpcfuse", "osxfs"}
+_WINDOWS_SHARES = {"9p", "drvfs", "v9fs"}
+
+
+def host_type() -> str:
+    given = str(os.environ.get("JHT_HOST_TYPE") or "").strip().lower()
+    if given:
+        return "vps" if given == "vps" else "local"
+    try:
+        for line in (jht_home() / "host.env").read_text(encoding="utf-8").splitlines():
+            key, _, value = line.strip().removeprefix("export ").partition("=")
+            if key == "JHT_HOST_TYPE":
+                return "vps" if value.strip().strip("'\"").lower() == "vps" else "local"
+    except OSError:
+        pass
+    return "local"
+
+
+def mount_fs_type(mountinfo: str, point: str = "/jht_user") -> str | None:
+    for line in mountinfo.splitlines():
+        left, sep, right = line.partition(" - ")
+        fields = left.split(" ")
+        if sep and len(fields) > 4 and fields[4] == point:
+            return right.split(" ")[0] or None
+    return None
+
+
+def host_kind() -> str:
+    """vps, macos, windows, linux, or unknown."""
+    if host_type() == "vps":
+        return "vps"
+    try:
+        fs = mount_fs_type(Path(os.environ.get("JHT_WELCOME_MOUNTINFO") or "/proc/self/mountinfo").read_text(encoding="utf-8"))
+    except OSError:
+        fs = None
+    if fs is None:
+        return "unknown"
+    if fs in _MAC_SHARES:
+        return "macos"
+    if fs in _WINDOWS_SHARES:
+        return "windows"
+    return "linux"
+
+
+def render_welcome(base: str, t) -> str:
+    """`welcome.assistente` with its {file_way}: the way to hand over a file that works where the team runs."""
+    if "{file_way}" not in base:
+        return base
+    way = _lookup(t, f"welcome.assistente_file_{host_kind()}") or _lookup(t, "welcome.assistente_file_unknown")
+    return base.replace("{file_way}", way)
+
+
 def welcome_texts() -> tuple[str, str]:
     """(the opening that makes it the welcome, the text to post).
 
     The text is the whole welcome with the first question of the onboarding while the profile is not ready; with the
     profile ready it is the opening and one line that says there is nothing to send, never the request for the CV."""
     t = _catalog()
-    base = _lookup(t, "welcome.assistente")
+    base = render_welcome(_lookup(t, "welcome.assistente"), t)
     if not base:
         return "", ""
     opening = _opening(base)

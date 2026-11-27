@@ -18,11 +18,16 @@ TRANSLATED = re.compile(r"(Dokumente|Documenti|Documentos|Dokumentumok)[/\\]+Job
 
 
 @pytest.mark.parametrize("lang", LANGS)
-def test_the_welcome_gives_the_real_path_for_mac_linux_and_windows_and_says_the_name_may_be_shown_translated(lang):
-    text = json.loads((ROOT / "shared" / "locales" / f"{lang}.json").read_text(encoding="utf-8"))["welcome.assistente"]
-    assert "`~/Documents/Job Hunter Team/allegati`" in text
-    assert "`%USERPROFILE%\\Documents\\Job Hunter Team\\allegati`" in text
-    assert not TRANSLATED.search(text)
+def test_the_welcome_gives_the_real_path_of_the_system_it_runs_on_and_says_the_name_may_be_shown_translated(lang):
+    # JHT-T354: the welcome gives the way of the place where the team runs, not the paths of every system together (on a
+    # Linux server the person got the Windows path and Finder); each place has its real path, never a translated name
+    catalog = json.loads((ROOT / "shared" / "locales" / f"{lang}.json").read_text(encoding="utf-8"))
+    for kind in ("vps", "linux", "macos"):
+        assert "`~/Documents/Job Hunter Team/allegati`" in catalog[f"welcome.assistente_file_{kind}"], kind
+    assert "`%USERPROFILE%\\Documents\\Job Hunter Team\\allegati`" in catalog["welcome.assistente_file_windows"]
+    for kind in ("unknown", "vps", "linux", "macos", "windows"):
+        assert not TRANSLATED.search(catalog[f"welcome.assistente_file_{kind}"]), kind
+    assert not TRANSLATED.search(catalog["welcome.assistente"])
 
 
 @pytest.mark.parametrize("lang", LANGS)
