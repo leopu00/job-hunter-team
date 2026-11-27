@@ -513,6 +513,22 @@ def test_the_switch_tells_the_container_before_it_stops_the_core_team(box):
     assert not tier.exists()
 
 
+@pytest.mark.parametrize(("given", "seconds", "logged"), [
+    (None, "3", False), ("", "3", False), ("0", "0", False), ("5", "5", False), ("07", "7", False), ("30", "30", False),
+    ("31", "3", True), ("999", "3", True), ("-1", "3", True), ("1.5", "3", True), ("abc", "3", True), ("3; rm -rf /", "3", True),
+])
+def test_the_wait_for_the_notice_is_a_whole_number_of_seconds_in_range_or_the_default_written_down(box, given, seconds, logged):
+    """A nit of the review of JHT-T346: JHT_TOOLS_SWITCH_NOTICE_WAIT went to `sleep` as it was. Now 0-30 seconds, else 3 and a line."""
+    env = {} if given is None else {"JHT_TOOLS_SWITCH_NOTICE_WAIT": given}
+    done = box.run("tools_switch_notice_wait", **env)
+    assert done.returncode == 0 and done.stdout == f"{seconds}\n"
+    log = box.runtime / "tools.log"
+    assert ("JHT_TOOLS_SWITCH_NOTICE_WAIT" in done.stderr) is logged
+    assert (log.exists() and "using 3" in log.read_text(encoding="utf-8")) is logged
+    if log.exists():
+        log.unlink()
+
+
 def test_the_switch_notice_is_not_written_through_a_link(box, tmp_path):
     elsewhere = tmp_path / "elsewhere.json"
     elsewhere.write_text("keep\n", encoding="utf-8")
