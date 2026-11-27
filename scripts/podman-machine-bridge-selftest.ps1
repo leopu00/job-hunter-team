@@ -139,6 +139,42 @@ function Test-JhtMachineDeadline {
   [Console]::Out.WriteLine("T205_CASE engine=$($PSVersionTable.PSVersion) action=$Action timeout124 elapsed_ms=$($clock.ElapsedMilliseconds) tree_stopped=true log_verified=true calls=1 PASS")
 }
 
+# T356: machine init on a slow line. With a stall bound the command runs past it while it makes progress, and stops, with the
+# real cause, only when nothing moves; the job's own I/O counters are what tells the two apart.
+function Test-JhtMachineProgress {
+  $case = New-JhtDeadlineCase 'progress'
+  $clock = [Diagnostics.Stopwatch]::StartNew()
+  $result = Invoke-JhtPodmanProcess -FilePath $script:Fake -Arguments @('machine', 'init', 'jht-fixture', 'trickle', '4000') -Phase podman_machine_init -TimeoutMilliseconds 60000 -StallMilliseconds 1500 -LogPath (Join-Path $case 'runtime.log')
+  Assert-JhtDeadlineCase ($result.ExitCode -eq 0) 'A command that kept writing was stopped.'
+  Assert-JhtDeadlineCase ($clock.ElapsedMilliseconds -ge 3500) 'The trickle ended before it outlived the stall bound.'
+  $owner = [JhtPodmanOwnedProcess]::new()
+  try {
+    $owner.Start($script:Fake, (ConvertTo-JhtPodmanNativeArguments -Arguments @('machine', 'init', 'jht-fixture', 'trickle', '1500')))
+    Assert-JhtDeadlineCase ($owner.Process.WaitForExit(20000)) 'The trickle did not end.'
+    $io = $owner.IoBytes()
+    Assert-JhtDeadlineCase ($null -ne $io -and $io[1] -ge 512KB -and $io[0] -ge $io[1]) "The job did not count the bytes its tree wrote: $($io -join ',')"
+  } finally { [void]$owner.Stop(5000); $owner.Dispose() }
+  $shown = Format-JhtPodmanProgress -Written (312MB + 100KB) -BytesPerSecondInMB 0.46
+  Assert-JhtDeadlineCase ($shown -ceq '312 MB, 0.5 MB/s') "Unexpected progress line: $shown"
+  [Console]::Out.WriteLine("T356_CASE engine=$($PSVersionTable.PSVersion) progressing_init_outlived_stall_bound=true job_io_counted=true PASS")
+
+  $case = New-JhtDeadlineCase 'stalled'
+  $failed = $null
+  $clock = [Diagnostics.Stopwatch]::StartNew()
+  try {
+    Invoke-JhtPodmanProcess -FilePath $script:Fake -Arguments @('machine', 'init', 'jht-fixture', 'stall') -Phase podman_machine_init -TimeoutMilliseconds 60000 -StallMilliseconds 2000 -LogPath (Join-Path $case 'runtime.log') | Out-Null
+  } catch { $failed = $_.Exception }
+  Assert-JhtDeadlineCase ($clock.ElapsedMilliseconds -le 15000) 'A stalled command was not stopped by the stall bound.'
+  Assert-JhtDeadlineCase ($null -ne $failed -and $failed.Data['Code'] -eq 'podman_machine_download_stalled' -and $failed.Data['Reason'] -eq 'no_progress') 'A stalled command lost its code or its reason.'
+  Assert-JhtDeadlineCase ($LASTEXITCODE -eq 124) 'The stall lost its exit code.'
+  Assert-JhtDeadlineCase ($failed.Message.StartsWith('podman_machine_download_stalled: ') -and $failed.Message.Contains('made no progress') -and $failed.Message.Contains('internet connection') -and -not $failed.Message.Contains('Check WSL before')) "The stall message does not say the real cause: $($failed.Message)"
+  $log = [IO.File]::ReadAllText((Join-Path $case 'runtime.log'))
+  Assert-JhtDeadlineCase ($log.Contains('podman_machine_init: podman_machine_download_stalled')) 'Runtime log lost the stall.'
+  $child = Get-JhtFixtureProcess (Join-Path $case 'parent.pid')
+  if ($child) { try { Assert-JhtDeadlineCase ($child.WaitForExit(2000)) 'The stalled command survived.' } finally { $child.Dispose() } }
+  [Console]::Out.WriteLine("T356_CASE engine=$($PSVersionTable.PSVersion) stalled_init_stopped=true real_cause=true PASS")
+}
+
 function Test-JhtMachineAnswers {
   $case = New-JhtDeadlineCase 'answers'
   $values = @('machine', 'ssh', 'jht-fixture', 'printf "%s" "two words"', '', 'C:\Ada Fixture\tail\', 'a\"b')
@@ -307,6 +343,23 @@ public static class PodmanDeadlineFake {
             Console.Error.Write(new string('y', 8192));
             Thread.Sleep(Timeout.Infinite);
         }
+        // T356: a download that keeps moving (64 KB every 100 ms for the given milliseconds, then done), or one that writes
+        // a little and then stops moving forever.
+        int trickle = Array.IndexOf(args, "trickle");
+        if (trickle >= 0) {
+            int lasting = Int32.Parse(args[trickle + 1]);
+            var clock = Stopwatch.StartNew();
+            using (var image = new FileStream(Path.Combine(root, "image.part"), FileMode.Create, FileAccess.Write, FileShare.Read)) {
+                var block = new byte[65536];
+                while (clock.ElapsedMilliseconds < lasting) { image.Write(block, 0, block.Length); image.Flush(true); Thread.Sleep(100); }
+            }
+            return 0;
+        }
+        if (Array.IndexOf(args, "stall") >= 0) {
+            File.WriteAllText(Path.Combine(root, "parent.pid"), Process.GetCurrentProcess().Id.ToString());
+            File.WriteAllBytes(Path.Combine(root, "image.part"), new byte[262144]);
+            Thread.Sleep(Timeout.Infinite);
+        }
         if (Array.IndexOf(args, "fail") >= 0) { Console.Error.WriteLine("synthetic-private-detail"); return 17; }
         if (Array.IndexOf(args, "oversized") >= 0) {
             var child = Process.Start(new ProcessStartInfo {
@@ -328,6 +381,7 @@ public static class PodmanDeadlineFake {
   if ($LASTEXITCODE -ne 0 -or -not [IO.File]::Exists($script:Fake)) { throw 'Native Podman fixture did not compile.' }
   foreach ($action in 'ssh', 'start', 'init') { Test-JhtMachineDeadline $action }
   Test-JhtMachineAnswers
+  Test-JhtMachineProgress
   Test-JhtMissingProgram
   Test-JhtCaptureBound
   Test-JhtInheritedPipe

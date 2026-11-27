@@ -624,8 +624,10 @@ pub(crate) fn wsl_state(
 /// while this Windows user reaches no podman.exe (it sits in another user's
 /// profile) and installing it for this user did not succeed, 26 the machine
 /// runs but Podman's connection for Docker tools (win-sshproxy.exe) did not
-/// start, so the pipe compose uses is missing. Any other failure is the
-/// caller's generic code.
+/// start, so the pipe compose uses is missing, 27 `podman machine init` stopped
+/// because the download of the machine's system image made no progress for
+/// minutes (the connection, not WSL). Any other failure is the caller's
+/// generic code.
 pub(crate) fn exit_failure(code: i32) -> Option<&'static str> {
     match code {
         20 => Some("wsl_not_ready"),
@@ -635,6 +637,7 @@ pub(crate) fn exit_failure(code: i32) -> Option<&'static str> {
         24 => Some("podman_version_mismatch"),
         25 => Some("podman_other_user"),
         26 => Some("podman_api_forwarding_unavailable"),
+        27 => Some("podman_machine_download_stalled"),
         _ => None,
     }
 }
@@ -1537,7 +1540,8 @@ mod tests {
         assert_eq!(exit_failure(24), Some("podman_version_mismatch"));
         assert_eq!(exit_failure(25), Some("podman_other_user"));
         assert_eq!(exit_failure(26), Some("podman_api_forwarding_unavailable"));
-        for generic in [0, 1, 2, 19, 27, 78, -1] {
+        assert_eq!(exit_failure(27), Some("podman_machine_download_stalled"));
+        for generic in [0, 1, 2, 19, 28, 78, -1] {
             assert_eq!(exit_failure(generic), None, "{generic}");
         }
     }
@@ -1555,7 +1559,9 @@ mod tests {
         assert_eq!(installer_outcome(Ok(25)), Err("podman_other_user"));
         // the machine runs but Podman's connection for Docker tools did not start: its own code, never «check your internet»
         assert_eq!(installer_outcome(Ok(26)), Err("podman_api_forwarding_unavailable"));
-        assert_eq!(installer_outcome(Ok(27)), Err("runtime_install_failed"));
+        // the download of the machine's system image stopped moving: its own code, which says the connection, not WSL
+        assert_eq!(installer_outcome(Ok(27)), Err("podman_machine_download_stalled"));
+        assert_eq!(installer_outcome(Ok(28)), Err("runtime_install_failed"));
         assert_eq!(installer_outcome(Ok(1)), Err("runtime_install_failed"));
         assert_eq!(installer_outcome(Err("process_timeout")), Err("timeout"));
         assert_eq!(installer_outcome(Err("process_start_failed")), Err("runtime_install_failed"));

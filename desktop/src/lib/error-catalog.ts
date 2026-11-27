@@ -665,6 +665,13 @@ export const ERROR_CATALOG: Readonly<Record<string, ErrorCopy>> = {
     "Podman did not respond in time. Setup stopped.",
     "Check that WSL responds, then try setup again.",
   ),
+  // Exit 27 of the Windows install: `podman machine init` stopped because its download made no progress for 10 minutes.
+  podman_machine_download_stalled: copy(
+    "Il download dell’immagine di sistema della macchina Podman si è fermato: per 10 minuti non è arrivato niente.",
+    "Controlla la connessione a internet di questo computer (una linea lenta va bene, una che si ferma no), poi riprova l’installazione. Se la connessione funziona, controlla che WSL risponda.",
+    "The download of the Podman machine’s system image stopped: nothing arrived for 10 minutes.",
+    "Check this computer’s internet connection (a slow line is fine, one that stops is not), then try setup again. If the connection works, check that WSL responds.",
+  ),
   podman_machine_unavailable: copy(
     "La macchina Podman non è diventata pronta entro il tempo previsto.",
     "Controlla che WSL e Podman rispondano, poi riprova.",
