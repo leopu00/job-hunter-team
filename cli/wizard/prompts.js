@@ -51,6 +51,7 @@
  * @property {function(string): Promise<void>} intro
  * @property {function(string): Promise<void>} outro
  * @property {function(string, string=): Promise<void>} note
+ * @property {function(string): Promise<void>} [success] something that went well, with a green check (a prompter without it says it as a note)
  * @property {function(WizardSelectParams): Promise<*>} select
  * @property {function(WizardMultiSelectParams): Promise<*[]>} multiselect
  * @property {function(WizardTextParams): Promise<string>} text
