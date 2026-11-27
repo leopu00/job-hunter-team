@@ -106,8 +106,8 @@ test('wrong values are refused with a clear sentence, before any key is kept, an
     [{ budgetDays: '3' }, /Give the amount with --budget-usd/],
     [{ budgetUsd: '5', budgetMinutes: '0' }, /--budget-minutes must be a positive number/],
     [{ budgetUsd: '5', budgetDays: 'abc' }, /--budget-days must be a positive number/],
-    [{ budgetUsd: '5', budgetUntil: '24' }, /--budget-until is a whole hour of the day, 0 to 23/],
-    [{ budgetUsd: '5', budgetUntil: '08:30' }, /--budget-until is a whole hour of the day/],
+    [{ budgetUsd: '5', budgetUntil: '24' }, /--budget-until is a time of the day, 0:00 to 23:59/],
+    [{ budgetUsd: '5', budgetUntil: '08:61' }, /--budget-until is a time of the day/],
   ];
   for (const [opts, message] of cases) {
     fresh();

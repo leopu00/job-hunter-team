@@ -53,14 +53,87 @@ function localClock(now, timeZone) {
   return { hour: parts.hour, minute: parts.minute };
 }
 
-/** The instant of the next `hour`:00 in `timeZone` after `now` (today if it is still ahead, else tomorrow). */
-export function nextLocalHour(now, hour, timeZone) {
+/** The instant of the next `hour`:`minute` in `timeZone` after `now` (today if it is still ahead, else tomorrow). */
+export function nextLocalTime(now, hour, minute, timeZone) {
   const { hour: h, minute: m } = localClock(now, timeZone);
-  let minutes = hour * 60 - (h * 60 + m);
+  let minutes = hour * 60 + minute - (h * 60 + m);
   if (minutes <= 0) minutes += 24 * 60;
   const at = new Date(now.getTime() + minutes * MINUTE);
   at.setUTCSeconds(0, 0);
   return at;
+}
+
+/** The instant of the next `hour`:00 in `timeZone` after `now`. */
+export function nextLocalHour(now, hour, timeZone) {
+  return nextLocalTime(now, hour, 0, timeZone);
+}
+
+const UNIT_MINUTES = [
+  [/^(m|min|mins|minutes?|minut[oi]|minuten?|minutos?|perc)$/, 1],
+  [/^(h|hr|hrs|hours?|or[ae]|stunden?|horas?|heures?|óra)$/, 60],
+  [/^(d|g|days?|giorn[oi]|tage?|d[ií]as?|jours?|nap)$/, 24 * 60],
+];
+
+/**
+ * A period typed by the person (JHT-T345): a duration («30», «30m», «15 min», «2h», «1.5h», «3d», «3 giorni»; a bare
+ * number is minutes) as { minutes }, or a time of the day («18:30», «8», «until 8:00») as { until: { hour, minute } }, the
+ * next one. Null for anything else.
+ */
+export function parseDuration(text) {
+  const s = String(text ?? '').trim().toLowerCase().replace(',', '.');
+  const at = /^(?:\D*\s)?(\d{1,2})(?::(\d{2}))$/.exec(s) ?? /^(?:until|fino alle|bis|hasta|jusqu'à|até)\s+(\d{1,2})(?::(\d{2}))?$/.exec(s);
+  if (at) {
+    const hour = Number(at[1]); const minute = Number(at[2] ?? 0);
+    return hour <= 23 && minute <= 59 ? { until: { hour, minute } } : null;
+  }
+  const d = /^(\d+(?:\.\d+)?)\s*([^\d\s.]*)$/.exec(s);
+  if (!d) return null;
+  const amount = Number(d[1]);
+  const unit = d[2] === '' ? 1 : UNIT_MINUTES.find(([re]) => re.test(d[2]))?.[1];
+  if (!unit || !(amount > 0)) return null;
+  const minutes = Math.round(amount * unit);
+  return minutes >= 1 ? { minutes } : null;
+}
+
+/** A time of the day «HH:MM» (or «H:MM») as «HH:MM», or null. */
+export function parseClock(text) {
+  const m = /^(\d{1,2}):(\d{2})$/.exec(String(text ?? '').trim());
+  if (!m || Number(m[1]) > 23 || Number(m[2]) > 59) return null;
+  return `${m[1].padStart(2, '0')}:${m[2]}`;
+}
+
+/** The days of the working hours from «mon-fri», «sat,sun», «all»: an array of mon..sun, or null. */
+export function parseWorkDays(spec) {
+  const s = String(spec ?? '').trim().toLowerCase();
+  if (s === 'all' || s === 'every-day') return [...ALL_DAYS];
+  if (/^[a-z]{3}-[a-z]{3}$/.test(s)) {
+    const [a, b] = s.split('-').map((d) => ALL_DAYS.indexOf(d));
+    return a >= 0 && b >= 0 && a <= b ? ALL_DAYS.slice(a, b + 1) : null;
+  }
+  const list = s.split(',').map((d) => d.trim()).filter(Boolean);
+  return list.length && list.every((d) => ALL_DAYS.includes(d)) ? ALL_DAYS.filter((d) => list.includes(d)) : null;
+}
+
+/** «09:00-18:00» as { start, end } (an end before the start runs past midnight), or null; never a window of nothing. */
+export function parseWorkTime(spec) {
+  const [a, b, extra] = String(spec ?? '').split('-').map((x) => x.trim());
+  const start = parseClock(a); const end = parseClock(b);
+  return start && end && extra === undefined && start !== end ? { start, end } : null;
+}
+
+/** team.working_hours with one window, in the zone of the person. */
+export function workingHoursOf(days, start, end, timeZone = localTimeZone()) {
+  return { timezone: timeZone, windows: [{ days: [...days], start, end }] };
+}
+
+/** The budget of an amount and a period as parseDuration reads it: a time of the day ends there, a duration starts at the
+ * first work of the team. `kind` is what budgetSummary reads. */
+export function budgetForPeriod(usd, period, now, timeZone = localTimeZone()) {
+  if (period.until) {
+    return { kind: 'until', budget: budgetOf(usd, nextLocalTime(now, period.until.hour, period.until.minute, timeZone), now, timeZone) };
+  }
+  const kind = period.minutes >= 24 * 60 && period.minutes % (24 * 60) === 0 ? 'days' : 'trial';
+  return { kind, budget: durationBudget(usd, period.minutes, now, timeZone) };
 }
 
 /** A positive amount of dollars from what the person typed («10», «7.5», «7,5», «$10»), or null. */
@@ -123,7 +196,12 @@ function workedHoursPerDay(window) {
  * The one line said before the configuration is saved, in words a person reads once: «The team can spend $10 in 3 days,
  * 10 hours a day (8:00-18:00 Europe/Rome), then it stops by itself.» `kind` = trial | night | days | none (what was chosen).
  */
-export function budgetSummary(t, tf, { budget, workingHours, kind }) {
+export function budgetSummary(t, tf, { budget, workingHours, kind, dailyUsd = null }) {
+  const daily = dailyUsd ? ` ${tf('wizard.budget.daily_note', tf('wizard.budget.money', String(dailyUsd)))}` : '';
+  return periodSummary(t, tf, { budget, workingHours, kind }) + (budget ? daily : '');
+}
+
+function periodSummary(t, tf, { budget, workingHours, kind }) {
   if (!budget) return t('wizard.budget.summary_none');
   const money = tf('wizard.budget.money', String(budget.usd));
   const zone = budget.timezone || workingHours?.timezone || localTimeZone();
@@ -159,13 +237,93 @@ export async function askPace(prompter, { t, budget }) {
   return on === true ? { ...budget, pace: true } : budget;
 }
 
+/** The amount, asked with `initial` already written (Enter keeps it): a wrong one, a huge one not confirmed or one below the
+ * least of the service not confirmed is asked again. */
+async function askAmount(prompter, { t, tf, provider, initial }) {
+  for (;;) {
+    const typed = await prompter.text({
+      message: t('wizard.budget.amount_prompt'),
+      initialValue: initial,
+      validate: (value) => (parseUsd(value) === null ? t('wizard.budget.amount_invalid') : undefined),
+    });
+    // nothing typed = the amount already written in the box
+    const usd = parseUsd(String(typed ?? '').trim() === '' ? initial : typed);
+    if (usd === null) { await prompter.note(t('wizard.budget.amount_invalid'), t('wizard.budget.title')); continue; }
+    if (usd > BUDGET_CONFIRM_ABOVE && !(await prompter.confirm({ message: tf('wizard.budget.amount_confirm', `$${usd}`), initialValue: false }))) continue;
+    const least = minimumFor(provider);
+    if (usd < least && !(await prompter.confirm({ message: tf('wizard.budget.below_min', `$${usd}`, `$${least}`, `$${usd}`), initialValue: false }))) continue;
+    return usd;
+  }
+}
+
+/** The period, asked with `initial` already written: «30m», «2h», «3d» or a time of the day such as «18:30». */
+async function askPeriod(prompter, { t, initial }) {
+  for (;;) {
+    const typed = await prompter.text({
+      message: t('wizard.budget.period_prompt'),
+      initialValue: initial,
+      validate: (value) => (parseDuration(value) === null ? t('wizard.budget.period_invalid') : undefined),
+    });
+    const period = parseDuration(String(typed ?? '').trim() === '' ? initial : typed);
+    if (period) return period;
+    await prompter.note(t('wizard.budget.period_invalid'), t('wizard.budget.title'));
+  }
+}
+
+/** The daily ceiling, optional: empty = none. Saved as no_quota_cap.usd, the ceiling the brake of pi already applies. */
+async function askDaily(prompter, { t }) {
+  for (;;) {
+    const typed = String((await prompter.text({ message: t('wizard.budget.daily_prompt'), initialValue: '' })) ?? '').trim();
+    if (typed === '') return null;
+    const usd = parseUsd(typed);
+    if (usd !== null) return usd;
+    await prompter.note(t('wizard.budget.amount_invalid'), t('wizard.budget.title'));
+  }
+}
+
+/** The names of the days in the language of the setup, from the system's own calendar (2026-11-16 is a Monday). */
+function dayLabel(day, lang) {
+  const monday = Date.UTC(2026, 10, 16, 12);
+  try {
+    return new Intl.DateTimeFormat(lang, { weekday: 'long', timeZone: 'UTC' }).format(new Date(monday + ALL_DAYS.indexOf(day) * 86_400_000));
+  } catch { return day; }
+}
+
+/** When the team works: one of the ready windows, or days and hours of the person's own (JHT-T345). */
+async function askHours(prompter, { t, timeZone, lang }) {
+  const choice = await prompter.select({
+    message: t('wizard.budget.hours_prompt'),
+    initialValue: 'ten_from_8',
+    options: [...Object.keys(HOURS_PRESETS), 'custom'].map((key) => ({ value: key, label: t(`wizard.budget.hours_${key}`) })),
+  });
+  if (choice !== 'custom') return windowsOf(HOURS_PRESETS[choice] ?? null, timeZone);
+  let days = [];
+  while (!days.length) {
+    days = (await prompter.multiselect({
+      message: t('wizard.budget.hours_days_prompt'),
+      options: ALL_DAYS.map((d) => ({ value: d, label: dayLabel(d, lang) })),
+      initialValues: ALL_DAYS.slice(0, 5),
+      required: true,
+    })) ?? [];
+    days = ALL_DAYS.filter((d) => days.includes(d));
+  }
+  for (;;) {
+    const from = parseClock(await prompter.text({ message: t('wizard.budget.hours_from_prompt'), initialValue: '09:00' }));
+    const to = parseClock(await prompter.text({ message: t('wizard.budget.hours_to_prompt'), initialValue: '18:00' }));
+    if (from && to && from !== to) return workingHoursOf(days, from, to, timeZone);
+    await prompter.note(t('wizard.budget.hours_invalid'), t('wizard.budget.title'));
+  }
+}
+
 /**
- * Asks the budget. Returns { kind, budget, workingHours } (kind = trial | night | days | none): budget null = no limit (nothing saved under team.budget);
- * workingHours null = 24/7, undefined = keep what the config has (the «no limit» answer asks the hours as before).
+ * Asks the budget. Returns { kind, budget, workingHours, dailyUsd } (kind = trial | night | days | until | none): budget null = no
+ * limit (nothing saved under team.budget); workingHours null = 24/7, undefined = keep what the config has (the «no limit» answer
+ * asks the hours as before); dailyUsd the ceiling per day, null for none. The ready answers propose an amount and a period that
+ * Enter keeps and the person may change («$5 for 30 minutes» can become «$2 for 10 minutes»); «custom» asks everything (JHT-T345).
  * @param {{ t: Function, tf: Function, now?: Date, timeZone?: string, askHours?: Function }} params askHours = the hours step of
  *   before (promptWorkingHours), asked only with «no limit»
  */
-export async function promptBudget(prompter, { t, tf, now = new Date(), timeZone = localTimeZone(), askHours = async () => undefined, provider = '' }) {
+export async function promptBudget(prompter, { t, tf, now = new Date(), timeZone = localTimeZone(), askHours: askHoursBefore = async () => undefined, provider = '', lang = 'en' }) {
   const choice = await prompter.select({
     message: t('wizard.budget.prompt'),
     initialValue: 'trial',
@@ -173,75 +331,57 @@ export async function promptBudget(prompter, { t, tf, now = new Date(), timeZone
       { value: 'trial', label: t('wizard.budget.trial') },
       { value: 'night', label: t('wizard.budget.night') },
       { value: 'days', label: t('wizard.budget.days') },
+      { value: 'custom', label: t('wizard.budget.custom') },
       { value: 'none', label: t('wizard.budget.none') },
     ],
   });
-  if (choice === 'trial') {
-    const p = BUDGET_PRESETS.trial;
-    return { kind: 'trial', budget: durationBudget(p.usd, p.minutes, now, timeZone), workingHours: null };
-  }
-  if (choice === 'night') {
-    const p = BUDGET_PRESETS.night;
-    return { kind: 'night', budget: budgetOf(p.usd, nextLocalHour(now, p.untilHour, timeZone), now, timeZone), workingHours: null };
-  }
   if (choice === 'none') {
     await prompter.note(t('wizard.budget.none_warning'), t('wizard.budget.title'));
-    return { kind: 'none', budget: null, workingHours: await askHours() };
+    return { kind: 'none', budget: null, workingHours: await askHoursBefore(), dailyUsd: null };
   }
-  // «a few days»: how much, for how many days, when
-  let usd = null;
-  while (usd === null) {
-    const typed = await prompter.text({
-      message: t('wizard.budget.amount_prompt'),
-      initialValue: '10',
-      validate: (value) => (parseUsd(value) === null ? t('wizard.budget.amount_invalid') : undefined),
-    });
-    // nothing typed = the amount already written in the box
-    usd = parseUsd(String(typed ?? '').trim() === '' ? '10' : typed);
-    if (usd === null) { await prompter.note(t('wizard.budget.amount_invalid'), t('wizard.budget.title')); continue; }
-    if (usd > BUDGET_CONFIRM_ABOVE && !(await prompter.confirm({ message: tf('wizard.budget.amount_confirm', `$${usd}`), initialValue: false }))) usd = null;
-    const least = minimumFor(provider);
-    if (usd !== null && usd < least && !(await prompter.confirm({ message: tf('wizard.budget.below_min', `$${usd}`, `$${least}`, `$${usd}`), initialValue: false }))) usd = null;
-  }
-  const days = await prompter.select({
-    message: t('wizard.budget.days_prompt'),
-    initialValue: 3,
-    options: BUDGET_DAYS.map((n) => ({ value: n, label: tf(n === 1 ? 'wizard.budget.day_one' : 'wizard.budget.day_many', String(n)) })),
-  });
-  const hoursChoice = await prompter.select({
-    message: t('wizard.budget.hours_prompt'),
-    initialValue: 'ten_from_8',
-    options: Object.keys(HOURS_PRESETS).map((key) => ({ value: key, label: t(`wizard.budget.hours_${key}`) })),
-  });
-  return {
-    kind: 'days',
-    budget: durationBudget(usd, Number(days) * 24 * 60, now, timeZone),
-    workingHours: windowsOf(HOURS_PRESETS[hoursChoice] ?? null, timeZone),
-  };
+  const proposed = { trial: ['5', '30m'], night: ['5', '08:00'], days: ['10', '3d'], custom: ['5', '1h'] }[choice];
+  const usd = await askAmount(prompter, { t, tf, provider, initial: proposed[0] });
+  const period = await askPeriod(prompter, { t, initial: proposed[1] });
+  const dailyUsd = choice === 'custom' ? await askDaily(prompter, { t }) : null;
+  const workingHours = choice === 'days' || choice === 'custom' ? await askHours(prompter, { t, timeZone, lang }) : null;
+  const { kind, budget } = budgetForPeriod(usd, period, now, timeZone);
+  return { kind: choice === 'night' && kind === 'until' ? 'night' : kind, budget, workingHours, dailyUsd };
 }
 
 /**
- * The budget of `jht setup --non-interactive`: --budget-usd with one of --budget-minutes, --budget-days or --budget-until HH,
- * or --no-budget. Returns { kind, budget } (kind as budgetSummary reads it) or { error } (a sentence), or {} when nothing about the budget was given.
+ * The budget of `jht setup --non-interactive` and of `jht budget set`: --budget-usd with one of --budget-minutes,
+ * --budget-hours, --budget-days or --budget-until HH[:MM], or --no-budget. Returns { kind, budget } (kind as budgetSummary reads
+ * it) or { error } (a sentence), or {} when nothing about the budget was given.
  */
-export function budgetFromOptions(opts, { now = new Date(), timeZone = localTimeZone() } = {}) {
+export function budgetFromOptions(opts, { now = new Date(), timeZone = localTimeZone(), setBy = 'setup', prefix = '--budget-', withHours = false } = {}) {
   if (opts.budget === false) return { kind: 'none', budget: null };
+  const flag = (name) => `${prefix}${name}`;
+  const periods = ['budgetMinutes', ...(withHours ? ['budgetHours'] : []), 'budgetDays', 'budgetUntil'];
+  const flags = { budgetMinutes: flag('minutes'), budgetHours: flag('hours'), budgetDays: flag('days'), budgetUntil: flag('until') };
   if (opts.budgetUsd === undefined) {
-    return opts.budgetMinutes || opts.budgetDays || opts.budgetUntil ? { error: 'Give the amount with --budget-usd <dollars>.' } : {};
+    return periods.some((k) => opts[k] !== undefined) ? { error: `Give the amount with ${flag('usd')} <dollars>.` } : {};
   }
   const usd = parseUsd(opts.budgetUsd);
-  if (usd === null) return { error: '--budget-usd must be a positive amount of dollars, for example 10 or 7.5.' };
-  const given = ['budgetMinutes', 'budgetDays', 'budgetUntil'].filter((k) => opts[k] !== undefined);
-  if (given.length !== 1) return { error: 'Give the period with one of --budget-minutes <n>, --budget-days <n> or --budget-until <hour 0-23>.' };
-  // --budget-until takes the hour as 8, 08 or 08:00 (a whole hour: the night ends on the hour)
-  const n = Number(given[0] === 'budgetUntil' ? String(opts.budgetUntil).trim().replace(/^(\d{1,2}):00$/, '$1') : opts[given[0]]);
-  if (given[0] === 'budgetUntil') {
-    if (!Number.isInteger(n) || n < 0 || n > 23) return { error: '--budget-until is a whole hour of the day, 0 to 23 (8 or 08:00).' };
-    const fixed = budgetOf(usd, nextLocalHour(now, n, timeZone), now, timeZone);
-    return { kind: 'until', budget: opts.budgetPace === true ? { ...fixed, pace: true } : fixed };
+  if (usd === null) return { error: `${flag('usd')} must be a positive amount of dollars, for example 10 or 7.5.` };
+  const given = periods.filter((k) => opts[k] !== undefined);
+  if (given.length !== 1) {
+    const list = periods.map((k) => `${flags[k]} <${k === 'budgetUntil' ? 'HH:MM' : 'n'}>`);
+    return { error: `Give the period with one of ${list.slice(0, -1).join(', ')} or ${list[list.length - 1]}.` };
   }
-  if (!Number.isFinite(n) || n <= 0) return { error: `--${given[0] === 'budgetDays' ? 'budget-days' : 'budget-minutes'} must be a positive number.` };
-  const minutes = given[0] === 'budgetDays' ? n * 24 * 60 : n;
-  const duration = durationBudget(usd, minutes, now, timeZone);
-  return { kind: given[0] === 'budgetDays' ? 'days' : 'trial', budget: opts.budgetPace === true ? { ...duration, pace: true } : duration };
+  let period;
+  if (given[0] === 'budgetUntil') {
+    const text = String(opts.budgetUntil).trim();
+    const at = /^\d{1,2}$/.test(text) ? `${text}:00` : text;
+    period = parseClock(at) ? parseDuration(at) : null;
+    if (!period?.until) return { error: `${flags.budgetUntil} is a time of the day, 0:00 to 23:59 (8, 08:00 or 18:30).` };
+  } else {
+    const n = Number(opts[given[0]]);
+    if (!Number.isFinite(n) || n <= 0) return { error: `${flags[given[0]]} must be a positive number.` };
+    const minutes = Math.round(n * { budgetMinutes: 1, budgetHours: 60, budgetDays: 24 * 60 }[given[0]]);
+    if (minutes < 1) return { error: `${flags[given[0]]} must be at least one minute.` };
+    period = { minutes };
+  }
+  const { kind, budget } = budgetForPeriod(usd, period, now, timeZone);
+  const stamped = setBy === 'setup' ? budget : { ...budget, set_by: setBy };
+  return { kind, budget: opts.budgetPace === true ? { ...stamped, pace: true } : stamped };
 }
