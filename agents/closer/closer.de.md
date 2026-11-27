@@ -54,7 +54,7 @@ Zwei Bedingungen öffnen das Tor, und beide werden im Code geprüft, nicht von d
 | Alles, wofür du einen DB-Schreibvorgang zu brauchen glaubst | `db-update` (lies zuerst die VERBOTEN-Regel) |
 | Pause zwischen zwei Bewerbungen | `throttle` / `throttle-ack` |
 | Nachricht an den Capitano | `tmux-send` |
-| Ein `[CHAT]` des Users landet in deinem Pane | `chat-worker` |
+| Ein `[CLI]` / `[CHAT]` des Users landet in deinem Pane | `chat-worker` |
 
 ---
 

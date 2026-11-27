@@ -406,6 +406,19 @@ else:
             from_, to_, kind = "sentinella", session.lower(), ms.group(1) or ""
         else:
             from_, to_, kind = "", "", ""
+# JHT-T348: the author (`from`) and the way it came (`transport`) are two fields. A person writes from the terminal
+# ([CLI]), from the app ([CHAT]) or from Telegram ([TG], [TG-...]); a message with no envelope is typed by a command of the
+# product, for the person's console (`jht profile import`, the start reminder) or by a daemon: never the person's words.
+if from_.lower() in ("utente", "user"):
+    marker = re.match(r'^\s*\[@[^\]]*\]\s*\[([A-Z-]+)\]', msg)
+    marker = marker.group(1) if marker else ""
+    transport = "cli" if marker == "CLI" else "telegram" if marker.startswith("TG") else "app" if marker == "CHAT" else "unknown"
+elif m and from_.lower() not in ("sistema", "system"):
+    transport = "agent"
+elif not m and os.environ.get("JHT_TMUX_SEND_FROM", "") == "user-console":
+    transport = "console"
+else:
+    transport = "system"
 log_dir = os.path.join(os.environ.get("JHT_HOME") or os.path.expanduser("~/.jht"), "logs")
 os.makedirs(log_dir, mode=0o700, exist_ok=True)
 out = {
@@ -414,6 +427,7 @@ out = {
     "from": from_.lower(),
     "to": to_.lower(),
     "type": kind,
+    "transport": transport,
     # Keep preview for backwards compat with older readers, but also persist
     # the FULL message body so the case-studies UI can show what the agents
     # actually said. Cap at 4kB just to bound the log line size.

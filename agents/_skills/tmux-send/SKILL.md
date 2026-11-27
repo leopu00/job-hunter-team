@@ -77,7 +77,7 @@ Standard types (see `agents/_manual/communication-rules.md` for full taxonomy an
 - `ACK` — acknowledge an `URG` or `REQ` you can't service yet
 - ~~`INFO` / `REPORT`~~ — **retired for peer traffic** (2026-07-27): they were 8 of the 30 pure-status messages that woke the Captain in ~1.5h. Progress is pulled from `db_query.py recent-activity`, not narrated
 
-> 💬 `[CHAT]` is reserved for **user → agent** messages from the web UI (see Captain's prompt protocol). Don't use it for inter-agent traffic.
+> 💬 `[CLI]` / `[CHAT]` is reserved for **user → agent** messages from the web UI (see Captain's prompt protocol). Don't use it for inter-agent traffic.
 
 ## 🚧 The bar — send a message ONLY when it passes
 

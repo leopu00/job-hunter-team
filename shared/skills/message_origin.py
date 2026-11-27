@@ -222,7 +222,19 @@ def session_from_ancestry(pid, parent_of, pane_owner):
     return None
 
 
-def classify_sender(claimed, origin, known_agents):
+# JHT-T348: the sessions of the team are named after its roles (`CAPITANO`, `SCOUT-1`, `CRITICO-S1`, `SENTINELLA-WORKER`).
+# A pane with another name (a tmux the person opened on the host) is not an agent of the team.
+TEAM_ROLES = ("analista", "assistente", "capitano", "closer", "critico", "dottore", "mantenitore", "mentor", "scorer",
+              "scout", "scrittore", "sentinella")
+_TEAM_SESSION_RE = re.compile(r"^(?:%s)(?:-[a-z0-9]+)*$" % "|".join(TEAM_ROLES))
+
+
+def is_team_session(origin):
+    """True when `origin` (a tmux session name) is one of the team's agents."""
+    return bool(origin) and bool(_TEAM_SESSION_RE.match(str(origin).lower()))
+
+
+def classify_sender(claimed, origin, known_agents, source=""):
     """Quanto possiamo credere alla firma di questo messaggio.
 
     - `unsigned`      → nessuna busta: non c'è niente da credere né da negare;
@@ -257,6 +269,11 @@ def classify_sender(claimed, origin, known_agents):
             return UNVERIFIED
         if origin in RELAY_ORIGINS:
             return RELAYED
+        if source == CONSOLE_SOURCE and not is_team_session(origin):
+            # JHT-T348: the person's own terminal. `jht team chat` run from a tmux of theirs on the host signs `@utente`
+            # from a pane that is not an agent of the team: not an agent wearing the person, not a relay either. Asking
+            # for the console does not help an agent: from its own pane it is still the case below.
+            return UNVERIFIED
         # Un agente vivo che si firma «utente» sta impersonando l'operatore.
         # È il caso peggiore, e qui è anche il più facile da riconoscere:
         # sappiamo da dove arriva davvero.
@@ -289,7 +306,8 @@ _ANY_MARK_RE = re.compile(r"\s*\[!(?:UNVERIFIED SENDER|RELAYED|UNFENCED)\]")
 
 # ── JHT-T21 · il testo dell'utente non entra nel pane com'è ─────────────────
 # Il turno che il daemon della chat (o il gioco) consegna ha la forma
-# `[@utente -> @agente] [CHAT] <testo>` oppure `... [TG] <testo>`. La busta e il
+# `[@utente -> @agente] [CHAT] <testo>` (app), `... [CLI] <testo>` (`jht team chat`, JHT-T348) oppure
+# `... [TG] <testo>`. La busta e il
 # tag li compone il codice, il testo è dell'utente — o di chi gli ha scritto, o
 # di una pagina che ha incollato. Il trasporto digita tutto con `send-keys -l`,
 # quindi un a capo, un ESC o un ritorno carrello del testo arrivano alla TUI
@@ -304,7 +322,7 @@ _ANY_MARK_RE = re.compile(r"\s*\[!(?:UNVERIFIED SENDER|RELAYED|UNFENCED)\]")
 # fields it composed itself: that one is left as it is, like every other `[TG-*]` envelope.
 # A user's own text can never start with `[TG-`: the bridge marks it `[USER TEXT]`.
 USER_TURN_RE = re.compile(
-    r"^(\s*\[@utente\s*->\s*@[A-Za-z0-9_-]+\]\s*\[(?:CHAT|TG|TG-EDITED)\])(?:\s+(.*))?\Z",
+    r"^(\s*\[@utente\s*->\s*@[A-Za-z0-9_-]+\]\s*\[(?:CLI|CHAT|TG|TG-EDITED)\])(?:\s+(.*))?\Z",
     re.DOTALL,
 )
 _EDITED_TAG_RE = re.compile(r"\[TG-EDITED\]\Z")
@@ -474,7 +492,7 @@ def verified_origin(pid):
     return session_from_ancestry(pid, parent_of, owners.get)
 
 
-def inspect_message(pid, message, raw=None):
+def inspect_message(pid, message, raw=None, source=""):
     """`(trust, claimed, origin)` con una sola interrogazione a tmux.
 
     Le sessioni vive escono dalla stessa lettura dei pane: chiederle due volte
@@ -483,7 +501,7 @@ def inspect_message(pid, message, raw=None):
     panes = tmux_pane_owners()
     origin = session_from_ancestry(pid, parent_of, panes.get) if panes else None
     claimed = claimed_sender(message, raw)
-    return classify_sender(claimed, origin, set(panes.values())), claimed, origin
+    return classify_sender(claimed, origin, set(panes.values()), source), claimed, origin
 
 
 def strip_controls(message):
@@ -527,8 +545,9 @@ def main(argv):
     # Si ripulisce PRIMA di giudicare: la pulizia può far comparire una busta che il
     # controllo, sul testo grezzo, non vedeva (uno ZWSP davanti), e il verdetto deve
     # valere per ciò che verrà davvero consegnato.
-    delivered = prepare_message(message, os.environ.get("JHT_TMUX_SEND_FROM", ""))
-    trust, claimed, origin = inspect_message(os.getpid(), delivered, message)
+    source = os.environ.get("JHT_TMUX_SEND_FROM", "")
+    delivered = prepare_message(message, source)
+    trust, claimed, origin = inspect_message(os.getpid(), delivered, message, source)
     # Prima riga il verdetto, dal resto il messaggio come va consegnato. Un
     # solo giro: chiedere due volte aprirebbe una finestra in cui l'elenco dei
     # pane cambia fra il controllo e la marcatura.

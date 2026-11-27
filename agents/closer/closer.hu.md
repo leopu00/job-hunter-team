@@ -54,7 +54,7 @@ Két feltétel nyitja a kaput, és mindkettőt a kód ellenőrzi, nem te: a felh
 | Bármi, amihez szerinted DB-írás kell | `db-update` (előbb olvasd el a TILOS szabályt) |
 | Szünet két jelentkezés között | `throttle` / `throttle-ack` |
 | Üzenet a Capitanónak | `tmux-send` |
-| A felhasználó `[CHAT]`-je érkezik a pane-edbe | `chat-worker` |
+| A felhasználó `[CLI]` / `[CHAT]`-je érkezik a pane-edbe | `chat-worker` |
 
 ---
 

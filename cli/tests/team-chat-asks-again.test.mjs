@@ -9,6 +9,9 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { forgetAsked, rememberAsked, unansweredQuestion } from '../src/commands/team/chat.js';
 
+// What the agent reads: the person's words behind the terminal's own marker (JHT-T348).
+const cli = (text) => `[@utente -> @assistente] [CLI] ${text}`;
+
 const CHAT = resolve(import.meta.dirname, '../src/commands/team/chat.js');
 const NOW = () => Math.floor(Date.now() / 1000);
 const homeDir = () => mkdtempSync(join(tmpdir(), 'jht-chat-asked-'));
@@ -117,9 +120,9 @@ const lost = () => ({ text: 'Any news?', at: NOW() - 60 });
 
 test('a chat that comes back asks again the question nothing answered, and says so', async () => {
   const r = await runChat({ asked: lost() }, { resumed: true });
-  assert.deepEqual(r.sent, ['Any news?'], r.out);
+  assert.deepEqual(r.sent, [cli('Any news?')], r.out);
   assert.match(r.out, /The team was restarting and your last question got no answer\. Asking it again: «Any news\?»/);
-  assert.match(r.out, /ok: Any news\?/, 'the answer is shown');
+  assert.match(r.out, /ok: \[@utente -> @assistente\] \[CLI\] Any news\?/, 'the answer is shown');
   assert.equal(existsSync(askedPath(r.home)), false, 'answered: nothing kept');
 }, { timeout: 60_000 });
 
@@ -140,7 +143,7 @@ test('a question that was answered is not asked again', async () => {
 
 test('a question typed in the chat is kept while nothing answers it and forgotten when the agent answers', async () => {
   const silent = await runChat({ answers: false }, { script: [[400, 'Hello there'], [500, '/exit']] });
-  assert.deepEqual(silent.sent, ['Hello there'], silent.out);
+  assert.deepEqual(silent.sent, [cli('Hello there')], silent.out);
   assert.equal(JSON.parse(readFileSync(askedPath(silent.home), 'utf8')).text, 'Hello there');
   const answered = await runChat({}, { script: [[400, 'Hello there'], [6000, '/exit']] });
   assert.equal(existsSync(askedPath(answered.home)), false, answered.out);

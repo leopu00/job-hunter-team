@@ -1,6 +1,6 @@
 ---
 name: chat-web
-description: Répondre à l'utilisateur quand il vous écrit depuis le chat web JHT. L'utilisateur vous contacte avec le préfixe `[@utente -> @capitano] [CHAT] <corps>` ; répondez UNIQUEMENT avec `jht-send` — n'écrivez jamais dans `chat.jsonl` à la main (l'échappement shell casse la ligne JSON et le frontend supprime silencieusement le message, l'utilisateur ne voit rien tandis que vous pensez avoir répondu). Utilisez cette skill pour chaque message `[CHAT]` ; ne l'utilisez PAS pour le trafic inter-agents (c'est `tmux-send`).
+description: Répondre à l'utilisateur quand il vous écrit depuis le chat web JHT. L'utilisateur vous contacte avec le préfixe `[@utente -> @capitano] [CHAT] <corps>` (`[CLI]` depuis le terminal) ; répondez UNIQUEMENT avec `jht-send` — n'écrivez jamais dans `chat.jsonl` à la main (l'échappement shell casse la ligne JSON et le frontend supprime silencieusement le message, l'utilisateur ne voit rien tandis que vous pensez avoir répondu). Utilisez cette skill pour chaque message `[CLI]` / `[CHAT]` ; ne l'utilisez PAS pour le trafic inter-agents (c'est `tmux-send`).
 allowed-tools: Bash(jht-send *)
 ---
 <!-- @translation: fr, ai-translated 2026-06-06 -->
@@ -22,6 +22,14 @@ Vous n'écrivez pas le JSON. Le wrapper `jht-send` le fait pour vous, avec horod
 - Répondez au **corps**, pas à l'enveloppe. L'utilisateur n'a pas tapé le préfixe ; le frontend l'a ajouté.
 
 > ⚠️ Mode de défaillance courant la première fois que vous voyez ceci : vous lisez le préfixe et pensez "je vais répondre via `jht-tmux-send` à l'utilisateur". `jht-tmux-send UTENTE ...` retourne `exit 2` (session inexistante). Ne commencez pas à déboguer — rappelez-vous simplement que `[CHAT]` ⇒ `jht-send`. Toujours.
+
+## D'où écrit l'utilisateur : `[CLI]`, `[CHAT]`, `[TG]`
+
+Le marqueur après l'enveloppe dit où se trouve la personne. C'est la même personne et la même conversation ; le marqueur décide seulement de ce que vous pouvez lui montrer.
+
+- `[CLI]` — le **terminal**, avec `jht team chat <agent>`. Vous répondez avec `jht-send` comme pour `[CHAT]`, et elle le lit dans le terminal. Il n'y a ni boutons, ni cartes à toucher, ni trombone 📎, ni glisser-déposer, rien « à gauche », ni app ni tableau de bord : donnez la commande `jht` à taper (par exemple `jht positions`, `jht team status`) ; une carte que vous avez publiée s'ouvre avec `/cards` dans le même chat et se répond avec son numéro. Les slash-commands de votre CLI, les fichiers à modifier et les outils à autoriser restent interdits, comme ci-dessous.
+- `[CHAT]` — l'**app** (desktop ou web), seulement là où elle existe : là, la personne voit les boutons et les cartes.
+- `[TG]` — **Telegram** : répondez avec `jht-telegram-send` (skill `telegram-send`).
 
 ## ⚠️ L'utilisateur N'EST PAS technique — pas de terminal, pas de CLI, pas de slash-commands
 

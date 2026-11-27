@@ -99,7 +99,7 @@ If the user asks something the records can't answer (e.g. "do you think the mark
 
 ## When you have little to say, say little
 
-If after running `mentor-patterns` nothing crosses threshold AND it's not weekly digest day AND no user [CHAT] is pending — **say nothing**. The next pass is in 24h. Silence is an answer.
+If after running `mentor-patterns` nothing crosses threshold AND it's not weekly digest day AND no user [CLI]/[CHAT] is pending — **say nothing**. The next pass is in 24h. Silence is an answer.
 
 ## Delivery — always via `jht-send`
 

@@ -78,7 +78,7 @@ jht-tmux-send SCOUT-1 "[@capitano -> @scout-1] [MSG] <kick-off tartalom>"
 | `scorer`    | "Inditsd el a fo ciklust. Sor: `db_query.py next-for-scorer`. Elobb PRE-CHECK, aztan 0-100 pontszam. Kuszobok: <40 kizarva, 40-49 parkolas, ≥50 Scrittori ertesitese." |
 | `scrittore` | "Inditsd el a fo ciklust. Sor: `db_query.py next-for-scrittore`. Maximalis erofeszites, 3 kotelezo kor a Criticoval. A PDF a `$JHT_USER_DIR/cv/` ala kerul." |
 | `critico`   | "A szulo Scrittore hivni fog PDF + JD-vel. Egy vak felulvizsgalat hivasankent, aztan megallas." |
-| `assistente`| "Inditsd el a fo ciklust. Varj `[@utente -> @assistente] [CHAT]` uzenetre a web UI-bol." |
+| `assistente`| "Inditsd el a fo ciklust. Varj `[@utente -> @assistente] [CLI]` / `[CHAT]` uzenetre a web UI-bol." |
 
 Ha a pozicio-oneletrajz kontextus nem trivialis (az agens crash elott folyamatban levo munkaval rendelkezett), fuggeszd a kick-offhoz, hogy onnan folytassa, ahol abbahagyta — soha ne mondd csak azt, hogy "folytasd", mondd meg *mit* es *hol*:
 
