@@ -11,12 +11,15 @@
  *
  * No secret goes in: credentials/ and files named like keys or tokens are left out, JSON values under a secret-named key are saved as
  * null (the rule of `jht backup`), values that look like a key in text files are replaced, columns with a secret name in the copy of the
- * database are emptied. The pieces that need the team or the host (stop, start, where it runs) are passed in, so the whole module is
+ * database are emptied. The one exception is the copy a restore keeps of what it replaces (`before-restore-<time>`, `raw` in its
+ * manifest): that one is whole, keys and links included, because the restore deletes exactly those parts of the home and the copy is
+ * the only way back. The pieces that need the team or the host (stop, start, where it runs) are passed in, so the whole module is
  * tried on made-up homes.
  */
 import { createHash } from 'node:crypto';
 import {
-  chmodSync, closeSync, existsSync, lstatSync, mkdirSync, openSync, readdirSync, readFileSync, readSync, rmSync, writeFileSync,
+  chmodSync, closeSync, existsSync, lstatSync, mkdirSync, openSync, readdirSync, readFileSync, readlinkSync, readSync, rmSync, symlinkSync,
+  writeFileSync,
 } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join, relative, sep } from 'node:path';
@@ -123,6 +126,25 @@ function copyTree(src, dst, counts) {
   return true;
 }
 
+/**
+ * A folder copied whole, for the copy a restore keeps of what it replaces: every file byte for byte (keys included), every link as a
+ * link (never followed), no folder left out. Private like the rest of the archive.
+ */
+function copyTreeRaw(src, dst) {
+  let info;
+  try { info = lstatSync(src); } catch { return false; }
+  if (info.isSymbolicLink()) {
+    privateDir(dirname(dst));
+    symlinkSync(readlinkSync(src), dst);
+    return true;
+  }
+  if (info.isFile()) { writePrivate(dst, readFileSync(src)); return true; }
+  if (!info.isDirectory()) return false;
+  privateDir(dst);
+  for (const entry of readdirSync(src)) copyTreeRaw(join(src, entry), join(dst, entry));
+  return true;
+}
+
 const LAUNCH_PROFILE = 'profile-at-start';
 const LAUNCH_MARK = '.saved.json';
 
@@ -133,19 +155,31 @@ export function launchProfileOf(home) {
     files: Number.isFinite(Number(mark.files)) ? Number(mark.files) : null } : null;
 }
 
-/** Raw copy back, for the restore: the snapshot is already clean. */
-function copyBack(src, dst, skip = new Set()) {
+/**
+ * Copy back, for the restore: only what the manifest lists (`listed`: path in the snapshot → its line of the manifest), each file
+ * checked again against its sha256 as it is written, each link only as the manifest recorded it. The restore refuses a snapshot with
+ * anything else in it before touching the home (`unlistedFiles`); this is the same rule where the bytes are written.
+ */
+function copyBack(src, dst, { snapshotDir, listed, skip = new Set() }) {
   const info = lstatSync(src);
-  if (info.isSymbolicLink()) return;
+  const rel = relative(snapshotDir, src).split(sep).join('/');
   if (info.isDirectory()) {
     mkdirSync(dst, { recursive: true, mode: 0o700 });
-    for (const entry of readdirSync(src)) if (!skip.has(entry)) copyBack(join(src, entry), join(dst, entry));
+    for (const entry of readdirSync(src)) if (!skip.has(entry)) copyBack(join(src, entry), join(dst, entry), { snapshotDir, listed });
     return;
   }
-  if (info.isFile()) {
-    mkdirSync(dirname(dst), { recursive: true, mode: 0o700 });
-    writeFileSync(dst, readFileSync(src), { mode: 0o600 });
+  const line = listed.get(rel);
+  if (!line) throw Object.assign(new Error('run_unlisted'), { files: [rel] });
+  mkdirSync(dirname(dst), { recursive: true, mode: 0o700 });
+  if (info.isSymbolicLink()) {
+    if (typeof line.link !== 'string' || readlinkSync(src) !== line.link) throw Object.assign(new Error('run_corrupt'), { files: [rel] });
+    symlinkSync(line.link, dst);
+    return;
   }
+  if (!info.isFile()) return;
+  const bytes = readFileSync(src);
+  if (createHash('sha256').update(bytes).digest('hex') !== line.sha256) throw Object.assign(new Error('run_corrupt'), { files: [rel] });
+  writeFileSync(dst, bytes, { mode: 0o600 });
 }
 
 async function sqlite() {
@@ -154,12 +188,13 @@ async function sqlite() {
 }
 
 /** jobs.db copied with VACUUM INTO (consistent with the WAL, one file), then every secret-named column emptied in the copy. */
-export async function snapshotDb(src, dst, counts = { secretColumns: 0 }) {
+export async function snapshotDb(src, dst, counts = { secretColumns: 0 }, { raw = false } = {}) {
   const DatabaseSync = await sqlite();
   privateDir(dirname(dst));
   const db = new DatabaseSync(src, { readOnly: true });
   try { db.exec(`VACUUM INTO '${dst.replaceAll("'", "''")}'`); } finally { db.close(); }
   chmodSync(dst, 0o600);
+  if (raw) return;   // the copy a restore keeps: whole
   const copy = new DatabaseSync(dst);
   try {
     const tables = copy.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'").all();
@@ -195,7 +230,7 @@ function listFiles(dir, base = dir, out = []) {
     const path = join(dir, entry);
     const info = lstatSync(path);
     if (info.isDirectory()) listFiles(path, base, out);
-    else if (info.isFile()) out.push(relative(base, path).split(sep).join('/'));
+    else if (info.isFile() || info.isSymbolicLink()) out.push(relative(base, path).split(sep).join('/'));
   }
   return out;
 }
@@ -265,7 +300,7 @@ export function runFacts(config, { where = null, version = null, pin = null } = 
  */
 export async function takeSnapshot({
   name, home, userDir, root = archiveRoot(), stopTeam = () => true, where = () => null, version = null, pin = null,
-  now = () => new Date(),
+  now = () => new Date(), raw = false,
 }) {
   if (!validName(name)) throw new Error('run_name_invalid');
   privateDir(root);
@@ -279,22 +314,31 @@ export async function takeSnapshot({
       const src = join(home, entry.path);
       if (!existsSync(src)) continue;
       const dst = join(dir, 'home', entry.path);
-      if (entry.db) await snapshotDb(src, dst, counts);
+      if (entry.db) await snapshotDb(src, dst, counts, { raw });
+      else if (raw) copyTreeRaw(src, dst);
       else copyTree(src, dst, counts);
     }
     for (const entry of USER_ENTRIES) {
       const src = join(userDir, entry.path);
-      if (existsSync(src)) copyTree(src, join(dir, 'user', entry.path), counts);
+      if (!existsSync(src)) continue;
+      if (raw) copyTreeRaw(src, join(dir, 'user', entry.path));
+      else copyTree(src, join(dir, 'user', entry.path), counts);
     }
   } catch (error) {
     rmSync(dir, { recursive: true, force: true });
     throw error;
   }
   const usage = piUsage(join(dir, 'home'));
-  const files = listFiles(dir).map((path) => ({ path, bytes: lstatSync(join(dir, path)).size, sha256: sha256(join(dir, path)) }));
+  const files = listFiles(dir).map((path) => {
+    const full = join(dir, path);
+    if (lstatSync(full).isSymbolicLink()) return { path, link: readlinkSync(full) };
+    return { path, bytes: lstatSync(full).size, sha256: sha256(full) };
+  });
   const manifest = {
     schema: SNAPSHOT_SCHEMA,
     name,
+    // whole, keys included: the copy a restore keeps of what it replaced
+    raw,
     created_at: now().toISOString(),
     run: { started_at: iso(usage[0]?.ts), ended_at: iso(usage.at(-1)?.ts) },
     ...runFacts(readJson(join(home, 'jht.config.json')), { where: where(), version, pin }),
@@ -338,9 +382,25 @@ export function verifySnapshot(dir, manifest) {
   const bad = [];
   for (const file of manifest.files ?? []) {
     const path = join(dir, ...String(file.path).split('/'));
-    if (String(file.path).split('/').includes('..') || !existsSync(path) || sha256(path) !== file.sha256) bad.push(file.path);
+    if (String(file.path).split('/').includes('..')) { bad.push(file.path); continue; }
+    let info;
+    try { info = lstatSync(path); } catch { bad.push(file.path); continue; }
+    if (typeof file.link === 'string') {
+      if (!info.isSymbolicLink() || readlinkSync(path) !== file.link) bad.push(file.path);
+    } else if (!info.isFile() || sha256(path) !== file.sha256) bad.push(file.path);
   }
   return bad;
+}
+
+/** The files and links of the parts of a snapshot (home/, user/) that its manifest does not list. */
+export function unlistedFiles(dir, manifest) {
+  const listed = new Set((manifest.files ?? []).map((f) => String(f.path)));
+  const out = [];
+  for (const part of ['home', 'user']) {
+    if (!existsSync(join(dir, part))) continue;
+    for (const path of listFiles(join(dir, part))) if (!listed.has(`${part}/${path}`)) out.push(`${part}/${path}`);
+  }
+  return out;
 }
 
 function removeEntry(base, entry) {
@@ -365,6 +425,10 @@ export async function restoreSnapshot({
   if (manifest.schema !== SNAPSHOT_SCHEMA) throw new Error('run_manual_snapshot');
   const bad = verifySnapshot(dir, manifest);
   if (bad.length) throw Object.assign(new Error('run_corrupt'), { files: bad });
+  // a restore writes only what the manifest lists: a file added to the archive afterwards (a hook in an agent's folder) is refused
+  const unlisted = unlistedFiles(dir, manifest);
+  if (unlisted.length) throw Object.assign(new Error('run_unlisted'), { files: unlisted });
+  const listed = new Map((manifest.files ?? []).map((f) => [String(f.path), f]));
   if ((await stopTeam()) === false) throw new Error('run_stop_failed');
   let kept = null;
   const hasData = [...HOME_ENTRIES.map((e) => join(home, e.path)), ...USER_ENTRIES.map((e) => join(userDir, e.path))].some(existsSync);
@@ -373,7 +437,8 @@ export async function restoreSnapshot({
     // two restores in the same second would name the same safety snapshot: the second gets -2, -3…
     let safety = `before-restore-${stamp}`;
     for (let n = 2; existsSync(join(root, safety)); n += 1) safety = `before-restore-${stamp}-${n}`;
-    kept = (await takeSnapshot({ name: safety, home, userDir, root, version, now })).dir;
+    // whole, keys and links included: every part the restore is about to delete is in it
+    kept = (await takeSnapshot({ name: safety, home, userDir, root, version, now, raw: true })).dir;
   }
   const liveConfig = readJson(join(home, 'jht.config.json'));
   for (const [entries, base, part] of [[HOME_ENTRIES, home, 'home'], [USER_ENTRIES, userDir, 'user']]) {
@@ -391,7 +456,7 @@ export async function restoreSnapshot({
       if (entry.config) {
         const saved = readJson(src);
         writePrivate(join(base, entry.path), JSON.stringify(mergeLiveSecrets(saved, liveConfig), null, 2) + '\n');
-      } else copyBack(src, join(base, entry.path), skip);
+      } else copyBack(src, join(base, entry.path), { snapshotDir: dir, listed, skip });
     }
   }
   const started = (await startTeam()) !== false;

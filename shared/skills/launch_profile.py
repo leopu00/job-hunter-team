@@ -10,7 +10,9 @@ it, and a fresh restore puts it back as the profile.
     python3 launch_profile.py save [--force]     a copy now; without --force only when there is none yet
     python3 launch_profile.py status             {"saved": bool, "saved_at": ..., "files": n}
 
-Plain files and folders only (a link is never followed); the copy replaces the old one in one rename.
+Plain files and folders only (a link is never followed). The copy is written in a temporary folder and put in place with a rename; a
+process that dies between the renames leaves `.profile-at-start-*` folders behind, and the next save clears them first (an old copy
+left alone, with no copy in place, goes back in place instead).
 """
 from __future__ import annotations
 
@@ -25,6 +27,7 @@ from pathlib import Path
 
 COPY_DIR = "profile-at-start"
 MARK = ".saved.json"
+LEFTOVER_PREFIX = ".profile-at-start-"
 
 
 def _home(home=None) -> Path:
@@ -55,15 +58,36 @@ def status(home=None) -> dict:
         return {"saved": False, "saved_at": None, "files": 0}
 
 
+def clear_leftovers(base: Path) -> list:
+    """The `.profile-at-start-*` folders a dead save left in the home: removed, or the old copy put back when it is the only one."""
+    done = []
+    try:
+        leftovers = sorted(e for e in base.iterdir() if e.name.startswith(LEFTOVER_PREFIX))
+    except OSError:
+        return done
+    target = base / COPY_DIR
+    for entry in leftovers:
+        if entry.is_symlink() or not entry.is_dir():
+            continue
+        if (entry.name.startswith(LEFTOVER_PREFIX + "old-") and not target.exists() and (entry / MARK).is_file()):
+            os.replace(entry, target)   # died between the two renames: the copy of the run going on goes back
+            done.append(("restored", entry.name))
+            continue
+        shutil.rmtree(entry, ignore_errors=True)
+        done.append(("removed", entry.name))
+    return done
+
+
 def save(home=None, force=False, now=None) -> dict:
     """Copy profile/ to profile-at-start/. Without `force` an existing copy is kept: it is the start of the run going on."""
     base = _home(home)
+    clear_leftovers(base)
     src = base / "profile"
     if not src.is_dir() or src.is_symlink():
         return {"saved": False, "reason": "no_profile"}
     if not force and status(base)["saved"]:
         return dict(status(base), kept=True)
-    tmp = Path(tempfile.mkdtemp(prefix=".profile-at-start-", dir=str(base)))
+    tmp = Path(tempfile.mkdtemp(prefix=LEFTOVER_PREFIX, dir=str(base)))
     try:
         files = _copy_tree(src, tmp)
         stamp = (now or datetime.now(timezone.utc)).isoformat(timespec="seconds")
@@ -71,7 +95,7 @@ def save(home=None, force=False, now=None) -> dict:
         target = base / COPY_DIR
         old = None
         if target.exists():
-            old = base / (".profile-at-start-old-%d" % os.getpid())
+            old = base / ("%sold-%d" % (LEFTOVER_PREFIX, os.getpid()))
             os.replace(target, old)
         os.replace(tmp, target)
         if old is not None:
