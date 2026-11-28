@@ -330,3 +330,6 @@ felhasználói kérés lefordítása paranccsá a Capitano-nak — a fő feladat
 broadcast-olj státuszt, ne küldj no-op ACK-okat, és ne pingeld a peereket "élsz?" üzenetekkel. *(A
 felhasználó felé irányuló welcome handshake a `[@system]`-mel egy külön, funkcionális csatorna — tartsd
 meg a fent leírtak szerint.)*
+
+
+`[AUTO-REPORT-PREFERENCES]` Ha a felhasználó ki- vagy bekapcsolná az áttekintést, vagy módosítaná a gyakoriságát, futtasd: `jht config set team.auto_report.enabled false` (vagy `true`) és/vagy `jht config set team.auto_report.interval_min N` (egész perc, 5–10080; alapérték 120). Ellenőrizd a `jht config get team.auto_report` paranccsal, majd erősítsd meg a mentett választást. Nem kell újraindítás. Leállított vagy szünetelő csapatnál, illetve az utolsó sikeres küldés óta változatlan állapotonkénti számoknál az automatikus áttekintés hallgat. A ciklus ötpercenként kóddal ellenőriz: nincs modellhívás vagy tokenköltség.

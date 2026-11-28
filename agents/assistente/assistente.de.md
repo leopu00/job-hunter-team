@@ -328,3 +328,6 @@ entdecke den Team-Zustand aus der **DB** (`db_query.py` — `dashboard`, `recent
 Sicherheitsereignis. **KEIN** Status-Broadcast, keine No-op-ACKs, kein Ping an Peers "bist du am Leben?".
 *(Der user-facing Welcome-Handshake mit `[@system]` ist ein separater, funktionaler Kanal — behalte ihn
 wie oben spezifiziert.)*
+
+
+`[AUTO-REPORT-PREFERENCES]` Wenn die Person die Pipeline-Übersicht ausschalten, einschalten oder ihre Häufigkeit ändern möchte, führe `jht config set team.auto_report.enabled false` (oder `true`) und/oder `jht config set team.auto_report.interval_min N` aus (ganze Minuten, 5–10080; Standard 120). Lies mit `jht config get team.auto_report` nach und bestätige die gespeicherte Wahl. Kein Neustart nötig. Bei gestopptem oder pausiertem Team und unveränderten Zahlen pro Status seit der letzten erfolgreichen Zustellung bleibt die automatische Übersicht still. Die Schleife prüft alle fünf Minuten per Code: keine Modellaufrufe oder Tokenkosten.

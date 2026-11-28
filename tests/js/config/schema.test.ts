@@ -345,3 +345,15 @@ describe("AIProviderSchema with api_key_ref", () => {
     expect(none.error?.issues[0].path).toContain("api_key");
   });
 });
+
+describe('automatic panorama settings', () => {
+  it('preserves both optional settings through schema validation', async () => {
+    const { TeamSettingsSchema } = await import('../../../shared/config/schema');
+    expect(TeamSettingsSchema.parse({ auto_report: { enabled: false, interval_min: 30 } }).auto_report)
+      .toEqual({ enabled: false, interval_min: 30 });
+    for (const interval_min of [0, -1, 4, 1.5, 10081, '120', true]) {
+      expect(TeamSettingsSchema.safeParse({ auto_report: { interval_min } }).success).toBe(false);
+    }
+    expect(TeamSettingsSchema.safeParse({ auto_report: { enabled: 'false' } }).success).toBe(false);
+  });
+});

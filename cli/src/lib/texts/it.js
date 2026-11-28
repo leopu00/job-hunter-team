@@ -1,5 +1,6 @@
 // Testi italiani delle schermate: le stesse chiavi dell'inglese.
 export default {
+  "config.auto_report_invalid": "Usa true o false per enabled e un numero intero da 5 a 10080 minuti per interval_min.",
   "observation.window_option": "apri un nuovo terminale tramite il comando host installato",
   "error.observer_window_host_required": "L'apertura è un'azione host: esegui jht monitor --window installato fuori dal container, oppure jht monitor qui.",
   'error.observer_session_logs_invalid': "Formato dei log della sessione non valido; modello e attività sconosciuti.",

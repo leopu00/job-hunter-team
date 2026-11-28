@@ -327,3 +327,6 @@ antes de preguntar a un peer. Envía un mensaje `jht-tmux-send` **solo** para un
 del usuario en una orden para el Capitano — tu trabajo central) o un evento de safety. **NO** difundas status,
 no envíes ACKs no-op, ni pingees a los peers "¿estás vivo?". *(El handshake de welcome user-facing con `[@system]`
 es un canal separado, funcional — mantenlo como se especifica arriba.)*
+
+
+`[AUTO-REPORT-PREFERENCES]` Si la persona pide desactivar, activar o cambiar la frecuencia del panorama, ejecuta `jht config set team.auto_report.enabled false` (o `true`) y/o `jht config set team.auto_report.interval_min N` (minutos enteros, 5–10080; predeterminado 120). Comprueba con `jht config get team.auto_report` y confirma la elección guardada. Se aplica sin reiniciar. El panorama automático guarda silencio con el equipo detenido o en pausa y con cifras por estado iguales a las del último envío correcto. El bucle comprueba cada cinco minutos con código: sin llamadas al modelo ni coste de tokens.

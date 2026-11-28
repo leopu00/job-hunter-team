@@ -23,8 +23,10 @@ The final output sends the caption and PNG through `jht-telegram-send --from cap
 --photo <path>`. No reply keyboard: the bot's commands live in its ☰ menu.
 
 The timestamp of the latest notification is stored in
-`$JHT_HOME/state/auto_report_last.json`. The script sends only when
-MIN_INTERVAL_MIN has elapsed; otherwise it exits successfully.
+`$JHT_HOME/state/auto_report_last.json`. The script sends only for a working team with changed per-status counts, after
+the configured interval. team.auto_report.enabled and interval_min are reloaded
+from jht.config.json each attempt (5..10080 minutes, default120; the legacy
+environment interval remains a fallback). --force bypasses only the interval.
 
 CLI:
     python3 /app/shared/skills/auto_report.py send       # honor the interval
@@ -41,6 +43,9 @@ import sqlite3
 import subprocess
 import sys
 import time
+import tempfile
+import re
+from contextlib import closing
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -63,7 +68,61 @@ STATE_PATH = JHT_HOME / "state" / "auto_report_last.json"
 PNG_OUT = JHT_HOME / "logs" / "pipeline_overview.png"
 TELEGRAM_SEND = "/app/agents/_tools/jht-telegram-send"
 
-MIN_INTERVAL_MIN = int(os.environ.get("JHT_AUTO_REPORT_INTERVAL_MIN", "120"))
+from plain_file import read_json
+
+DEFAULT_INTERVAL_MIN = 120
+MIN_INTERVAL, MAX_INTERVAL = 5, 10080
+try:
+    MIN_INTERVAL_MIN = int(os.environ.get("JHT_AUTO_REPORT_INTERVAL_MIN", "120"))
+    if not MIN_INTERVAL <= MIN_INTERVAL_MIN <= MAX_INTERVAL:
+        MIN_INTERVAL_MIN = DEFAULT_INTERVAL_MIN
+except ValueError:
+    MIN_INTERVAL_MIN = DEFAULT_INTERVAL_MIN
+
+
+def settings() -> dict:
+    """Reload on every attempt: malformed/unreadable configuration uses defaults."""
+    defaults = {"enabled": True, "interval_min": MIN_INTERVAL_MIN}
+    try:
+        config = read_json(JHT_HOME / "jht.config.json")
+        raw = config.get("team", {}).get("auto_report", {})
+        enabled = raw.get("enabled", True)
+        minutes = raw.get("interval_min", MIN_INTERVAL_MIN)
+        if not isinstance(enabled, bool) or type(minutes) is not int or not MIN_INTERVAL <= minutes <= MAX_INTERVAL:
+            return defaults
+        return {"enabled": enabled, "interval_min": minutes}
+    except Exception:
+        # read_plain also rejects links, pipes and oversized files.
+        return defaults
+
+
+def team_blocked(sessions: list[str]) -> bool:
+    """Session presence alone is not activity: respect the team's canonical brakes."""
+    try:
+        import standby
+        import working_hours
+        import agent_pause
+        import team_roster
+        if standby.is_active(home=JHT_HOME):
+            return True
+        for name in (".team-halted.flag", ".daily-halt.flag", ".weekly-halt.flag",
+                     "logs/daily-halt.flag", "logs/weekly-halt.flag"):
+            if (JHT_HOME / name).exists():
+                return True
+        if not working_hours.is_within_working_hours():
+            return True
+        workers = [name for name in sessions if re.fullmatch(r"(?:SCOUT|ANALISTA|SCORER|SCRITTORE|CRITICO|CLOSER)(?:-[0-9]+)?", name)]
+        return not any(not agent_pause.is_paused(name, home=JHT_HOME)
+                       and not team_roster.is_contained(name) for name in workers)
+    except Exception:
+        return True  # a routine notification may wait until activity can be established
+
+
+def snapshot(pipeline: dict) -> dict:
+    # Status changes matter even at the same total. Ignore clocks, budget, sessions
+    # and the sliding 24h counter: none means new pipeline work.
+    return {key: dict(pipeline.get(key, {})) for key in ("positions", "applications")}
+
 
 
 def _now() -> datetime:
@@ -71,21 +130,32 @@ def _now() -> datetime:
 
 
 def _load_last() -> dict:
-    if not STATE_PATH.exists():
-        return {}
     try:
-        with STATE_PATH.open() as f:
-            return json.load(f)
-    except (json.JSONDecodeError, OSError):
-        return {}
+        data = read_json(STATE_PATH, max_size=65536)
+        if not isinstance(data, dict) or not isinstance(data.get("snapshot"), dict):
+            return {}
+        saved = data["snapshot"]
+        if set(saved) != {"positions", "applications"} or any(
+                not isinstance(counts, dict) or any(not isinstance(k, str) or type(v) is not int or v < 0
+                                                   for k, v in counts.items()) for counts in saved.values()):
+            return {}
+        return data
+    except Exception:
+        return {}  # lost/corrupt state must never silence future notifications
 
 
 def _save_last(d: dict) -> None:
     STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
-    tmp = STATE_PATH.with_suffix(".json.tmp")
-    with tmp.open("w", encoding="utf-8") as f:
-        json.dump(d, f, ensure_ascii=False, indent=2)
-    tmp.replace(STATE_PATH)
+    fd, name = tempfile.mkstemp(prefix=".auto-report-", dir=STATE_PATH.parent)
+    tmp = Path(name)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            json.dump(d, f, ensure_ascii=False, indent=2)
+            f.flush()
+            os.fsync(f.fileno())
+        tmp.replace(STATE_PATH)
+    finally:
+        tmp.unlink(missing_ok=True)
 
 
 def _fmt_local_time() -> str:
@@ -123,36 +193,35 @@ def _fmt_reset_user(unix_ts, fallback: str | None = None) -> str:
 
 def _read_pipeline() -> dict:
     if not DB_PATH.exists():
-        return {"positions": {}, "applications": {}, "transitions_24h": 0,
-                "last_ready_apps": [], "top_ready": []}
-    c = sqlite3.connect(str(DB_PATH))
-    c.row_factory = sqlite3.Row
-    out: dict = {"positions": {}, "applications": {}}
-    for r in c.execute("SELECT status, COUNT(*) AS n FROM positions GROUP BY status"):
-        out["positions"][r["status"]] = r["n"]
-    for r in c.execute("SELECT status, COUNT(*) AS n FROM applications GROUP BY status"):
-        out["applications"][r["status"]] = r["n"]
-    try:
-        out["transitions_24h"] = c.execute(
-            "SELECT COUNT(*) FROM position_state_transitions WHERE ts >= datetime('now','-1 day')"
-        ).fetchone()[0]
-    except sqlite3.OperationalError:
-        out["transitions_24h"] = 0
-    # Top 5 ready per critic_score
-    try:
-        rows = c.execute("""
-            SELECT p.company, p.title, a.critic_score
-              FROM applications a
-              JOIN positions p ON p.id = a.position_id
-             WHERE a.status = 'ready'
-          ORDER BY a.critic_score DESC NULLS LAST
-             LIMIT 5
-        """).fetchall()
-        out["top_ready"] = [dict(r) for r in rows]
-    except sqlite3.OperationalError:
-        out["top_ready"] = []
-    c.close()
-    return out
+        raise FileNotFoundError(DB_PATH)
+    with closing(sqlite3.connect(DB_PATH.resolve().as_uri() + "?mode=ro", uri=True, timeout=2)) as c:
+        c.execute("BEGIN")
+        c.row_factory = sqlite3.Row
+        out: dict = {"positions": {}, "applications": {}}
+        for r in c.execute("SELECT status, COUNT(*) AS n FROM positions GROUP BY status"):
+            out["positions"][r["status"]] = r["n"]
+        for r in c.execute("SELECT status, COUNT(*) AS n FROM applications GROUP BY status"):
+            out["applications"][r["status"]] = r["n"]
+        try:
+            out["transitions_24h"] = c.execute(
+                "SELECT COUNT(*) FROM position_state_transitions WHERE ts >= datetime('now','-1 day')"
+            ).fetchone()[0]
+        except sqlite3.OperationalError:
+            out["transitions_24h"] = 0
+        # Top 5 ready per critic_score
+        try:
+            rows = c.execute("""
+                SELECT p.company, p.title, a.critic_score
+                  FROM applications a
+                  JOIN positions p ON p.id = a.position_id
+                 WHERE a.status = 'ready'
+              ORDER BY a.critic_score DESC NULLS LAST
+                 LIMIT 5
+            """).fetchall()
+            out["top_ready"] = [dict(r) for r in rows]
+        except sqlite3.OperationalError:
+            out["top_ready"] = []
+        return out
 
 
 def _read_bridge_state() -> dict:
@@ -211,7 +280,7 @@ def _html_escape(s: str) -> str:
 
 
 def build_panorama_text(pipeline: dict, bridge: dict, tmux_n: int,
-                        sessions: list[str]) -> str:
+                        sessions: list[str], interval_min: int | None = None) -> str:
     """Output in HTML-safe Telegram (parse_mode=HTML).
 
     Bug 2026-05-17 21:18: MarkdownV2 richiede escape su `()[]_*~`. Il
@@ -280,7 +349,7 @@ def build_panorama_text(pipeline: dict, bridge: dict, tmux_n: int,
             lines.append(f"  • {comp} — {title}  ({sc})")
 
     lines.append("")
-    lines.append(f"<i>{_i18n_tf('auto_report.footer', MIN_INTERVAL_MIN)}</i>")
+    lines.append(f"<i>{_i18n_tf('auto_report.footer', interval_min if interval_min is not None else settings()['interval_min'])}</i>")
     return "\n".join(lines)
 
 
@@ -381,25 +450,42 @@ def send_to_telegram(text: str, photo: Path | None, dry_run: bool = False) -> bo
 
 
 def send(force: bool = False, dry_run: bool = False) -> int:
+    options = settings()
+    if not options["enabled"]:
+        print("skip: disabled")
+        return 0
+    tmux_n, sessions = _count_tmux_sessions()
+    if team_blocked(sessions):
+        print("skip: team stopped or paused")
+        return 0
     last = _load_last()
     last_ts = last.get("ts", 0)
+    if type(last_ts) not in (int, float) or not 0 <= last_ts <= time.time():
+        last_ts = 0
+    interval_min = options["interval_min"]
     now_ts = time.time()
-    if not force and (now_ts - last_ts) < MIN_INTERVAL_MIN * 60:
-        mins_left = int((MIN_INTERVAL_MIN * 60 - (now_ts - last_ts)) / 60)
+    if last and not force and (now_ts - last_ts) < interval_min * 60:
+        mins_left = int((interval_min * 60 - (now_ts - last_ts)) / 60)
         print(f"skip: last notification {int((now_ts - last_ts)/60)}m ago, next in {mins_left}m")
         return 0
 
-    pipeline = _read_pipeline()
+    try:
+        pipeline = _read_pipeline()
+    except (sqlite3.Error, OSError):
+        print("skip: pipeline unreadable")
+        return 0
+    current = snapshot(pipeline)
+    if last.get("snapshot") == current:
+        print("skip: unchanged pipeline")
+        return 0
     bridge = _read_bridge_state()
-    tmux_n, sessions = _count_tmux_sessions()
-
-    text = build_panorama_text(pipeline, bridge, tmux_n, sessions)
+    text = build_panorama_text(pipeline, bridge, tmux_n, sessions, interval_min)
     png_ok = build_png(pipeline, bridge, PNG_OUT)
     photo = PNG_OUT if png_ok else None
 
     sent = send_to_telegram(text, photo, dry_run=dry_run)
     if sent and not dry_run:
-        _save_last({"ts": now_ts, "text_chars": len(text),
+        _save_last({"ts": now_ts, "snapshot": current, "text_chars": len(text),
                     "png_path": str(PNG_OUT) if png_ok else "",
                     "iso": _now().isoformat()})
         print(f"auto-report sent (text {len(text)} chars + photo={'yes' if photo else 'no'})")
@@ -409,7 +495,7 @@ def send(force: bool = False, dry_run: bool = False) -> int:
 def status() -> int:
     last = _load_last()
     print(json.dumps({
-        "interval_min": MIN_INTERVAL_MIN,
+        **settings(),
         "last": last,
         "state_path": str(STATE_PATH),
         "png_out": str(PNG_OUT),

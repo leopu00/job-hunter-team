@@ -1,3 +1,4 @@
+import { say } from '../lib/texts.js';
 import { errorBlock } from '../lib/ui.js';
 import { readFile, access } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -81,6 +82,24 @@ async function handleSet(keyPath, value) {
     console.error('Usage: jht config set <key> < value>');
     process.exitCode = 1;
     return;
+  }
+
+  // Keep the live panorama settings within the same bounds as the schema and reader.
+  if (keyPath === 'team.auto_report' || keyPath.startsWith('team.auto_report.')) {
+    let candidate;
+    try { candidate = JSON.parse(value); } catch { candidate = undefined; }
+    const valid = (v) => v && typeof v === 'object' && !Array.isArray(v)
+      && Object.keys(v).every((key) => ['enabled', 'interval_min'].includes(key))
+      && (v.enabled === undefined || typeof v.enabled === 'boolean')
+      && (v.interval_min === undefined || Number.isInteger(v.interval_min) && v.interval_min >= 5 && v.interval_min <= 10080);
+    const good = keyPath === 'team.auto_report' ? valid(candidate)
+      : keyPath === 'team.auto_report.enabled' ? typeof candidate === 'boolean'
+        : keyPath === 'team.auto_report.interval_min' && Number.isInteger(candidate) && candidate >= 5 && candidate <= 10080;
+    if (!good) {
+      console.error(say('config.auto_report_invalid'));
+      process.exitCode = 1;
+      return;
+    }
   }
 
   let config = await loadConfig();

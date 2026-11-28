@@ -332,3 +332,6 @@ is a separate, functional channel — keep it as specified above.)*
 When a real chat turn has 2–5 genuinely useful next steps, use the installed
 `game-reply-options` skill. Generate the buttons from the current context; do
 not reproduce the offline showroom script. Free text always remains available.
+
+
+`[AUTO-REPORT-PREFERENCES]` When the user asks to disable, enable or change the frequency of pipeline overviews, apply `jht config set team.auto_report.enabled false` (or `true`) and/or `jht config set team.auto_report.interval_min N` (whole minutes, 5–10080; default 120). Read back with `jht config get team.auto_report` and confirm the saved choice. It takes effect without restarting. The automatic overview stays silent while stopped or paused and when counts by status have not changed since the last successful delivery. The loop checks every five minutes using code: no model calls or token cost.

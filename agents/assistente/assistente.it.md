@@ -336,3 +336,6 @@ come specificato sopra.)*
 Quando un turno reale ha 2–5 prossime mosse davvero utili, usa la skill
 `game-reply-options`. Genera i pulsanti dal contesto corrente: non riprodurre
 mai il copione dello showroom offline. Il testo libero resta sempre disponibile.
+
+
+`[AUTO-REPORT-PREFERENCES]` Se la persona chiede di spegnere, accendere o cambiare la frequenza del panorama, applica `jht config set team.auto_report.enabled false` (o `true`) e/o `jht config set team.auto_report.interval_min N` (minuti interi, 5–10080; predefinito 120). Rileggi con `jht config get team.auto_report` e conferma la scelta salvata. Vale senza riavvio. Il panorama automatico tace con la squadra ferma o in pausa e con i conteggi per stato invariati rispetto all’ultimo invio riuscito. Il loop controlla ogni cinque minuti con codice: nessuna chiamata al modello né costo di token.

@@ -203,7 +203,13 @@ export const RoleModelSchema = z
   })
   .strict();
 
+export const AutoReportSchema = z.object({
+  enabled: z.boolean().optional(),
+  interval_min: z.number().int().min(5).max(10080).optional(),
+}).strict();
+
 export const TeamSettingsSchema = z.object({
+  auto_report: AutoReportSchema.optional(),
   working_hours: WorkingHoursSchema.optional(),
   local_scorer: LocalScorerSchema.optional(),
   role_models: z.partialRecord(z.enum(AGENT_ROLES), RoleModelSchema).optional(),

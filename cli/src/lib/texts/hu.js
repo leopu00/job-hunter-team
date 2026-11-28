@@ -1,6 +1,7 @@
 // Texts of the screens in this language: so far the last steps of `jht setup` (the check of pi, `jht team stop`, `jht team start`) `jht team chat` (header, question cards, answers) and `jht team status` / `jht agents`, and the help of `jht --help` and `jht help`.
 // Every other text is said in English (texts.js, PARTIAL).
 export default {
+  "config.auto_report_invalid": "Az enabled értéke true vagy false, az interval_min pedig 5 és 10080 közötti egész percszám legyen.",
   "credit.gone": "A(z) {provider} egyenlege elfogyott: az ügynökök nem tudnak válaszolni. Töltsd fel a szolgáltató oldalán; a csapat fél órán belül magától folytatja.",
   "release.codex_legacy": "A ChatGPT-előfizetést (Codex) a 0.4.0 óta nem kínáljuk új felhasználóknak: a csapatod tovább működik; ha GLM-re, Kimire, OpenAI-ra vagy Claude-ra váltanál API-kulccsal: jht setup",
   "team.starting_container": "Az ügynökök indítása a jht konténerben...",

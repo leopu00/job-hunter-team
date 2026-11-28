@@ -1,6 +1,7 @@
 // Texts of the screens in this language: so far the last steps of `jht setup` (the check of pi, `jht team stop`, `jht team start`) `jht team chat` (header, question cards, answers) and `jht team status` / `jht agents`, and the help of `jht --help` and `jht help`.
 // Every other text is said in English (texts.js, PARTIAL).
 export default {
+  "config.auto_report_invalid": "Usa true o false para enabled y un número entero de 5 a 10080 minutos para interval_min.",
   "credit.gone": "El crédito en {provider} se ha agotado: los agentes no pueden responder. Recárgalo en el sitio del proveedor; el equipo se reanuda solo en media hora.",
   "release.codex_legacy": "La suscripción de ChatGPT (Codex) ya no se ofrece a usuarios nuevos desde la 0.4.0: tu equipo sigue funcionando; para pasar a GLM, Kimi, OpenAI o Claude con una clave de API: jht setup",
   "team.starting_container": "Arrancando los agentes en el contenedor jht...",

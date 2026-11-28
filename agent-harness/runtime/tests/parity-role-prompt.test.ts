@@ -180,3 +180,13 @@ describe("the real SCOUT", () => {
     for (const s of prompt.skills) expect(s.description, s.name).not.toBe("");
   });
 });
+
+it('loads the live panorama controls into the Assistant prompt in all seven languages', async () => {
+  for (const locale of ['en', 'it', 'de', 'es', 'fr', 'pt', 'hu']) {
+    const prompt = await loadRolePrompt({ appRoot: REPO_ROOT, role: 'assistente', locale });
+    expect(prompt.identity).toContain('[AUTO-REPORT-PREFERENCES]');
+    expect(prompt.identity).toContain('jht config set team.auto_report.enabled false');
+    expect(prompt.identity).toContain('jht config set team.auto_report.interval_min N');
+    expect(prompt.identity).toContain('jht config get team.auto_report');
+  }
+});
