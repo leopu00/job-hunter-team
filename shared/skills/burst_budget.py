@@ -165,7 +165,8 @@ def decide(role, budget_usd, events, queues, sourcing_done, pending, policy, ini
     return {"allowed": allowed, "reason": "allowed" if allowed else "burst-reserve",
             "protected_usd": round(protected, 6), "spent_usd": round(spent, 6),
             "inflight": len(pending), "inflight_usd": round(outstanding, 6),
-            "estimate_usd": estimate, "room_usd": round(room, 6)}
+            "estimate_usd": estimate, "room_usd": round(room, 6),
+            "waiting_for_inflight": not allowed and bool(pending) and room + outstanding + 1e-9 >= estimate}
 
 
 @contextlib.contextmanager

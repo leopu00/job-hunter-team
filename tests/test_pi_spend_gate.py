@@ -22,6 +22,7 @@ pytestmark = pytest.mark.skipif(shutil.which("node") is None, reason="node requi
 
 DRIVER = r"""
 const fs = require("node:fs");
+(async () => {
 const handlers = {};
 require(process.argv[2])({ on: (name, fn) => { (handlers[name] ||= []).push(fn); } });
 const results = [];
@@ -47,10 +48,11 @@ for (const step of JSON.parse(fs.readFileSync(0, "utf8"))) {
   }
   let aborted = 0;
   const ctx = { abort: () => { aborted += 1; } };
-  const out = (handlers[step.event] || []).map((fn) => fn({ text: step.text || "", payload: {} }, ctx));
+  const out = await Promise.all((handlers[step.event] || []).map((fn) => fn({ text: step.text || "", payload: {} }, ctx)));
   results.push({ handlers: out.length, out: out.length ? (out[0] === undefined ? null : out[0]) : null, aborted });
 }
 process.stdout.write(JSON.stringify(results));
+})().catch((error) => { console.error(error); process.exitCode = 1; });
 """
 
 BRAKE = json.dumps({"halted_at": "2026-11-16T09:45:00+00:00", "reason": "pi_spend_cap",

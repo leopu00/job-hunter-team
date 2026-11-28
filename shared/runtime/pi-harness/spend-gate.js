@@ -30,7 +30,9 @@
  */
 const fs = require("node:fs");
 const path = require("node:path");
-const { spawnSync } = require("node:child_process");
+const { execFile } = require("node:child_process");
+const { promisify } = require("node:util");
+const runFile = promisify(execFile);
 const { randomUUID } = require("node:crypto");
 
 const REASON = "pi_spend_cap";
@@ -167,39 +169,46 @@ function agentName() {
   return String(process.env.JHT_AGENT_NAME || "").toLowerCase();
 }
 
-/** Admission is synchronous only while accounts and in-flight estimates are
+/** Admission awaits the helper only while accounts and in-flight estimates are
  * checked. The Python lock is released before the provider starts; requests run
  * in parallel. A failed reading holds upstream workers, never the Scorer/core. */
-function burstAdmission() {
+async function burstAdmission() {
   const role = agentName().split("-", 1)[0];
   const exempt = ["capitano", "assistente", "scorer"].includes(role);
+  const fallback = { allowed: exempt };
   const home = process.env.JHT_HOME;
-  if (!home) return true;
+  if (!home) return { allowed: true };
   // A readable non-dollar/subscription configuration takes the cheap path.
   try {
     const file = path.join(home, "jht.config.json");
     const info = fs.lstatSync(file);
-    if (!info.isFile() || info.size > 4 * 1024 * 1024) return exempt;
+    if (!info.isFile() || info.size > 4 * 1024 * 1024) return fallback;
     const config = JSON.parse(fs.readFileSync(file, "utf8"));
     const provider = String(config.active_provider || "").toLowerCase();
     if (config.providers?.[provider]?.auth_method !== "api_key" ||
-        !(config.team?.budget?.usd > 0)) return true;
+        !(config.team?.budget?.usd > 0)) return { allowed: true };
   } catch (error) {
-    return exempt || error.code === "ENOENT"; // no configuration yet: no declared dollar budget
+    return { allowed: exempt || error.code === "ENOENT" };
+  }
+  const script = path.resolve(__dirname, "../../skills/burst_budget.py");
+  const argv = [script, "claim", agentName(), "--id", randomUUID()];
+  let stdout;
+  try {
+    ({ stdout } = await runFile("python3", argv, {
+      env: process.env, encoding: "utf8", timeout: 10000, maxBuffer: 65536,
+    }));
+  } catch (error) {
+    // Exit 75 carries the normal reserve decision too. A timeout, missing
+    // helper or malformed accounts holds workers and leaves core/scorer up.
+    if (error.code !== 75) return fallback;
+    stdout = error.stdout;
   }
   try {
-    const script = path.resolve(__dirname, "../../skills/burst_budget.py");
-    const result = spawnSync("python3", [script, "claim", agentName(), "--id", randomUUID()], {
-      env: process.env, encoding: "utf8", timeout: 10000, maxBuffer: 65536,
-      stdio: ["ignore", "pipe", "pipe"],
-    });
-    if (result.status !== 0) {
-      logLine({ event: "burst_reserve_held" });
-      return exempt;
-    }
-    return exempt || JSON.parse(result.stdout).allowed === true;
+    const result = JSON.parse(stdout);
+    if (!result.allowed) logLine({ event: "burst_reserve_held" });
+    return exempt ? { allowed: true } : result;
   } catch (_error) {
-    return exempt;
+    return fallback;
   }
 }
 
@@ -234,14 +243,27 @@ module.exports = function spendGate(pi) {
     }
   });
 
-  pi.on("before_provider_request", (_event, ctx) => {
+  pi.on("before_provider_request", async (_event, ctx) => {
+    let stop = false;
     try {
-      if ((paused() || standby() || queued() || !burstAdmission()) && ctx && typeof ctx.abort === "function") {
-        logLine({ event: "request_stopped" });
-        ctx.abort();
+      for (;;) {
+        if (paused() || standby() || queued()) { stop = true; break; }
+        const decision = await burstAdmission();
+        // A halt arriving during the accounting read wins over admission.
+        if (paused() || standby() || queued()) { stop = true; break; }
+        if (decision.allowed) break;
+        if (!decision.waiting_for_inflight) { stop = true; break; }
+        // Only an estimate is using this room. Wait asynchronously for paid
+        // usage (or claim expiry), with no admission lock held and a live UI.
+        logLine({ event: "burst_waiting_for_inflight" });
+        await new Promise((resolve) => setTimeout(resolve, 500));
       }
     } catch (_error) {
-      /* never break the request of the agent */
+      stop = !["capitano", "assistente", "scorer"].includes(agentName().split("-", 1)[0]);
+    }
+    if (stop && ctx && typeof ctx.abort === "function") {
+      logLine({ event: "request_stopped" });
+      ctx.abort();
     }
     return undefined;
   });

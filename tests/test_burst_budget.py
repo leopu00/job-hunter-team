@@ -224,11 +224,13 @@ def test_first_scout_then_observation_interval_before_next_spawn(world):
 def test_real_pi_before_provider_request_enforces_reserve(world, agent, blocked):
     usage(world, "scout-1", 2.5)
     driver = r'''
+(async () => {
 const handlers = {};
 require(process.argv[1])({on:(name, fn)=>{handlers[name]=fn;}});
 let aborted=0;
-handlers.before_provider_request({}, {abort:()=>{aborted++;}});
+await handlers.before_provider_request({}, {abort:()=>{aborted++;}});
 process.stdout.write(JSON.stringify({aborted}));
+})().catch((error) => { console.error(error); process.exitCode = 1; });
 '''
     done = subprocess.run(["node", "-e", driver, str(GATE)], capture_output=True, text=True, timeout=20,
                           env={**os.environ, "JHT_AGENT_NAME": agent})
@@ -283,3 +285,39 @@ def test_roster_still_launches_scorer_when_scout_budget_is_spent(world, monkeypa
     rows = roster._spawn(["scout", "analista", "scorer"], {})
     assert rows[0]["why"] == "burst-reserve"
     assert calls == ["analista", "scorer"] and rows[-1]["ok"]
+
+
+@pytest.mark.skipif(shutil.which("node") is None, reason="node required")
+def test_pi_waits_for_inflight_usage_then_sends_without_losing_the_turn(world):
+    world["config"]["team"]["burst_budget"] = {"request_estimate_usd": 0.25}
+    save_config(world)
+    usage(world, "capitano", 2)
+    assert _claim(world, "scout-1", "one")["allowed"]
+    assert _claim(world, "scout-2", "two")["allowed"]
+    driver = r'''
+(async () => {
+const handlers = {};
+require(process.argv[1])({on:(name, fn)=>{handlers[name]=fn;}});
+let aborted=0;
+await handlers.before_provider_request({}, {abort:()=>{aborted++;}});
+process.stdout.write(JSON.stringify({aborted}));
+})().catch((error) => { console.error(error); process.exitCode = 1; });
+'''
+    process = subprocess.Popen(["node", "-e", driver, str(GATE)], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+                               env={**os.environ, "JHT_AGENT_NAME": "scout-3"})
+    try:
+        log = world["home"] / "logs/pi-spend-gate.log"
+        deadline = time.monotonic() + 10
+        while time.monotonic() < deadline and (not log.exists() or "burst_waiting_for_inflight" not in log.read_text()):
+            assert process.poll() is None, "the waiting turn must not be aborted"
+            time.sleep(0.05)
+        assert log.exists() and "burst_waiting_for_inflight" in log.read_text()
+        usage(world, "scout-1", 0.05)
+        usage(world, "scout-2", 0.05)
+        stdout, stderr = process.communicate(timeout=15)
+        assert process.returncode == 0, stderr
+        assert json.loads(stdout)["aborted"] == 0
+    finally:
+        if process.poll() is None:
+            process.terminate()
+            process.communicate(timeout=5)
