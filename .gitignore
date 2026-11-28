@@ -58,6 +58,10 @@ shared/data/incoming/
 
 # Gap report e dati analisi personali
 shared/data/gap-report.json
+# made at the build of the image (scripts/geonames_reduce.py, JHT-T351)
+shared/data/cities.tsv.gz
+shared/data/cities.tsv.gz.sha256
+shared/data/cities.json
 
 # Candidate profile (dati personali)
 candidate_profile.yml

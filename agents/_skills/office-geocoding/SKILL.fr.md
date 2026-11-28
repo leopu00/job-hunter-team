@@ -39,7 +39,7 @@ office_verified   bool     true si vous êtes SÛR que c'est le bon bureau ;
 
 4. **Géocodage via Nominatim/Photon** **UNIQUEMENT après** avoir trouvé l'adresse. Nominatim/Photon convertissent texte→coordonnées, **ce n'est pas de la vérification**. Pas d'adresse du web → pas de `office_verified=true`.
 
-5. **Fallback niveau ville** quand toutes les tentatives ci-dessus échouent : géocoder le **nom de la ville** (ex. `"Roma, Italy"`), sauvegarder avec `office_verified=false` et `office_address = <city>, <country>`. **NE JAMAIS laisser NULL si la position a une city/country du location-enrichment** — utiliser le fallback ville.
+5. **Fallback niveau ville** quand toutes les tentatives ci-dessus échouent : le centre de la ville depuis la liste GeoNames de l'image, hors ligne, jamais de coordonnées de mémoire : `python3 /app/shared/skills/city_geo.py "<city>, <CODE PAYS>"` (JHT-T351). `found` → sauvegarder lat/lon avec `office_verified=false`, `--location-precision city` et `office_address = <city>, <country>`. `ambiguous` ou `not_found` → laisser les coordonnées NULL (le Scorer garde le contrôle par pays).
 
 ### Quand skip avec TOUT NULL
 

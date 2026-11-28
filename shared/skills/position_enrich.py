@@ -16,7 +16,10 @@ be done without a model when the ad says enough, so they are done here, when a p
                no row at all, one is created from the company name of the ad (db_insert.py company --name), only when
                that name is the employer: not an agency, a head hunter, an unnamed client or a board (employer_in_ad).
 
-A value that cannot be found stays NULL, never estimated: no city pin, no site guessed from the name. The reason is a
+A value that cannot be found stays NULL, never estimated: no site guessed from the name. The one fallback is the centre of the
+position's city from the GeoNames list built into the image (city_geo.py, JHT-T351), when the ad gives no address or the
+address is not found: `location_precision` city, not verified, so the Scorer can measure a distance from the residence
+(an office in Rome for a person in Milan); a city the list does not know, or that is ambiguous, stays NULL. The reason is a
 code from a closed list (REASONS), in the JSON answer, in `$JHT_HOME/logs/position-enrich.jsonl` and, for a step that
 was tried, as a row of the maintenance history (`maintenance_events`, by_agent `position-enrich`). A position whose
 office stays NULL keeps `office_geocoded=0`: the Analista and the care queue can still do it.
@@ -483,6 +486,32 @@ def _skill(script: str, *args: str) -> subprocess.CompletedProcess:
                           timeout=180)
 
 
+# The reasons after which the centre of the city is written: the answer would not change on a retry. A network error, a rate
+# limit or the policy off leave the office to the next try, which may find the address.
+CITY_FALLBACK = ("not_found", "not_in_city", "nominatim_off")
+
+
+def city_step(pos, city: str, dry_run: bool) -> dict | None:
+    """The centre of the city from the GeoNames list (precision `city`, not verified), or None when the list does not know it."""
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("jht_city_geo", Path(__file__).resolve().parent / "city_geo.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    code = (pos["loc_country_code"] or "").strip().upper()
+    found = module.locate(f"{city}, {code}" if re.fullmatch(r"[A-Z]{2}", code) else city)
+    if found.get("status") != "found":
+        return None
+    if dry_run:
+        return {"done": False, "would_write": {"lat": found["lat"], "lon": found["lon"], "precision": "city"}}
+    done = _skill("db_update.py", "position", str(pos["id"]), "--office-lat", repr(found["lat"]),
+                  "--office-lon", repr(found["lon"]), "--office-geocoded", "true", "--office-verified", "false",
+                  "--location-precision", "city", "--action", "geocode", "--outcome", "updated", "--evidence-kind", "none")
+    if done.returncode != 0:
+        return None
+    return {"done": True, "precision": "city"}
+
+
 def office_step(pos, pipeline: bool, dry_run: bool, gap: float) -> dict:
     from enrichment_policy import geocode_options, is_enabled
     if pos["office_geocoded"]:
@@ -504,6 +533,9 @@ def office_step(pos, pipeline: bool, dry_run: bool, gap: float) -> dict:
         elif len(found) > 1:
             reason = "several_addresses_in_ad"
     if reason:
+        centre = city_step(pos, city, dry_run) if reason != "no_city" else None
+        if centre:
+            return centre
         if not dry_run:
             _record("position", pos["id"], "geocode", OUTCOME[reason])
         return {"done": False, "reason": reason}
@@ -515,6 +547,9 @@ def office_step(pos, pipeline: bool, dry_run: bool, gap: float) -> dict:
     if answer is not None:
         place, reason = place_from(answer[0], city) if answer else (None, "not_found")
     if reason:
+        centre = city_step(pos, city, dry_run) if reason in CITY_FALLBACK else None
+        if centre:
+            return centre
         if not dry_run and reason != "nominatim_off":
             _record("position", pos["id"], "geocode", OUTCOME[reason])
         return {"done": False, "reason": reason}

@@ -93,10 +93,10 @@ Keep asking until the user tells you to stop — more data = a more tailored CV 
 
 | Field | YAML path | Neutral question |
 |---|---|---|
-| Residence | `residence` = `{place: "Town, Country", lat: null, lon: null}` | "Where do you live? Town and country are enough." |
+| Residence | `residence` = `{place: "Town, Country"}` | "Where do you live? Town and country are enough." |
 | Radius for onsite and hybrid jobs | `commute_max_km` (a number of km) | "For a job in the office or hybrid, how far are you willing to travel? In km, or in time and I convert it." |
 
-- Write `place` as «Town, Country»; leave `lat`/`lon` at `null` (never coordinates from memory). A time («45 minutes by car») you turn into km and say the figure you wrote.
+- Write `place` as «Town, Country» and never `lat`/`lon`: `profile_apply.py` looks the town up in the GeoNames list of the image and answers `residence_geo` — `found` (done), `ambiguous` (ask which of the `candidates`, then write it with its country or region), `not_found` (a place under 5000 inhabitants, or a typo: ask for the nearest larger town and write that one). When you record the radius, say it is in a straight line, not by road. A time («45 minutes by car») you turn into km and say the figure you wrote.
 - Ask the radius only when the work is not only remote (`preferences.work_mode`).
 - «Anywhere» / «Ovunque» as the place of the search is a choice, not an answer to file away: ask ONE question of detail — the whole world, or some countries? onsite abroad too, or remote only? would they move? — then write what they say (a list of countries, `preferences.relocation`), or keep «anywhere» if that is what they mean (see the next section).
 

@@ -91,10 +91,10 @@ Continua a pedir até o utilizador dizer para parar — mais dados = CV e procur
 
 | Campo | Caminho YAML | Pergunta neutra |
 |---|---|---|
-| Residência | `residence` = `{place: "Cidade, País", lat: null, lon: null}` | "Onde vives? Basta a cidade e o país." |
+| Residência | `residence` = `{place: "Cidade, País"}` | "Onde vives? Basta a cidade e o país." |
 | Raio para trabalhos presenciais e híbridos | `commute_max_km` (um número de km) | "Para um trabalho presencial ou híbrido, até onde estás disposto a deslocar-te? Em km, ou em tempo e eu converto." |
 
-- Escreve `place` como «Cidade, País»; deixa `lat`/`lon` a `null` (nunca coordenadas de memória). Um tempo («45 minutos de carro») convertes em km e dizes o número que escreveste.
+- Escreve `place` como «Cidade, País» e nunca `lat`/`lon`: o `profile_apply.py` procura a cidade na lista GeoNames da imagem e responde `residence_geo` — `found` (feito), `ambiguous` (pergunta qual dos `candidates` e escreve-a com o país ou a região), `not_found` (um lugar com menos de 5000 habitantes, ou uma gralha: pergunta a cidade maior mais próxima e escreve essa). Quando registares o raio, diz que é em linha reta, não por estrada. Um tempo («45 minutos de carro») convertes em km e dizes o número que escreveste.
 - O raio pergunta-o só quando o trabalho não é só remoto (`preferences.work_mode`).
 - «Em qualquer lugar» como lugar da procura é uma escolha, não uma resposta para arquivar: faz UMA pergunta de detalhe — o mundo inteiro ou alguns países? também presencial no estrangeiro ou só remoto? mudavas-te? — e escreve o que disser (uma lista de países, `preferences.relocation`), ou mantém «em qualquer lugar» se é isso que quer (ver a secção seguinte).
 

@@ -251,6 +251,14 @@ FROM ${BASE} AS runtime
 
 COPY . .
 
+# The towns the residence and the offices with a city only are located in (JHT-T351): GeoNames cities5000 (CC BY 4.0, NOTICE.md),
+# downloaded and reduced HERE, at the build, never at run time; no data of the person leaves the container. Its sha256 is in
+# shared/data/cities.tsv.gz.sha256 and cities.json, checked now and printed in the log of the build.
+RUN python3 scripts/geonames_reduce.py --fetch --out shared/data \
+    && (cd shared/data && sha256sum -c cities.tsv.gz.sha256) \
+    && python3 shared/skills/city_geo.py "Milano, Italy" | grep -q '"status": "found"' \
+    && cat shared/data/cities.json
+
 # The browser of the manual sign-in must not keep what the person types: the profile sits under ~/.jht, which the agents read, and an
 # accepted «Save password?» would leave the password in Default/Login Data. Managed policy of Chromium (it wins over any user setting),
 # in every tier: password manager, address and card autofill off, no sync, no sign-in to the browser itself (the web sign-in of Google

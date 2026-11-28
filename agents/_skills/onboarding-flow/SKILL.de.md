@@ -91,10 +91,10 @@ Frage weiter, bis der Nutzer sagt, du sollst aufhören — mehr Daten = CV und S
 
 | Feld | YAML-Pfad | Neutrale Frage |
 |---|---|---|
-| Wohnort | `residence` = `{place: "Stadt, Land", lat: null, lon: null}` | "Wo wohnst du? Stadt und Land reichen." |
+| Wohnort | `residence` = `{place: "Stadt, Land"}` | "Wo wohnst du? Stadt und Land reichen." |
 | Radius für Stellen vor Ort und hybrid | `commute_max_km` (eine Zahl in km) | "Für eine Stelle im Büro oder hybrid: wie weit würdest du fahren? In km, oder als Zeit und ich rechne es um." |
 
-- Schreib `place` als «Stadt, Land»; lass `lat`/`lon` auf `null` (nie Koordinaten aus dem Gedächtnis). Eine Zeit («45 Minuten mit dem Auto») rechnest du in km um und sagst die Zahl, die du geschrieben hast.
+- Schreib `place` als «Stadt, Land» und nie `lat`/`lon`: `profile_apply.py` sucht die Stadt in der GeoNames-Liste des Images und antwortet `residence_geo` — `found` (erledigt), `ambiguous` (frag, welche der `candidates`, und schreib sie mit Land oder Region), `not_found` (ein Ort unter 5000 Einwohnern oder ein Tippfehler: frag nach der nächsten größeren Stadt und schreib diese). Wenn du den Radius einträgst, sag, dass er Luftlinie ist, nicht Straße. Eine Zeit («45 Minuten mit dem Auto») rechnest du in km um und sagst die Zahl, die du geschrieben hast.
 - Den Radius fragst du nur, wenn die Arbeit nicht nur remote ist (`preferences.work_mode`).
 - «Überall» als Ort der Suche ist eine Wahl, keine Antwort zum Ablegen: stell EINE Detailfrage — die ganze Welt oder einige Länder? auch vor Ort im Ausland oder nur remote? würdest du umziehen? — und schreib, was sie sagt (eine Liste von Ländern, `preferences.relocation`), oder behalte «überall», wenn sie das meint (siehe nächster Abschnitt).
 

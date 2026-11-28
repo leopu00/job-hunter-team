@@ -51,11 +51,10 @@ webes forrásból ellenőrizted volna** mint a cég valós irodája. A helyes so
    ellenőrzés**. Nincs web-ből származó cím → nincs
    `office_verified=true`.
 
-5. **Város-szintű tartalék**, ha a fenti kísérletek mind sikertelenek:
-   geokódold a **városnevet** (pl. `"Roma, Italy"`), mentsd
-   `office_verified=false`-szal és `office_address = <city>, <country>`-val.
-   **SOHA ne hagyj NULL-t, ha a pozíciónak van city/country-ja a location-
-   enrichment-ből** — használd a város-tartalékot.
+5. **Város-szintű tartalék**, ha a fenti kísérletek mind sikertelenek: a város közepe az image GeoNames-listájából,
+   offline, soha emlékezetből vett koordináta: `python3 /app/shared/skills/city_geo.py "<city>, <ORSZÁGKÓD>"` (JHT-T351).
+   `found` → mentsd a lat/lon-t `office_verified=false`-szal, `--location-precision city`-vel és `office_address = <city>, <country>`-val.
+   `ambiguous` vagy `not_found` → a koordináták maradjanak NULL (a Scorer az országos ellenőrzésnél marad).
 
 ### Mikor hagyj ki TELJESEN NULL-lal
 

@@ -50,11 +50,10 @@ corretta è **web search PRIMA, geocoding DOPO** — non l'inverso.
    sono verification**. Niente address da web → niente
    `office_verified=true`.
 
-5. **Fallback city-level** quando tutti i tentativi sopra falliscono:
-   geocoda il **nome city** (es. `"Roma, Italy"`), salva con
-   `office_verified=false` e `office_address = <city>, <country>`.
-   **MAI lasciare NULL se la position ha city/country dal location-
-   enrichment** — usa il fallback city.
+5. **Fallback city-level** when every attempt above fails: the centre of the city from the GeoNames list of the image,
+   offline, never coordinates from memory: `python3 /app/shared/skills/city_geo.py "<city>, <COUNTRY CODE>"` (JHT-T351).
+   `found` → save its lat/lon with `office_verified=false`, `--location-precision city` and `office_address = <city>, <country>`.
+   `ambiguous` or `not_found` → leave the coordinates NULL (the Scorer keeps the country check).
 
 ### Quando skippa con TUTTO NULL
 

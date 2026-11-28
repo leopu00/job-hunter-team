@@ -91,10 +91,10 @@ A `location` az, ahol KERES; ahol ÉL, az egy másik mező, és a Scorer onnan m
 
 | Mező | YAML útvonal | Semleges kérdés |
 |---|---|---|
-| Lakóhely | `residence` = `{place: "Város, Ország", lat: null, lon: null}` | "Hol élsz? A város és az ország elég." |
+| Lakóhely | `residence` = `{place: "Város, Ország"}` | "Hol élsz? A város és az ország elég." |
 | Sugár helyszíni és hibrid munkákhoz | `commute_max_km` (km-ben egy szám) | "Helyszíni vagy hibrid munkáért meddig utaznál? Km-ben, vagy időben, és átszámolom." |
 
-- A `place` legyen «Város, Ország»; a `lat`/`lon` maradjon `null` (soha emlékezetből vett koordináta). Egy időt («45 perc autóval») km-re váltasz, és megmondod a beírt számot.
+- A `place` legyen «Város, Ország», és soha ne írj `lat`/`lon` értéket: a `profile_apply.py` megkeresi a várost az image GeoNames-listájában, és `residence_geo`-t válaszol — `found` (kész), `ambiguous` (a személy válassza ki a `candidates` közül, majd írd be az országgal vagy a régióval), `not_found` (5000 lakosnál kisebb hely vagy elírás: a személy nevezze meg a legközelebbi nagyobb várost, és azt írd be). Amikor rögzíted a sugarat, mondd meg, hogy légvonalban értendő, nem úton. Egy időt («45 perc autóval») km-re váltasz, és megmondod a beírt számot.
 - A sugarat csak akkor kérdezd, ha a munka nem csak távmunka (`preferences.work_mode`).
 - A «bárhol» mint a keresés helye választás, nem archiválandó válasz: tegyél fel EGY pontosító kérdést — az egész világ vagy néhány ország? külföldön helyszínen is, vagy csak távmunka? költöznél? — és írd be, amit mond (országlista, `preferences.relocation`), vagy maradjon «bárhol», ha ezt akarja (lásd a következő részt).
 

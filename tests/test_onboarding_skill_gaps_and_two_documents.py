@@ -26,7 +26,10 @@ def _section(text, emoji):
 @pytest.mark.parametrize("lang", SUFFIX)
 def test_the_skill_asks_where_the_person_lives_and_how_far_they_travel(lang):
     place = _section(_skill("onboarding-flow", lang), "📍")
-    assert "`residence`" in place and "`commute_max_km`" in place and "`null`" in place
+    assert "`residence`" in place and "`commute_max_km`" in place
+    # the coordinates come from the GeoNames list of the image, never from the model; the radius is said to be in a straight line
+    assert "`residence_geo`" in place and "`ambiguous`" in place and "`not_found`" in place and "`candidates`" in place
+    assert "lat: null" not in place
     assert "`preferences.work_mode`" in place and "`preferences.relocation`" in place
 
 

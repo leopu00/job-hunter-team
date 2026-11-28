@@ -91,10 +91,10 @@ Sigue preguntando hasta que el usuario diga que pare — más datos = CV y búsq
 
 | Campo | Ruta YAML | Pregunta neutra |
 |---|---|---|
-| Residencia | `residence` = `{place: "Ciudad, País", lat: null, lon: null}` | "¿Dónde vives? Bastan ciudad y país." |
+| Residencia | `residence` = `{place: "Ciudad, País"}` | "¿Dónde vives? Bastan ciudad y país." |
 | Radio para trabajos presenciales e híbridos | `commute_max_km` (un número de km) | "Para un trabajo presencial o híbrido, ¿hasta dónde estás dispuesto a desplazarte? En km, o en tiempo y lo convierto yo." |
 
-- Escribe `place` como «Ciudad, País»; deja `lat`/`lon` en `null` (nunca coordenadas de memoria). Un tiempo («45 minutos en coche») lo conviertes en km y dices la cifra que has escrito.
+- Escribe `place` como «Ciudad, País» y nunca `lat`/`lon`: `profile_apply.py` busca la ciudad en la lista GeoNames de la imagen y responde `residence_geo` — `found` (hecho), `ambiguous` (pregunta cuál de los `candidates` y escríbela con su país o región), `not_found` (un lugar de menos de 5000 habitantes, o una errata: pregunta la ciudad más grande más cercana y escribe esa). Cuando registres el radio, di que es en línea recta, no por carretera. Un tiempo («45 minutos en coche») lo conviertes en km y dices la cifra que has escrito.
 - El radio pregúntalo solo cuando el trabajo no es solo en remoto (`preferences.work_mode`).
 - «En cualquier lugar» como lugar de búsqueda es una elección, no una respuesta para archivar: haz UNA pregunta de detalle — ¿todo el mundo o algunos países? ¿también presencial en el extranjero o solo remoto? ¿te mudarías? — y escribe lo que diga (una lista de países, `preferences.relocation`), o mantén «en cualquier lugar» si es lo que quiere (ver la sección siguiente).
 

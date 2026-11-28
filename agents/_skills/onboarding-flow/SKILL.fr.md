@@ -91,10 +91,10 @@ Continuez à poser des questions jusqu'à ce que l'utilisateur vous demande d'ar
 
 | Champ | Chemin YAML | Question neutre |
 |---|---|---|
-| Résidence | `residence` = `{place: "Ville, Pays", lat: null, lon: null}` | "Où habitez-vous ? La ville et le pays suffisent." |
+| Résidence | `residence` = `{place: "Ville, Pays"}` | "Où habitez-vous ? La ville et le pays suffisent." |
 | Rayon pour les postes sur site et hybrides | `commute_max_km` (un nombre de km) | "Pour un poste sur site ou hybride, jusqu'où êtes-vous prêt à vous déplacer ? En km, ou en temps et je convertis." |
 
-- Écrivez `place` sous la forme « Ville, Pays » ; laissez `lat`/`lon` à `null` (jamais de coordonnées de mémoire). Un temps (« 45 minutes en voiture ») se convertit en km, et vous dites le chiffre écrit.
+- Écrivez `place` sous la forme « Ville, Pays » et jamais `lat`/`lon` : `profile_apply.py` cherche la ville dans la liste GeoNames de l'image et répond `residence_geo` — `found` (fait), `ambiguous` (demandez laquelle parmi les `candidates`, puis écrivez-la avec son pays ou sa région), `not_found` (un lieu de moins de 5000 habitants, ou une faute de frappe : demandez la ville plus grande la plus proche et écrivez celle-là). Quand vous enregistrez le rayon, dites qu'il est à vol d'oiseau, pas par la route. Un temps (« 45 minutes en voiture ») se convertit en km, et vous dites le chiffre écrit.
 - Le rayon ne se demande que si le travail n'est pas uniquement à distance (`preferences.work_mode`).
 - « Partout » comme lieu de recherche est un choix, pas une réponse à classer : posez UNE question de détail — le monde entier ou quelques pays ? sur site à l'étranger aussi, ou à distance seulement ? déménageriez-vous ? — puis écrivez ce qu'elle dit (une liste de pays, `preferences.relocation`), ou gardez « partout » si c'est ce qu'elle veut (voir la section suivante).
 

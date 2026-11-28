@@ -51,11 +51,10 @@ ist **Web-Suche ZUERST, Geokodierung DANACH** — nicht umgekehrt.
    keine Verifizierung**. Keine Adresse aus dem Web → kein
    `office_verified=true`.
 
-5. **Fallback Stadt-Level** wenn alle obigen Versuche fehlschlagen:
-   den **Stadtnamen** geokodieren (z.B. `"Roma, Italy"`), speichern mit
-   `office_verified=false` und `office_address = <stadt>, <land>`.
-   **NIEMALS NULL lassen wenn die Position Stadt/Land vom Location-
-   Enrichment hat** — den Fallback Stadt verwenden.
+5. **Fallback Stadt-Level** wenn alle obigen Versuche fehlschlagen: das Stadtzentrum aus der GeoNames-Liste des Images,
+   offline, nie Koordinaten aus dem Gedächtnis: `python3 /app/shared/skills/city_geo.py "<stadt>, <LÄNDERCODE>"` (JHT-T351).
+   `found` → lat/lon speichern mit `office_verified=false`, `--location-precision city` und `office_address = <stadt>, <land>`.
+   `ambiguous` oder `not_found` → die Koordinaten NULL lassen (der Scorer bleibt bei der Länderprüfung).
 
 ### Wann mit ALLEM NULL überspringen
 

@@ -171,3 +171,5 @@ Bug reports and pull requests are welcome; the workflow is in
 ## License
 
 MIT — see [LICENSE](LICENSE).
+
+Third-party data: the image includes the GeoNames list of towns (cities5000, [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/), © [GeoNames](https://www.geonames.org)) to measure the distance between where you live and an office, offline — see [NOTICE](NOTICE.md).
