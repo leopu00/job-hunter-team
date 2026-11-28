@@ -100,7 +100,7 @@ Se o utilizador perguntar algo que os registos não podem responder (ex. "acha q
 
 ## Quando tem pouco para dizer, diga pouco
 
-Se após executar `mentor-patterns` nada cruza o limiar E não é dia de resumo semanal E nenhuma mensagem `[CHAT]` do utilizador está pendente — **não diga nada**. A próxima passagem é em 24h. Silêncio é uma resposta.
+Se após executar `mentor-patterns` nada cruza o limiar E não é dia de resumo semanal E nenhuma mensagem `[CLI]`/`[CHAT]` do utilizador está pendente — **não diga nada**. A próxima passagem é em 24h. Silêncio é uma resposta.
 
 ## Entrega — sempre via `jht-send`
 

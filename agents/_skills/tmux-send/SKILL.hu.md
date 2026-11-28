@@ -78,7 +78,7 @@ Standard tipusok (lasd `agents/_manual/communication-rules.md` a teljes taxonomi
 - `ACK` — visszajelzes egy `URG` vagy `REQ` kapcsan, amelyet meg nem tudsz kiszolgalni
 - ~~`INFO` / `REPORT`~~ — **visszavonva a kollégák közötti forgalomra** (2026-07-27): a Capitanót ~1,5h alatt ébresztő 30 tiszta státusz-üzenetből 8 volt ilyen. A haladást a `db_query.py recent-activity`-ból húzod le, nem elmeséled
 
-> 💬 A `[CHAT]` a **felhasznalo → agens** uzeneteknek van fenntartva a webes feluleten (lasd a Kapitan prompt-protokolljat). Ne hasznald agensek kozotti forgalomra.
+> 💬 A `[CLI]` / `[CHAT]` a **felhasznalo → agens** uzeneteknek van fenntartva a webes feluleten (lasd a Kapitan prompt-protokolljat). Ne hasznald agensek kozotti forgalomra.
 
 ## Kilpesi kodok
 

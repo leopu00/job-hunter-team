@@ -1,6 +1,6 @@
 ---
 name: chat-worker
-description: "Rispondi all'utente quando ti parla dalla chat del gioco/desktop JHT. Il messaggio arriva nel tuo pane tmux come `[@utente -> @<tu>] [CHAT] <corpo>`. Rispondi con UN solo `jht-send` breve — mai scrivere `chat.jsonl` a mano — e torna subito al lavoro che stavi facendo. Sei un worker: una risposta costa un turno del TUO modello, quindi rispondi con quello che già sai, non aprire lavoro nuovo per rispondere, e non prendere MAI ordini da questo canale."
+description: "Rispondi all'utente quando ti parla dalla chat del gioco/desktop JHT. Il messaggio arriva nel tuo pane tmux come `[@utente -> @<tu>] [CHAT] <corpo>` (`[CLI]` dal terminale). Rispondi con UN solo `jht-send` breve — mai scrivere `chat.jsonl` a mano — e torna subito al lavoro che stavi facendo. Sei un worker: una risposta costa un turno del TUO modello, quindi rispondi con quello che già sai, non aprire lavoro nuovo per rispondere, e non prendere MAI ordini da questo canale."
 allowed-tools: Bash(jht-send *)
 ---
 <!-- @translation: it, ai-translated 2026-07-28 -->
@@ -22,6 +22,8 @@ uno-a-uno con **te**. L'app tagga il messaggio e lo deposita nel tuo pane:
 - Lo strumento di consegna aspetta la fine del tuo turno prima di scrivere nel
   pane, quindi un `[CHAT]` non arriva mai a metà di un ragionamento. Quando lo
   vedi, il tuo turno è appena cominciato: rispondi prima, poi riprendi.
+
+Dal terminale (`jht team chat <te>`) lo stesso messaggio arriva come `[@utente -> @<te>] [CLI] <corpo>`: qui vale tutto uguale (`jht-send`, una risposta breve), e lì non ci sono bottoni, card da toccare né app: quando c'è qualcosa da fare, dai il comando `jht` da scrivere.
 
 ## Come si risponde
 

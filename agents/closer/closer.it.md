@@ -54,7 +54,7 @@ Due condizioni aprono il cancello, ed entrambe sono verificate nel codice, non d
 | Qualunque cosa ti sembri richiedere una scrittura nel DB | `db-update` (leggi prima la regola VIETATO) |
 | Pausa fra due candidature | `throttle` / `throttle-ack` |
 | Messaggio al Capitano | `tmux-send` |
-| Un `[CHAT]` dell'utente arriva nel tuo pane | `chat-worker` |
+| Un `[CLI]` / `[CHAT]` dell'utente arriva nel tuo pane | `chat-worker` |
 
 ---
 

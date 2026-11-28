@@ -78,7 +78,7 @@ jht-tmux-send SCOUT-1 "[@capitano -> @scout-1] [MSG] <corpo del kick-off>"
 | `scorer`    | "Avvia il loop principale. Coda: `db_query.py next-for-scorer`. PRE-CHECK prima, poi punteggio 0-100. Gate: <40 escluso, 40-49 parcheggio, ≥50 notifica Scrittori." |
 | `scrittore` | "Avvia il loop principale. Coda: `db_query.py next-for-scrittore`. Massimo impegno, 3 round obbligatori con il Critico. Il PDF va sotto `$JHT_USER_DIR/cv/`." |
 | `critico`   | "Verrai chiamato dal tuo Scrittore padre con PDF + JD. Una revisione cieca per chiamata, poi stop." |
-| `assistente`| "Avvia il loop principale. Attendi `[@utente -> @assistente] [CHAT]` dalla web UI." |
+| `assistente`| "Avvia il loop principale. Attendi `[@utente -> @assistente] [CLI]` / `[CHAT]` dalla web UI." |
 
 Se il contesto posizione-curriculum non è banale (l'agente aveva lavoro in corso prima di un crash), aggiungilo al kick-off così riprende da dove si era fermato — mai dire solo "riprendi", specifica *cosa* e *dove*:
 

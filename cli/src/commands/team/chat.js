@@ -70,17 +70,30 @@ const SEND_ERRORS = {
   5: 'agent is stuck: the message reached the prompt but was not processed',
 };
 
-/** Invia un messaggio testuale all'agente e ne VERIFICA la consegna. */
-export function sendMessage(session, message) {
+/**
+ * The person writes from the terminal: the agent reads `[@utente -> @<agent>] [CLI] <text>`, its own marker, apart from
+ * `[CHAT]` (the app) and `[TG]` (Telegram), so it answers with commands to type and never with buttons of an app that is
+ * not there; the log keeps the person as the author and the CLI as the transport (JHT-T348).
+ */
+export function cliEnvelope(session, text) {
+  return `[@utente -> @${String(session).toLowerCase().replace(/^jht-/, '')}] [CLI] ${text}`;
+}
+
+/**
+ * Invia un messaggio testuale all'agente e ne VERIFICA la consegna. `fromPerson`: the text is the person's own words
+ * (`jht team send`, `jht team chat`) and travels behind `[CLI]`; a text the product composes (`jht profile import`) does
+ * not wear the person's envelope.
+ */
+export function sendMessage(session, message, { fromPerson = false } = {}) {
   // MAI `tmux send-keys` a mano: esce 0 appena la sessione esiste, quindi
   // dichiarerebbe consegnato anche un messaggio che la TUI ha ignorato. Il
   // wrapper aspetta il pane libero, verifica che il testo sia comparso e
   // ricontrolla che il turno sia davvero partito.
-  const escaped = bashSingleQuote(message);
+  const escaped = bashSingleQuote(fromPerson ? cliEnvelope(session, message) : message);
   const args = `'${session}' '${escaped}'`;
-  // JHT_TMUX_SEND_FROM=user-console: il testo e' libero (nessuna busta) e lo scrive chi
-  // usa la console. Chiede al trasporto di ripulirlo (ESC/CR, invisibili, finte buste)
-  // senza attribuirlo a nessuno: shared/skills/message_origin.py, JHT-T21-b.
+  // JHT_TMUX_SEND_FROM=user-console: lo scrive chi usa la console, che aspetta il comando (il trasporto gli concede
+  // l'attesa del composer). Il testo dopo la busta [CLI] il trasporto lo recinta come quello della chat:
+  // shared/skills/message_origin.py, JHT-T21 e JHT-T348.
   const from = 'JHT_TMUX_SEND_FROM=user-console';
   const cmd =
     `if command -v jht-tmux-send >/dev/null 2>&1; then ${from} jht-tmux-send ${args}; ` +
@@ -433,7 +446,7 @@ export function sendAction(agentArg, message) {
     return;
   }
 
-  const r = sendMessage(session, message);
+  const r = sendMessage(session, message, { fromPerson: true });
   if (!r.ok) {
     console.error(c.red(`Failed sending: ${(r.error || '').split('\n')[0]}`));
     process.exitCode = 1;
@@ -656,7 +669,7 @@ export async function chatAction(agentArg, options = {}) {
       console.log(c.dim(`  Send it again when it has answered (/read shows the answer). Your text: ${msg.length > 80 ? msg.slice(0, 80) + '…' : msg}`));
       return false;
     }
-    const r = sendMessage(session, msg);
+    const r = sendMessage(session, msg, { fromPerson: true });
     if (!r.ok) {
       console.log(c.red(`  : Failed sending: ${(r.error || '').split('\n')[0]}`));
       return false;

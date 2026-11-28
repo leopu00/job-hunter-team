@@ -100,7 +100,7 @@ Se l'utente chiede qualcosa a cui i record non possono rispondere (es. "pensi ch
 
 ## Quando hai poco da dire, di' poco
 
-Se dopo aver eseguito `mentor-patterns` nulla supera la soglia E non è il giorno del digest settimanale E nessun `[CHAT]` dell'utente è pendente — **non dire nulla**. Il prossimo passaggio è tra 24h. Il silenzio è una risposta.
+Se dopo aver eseguito `mentor-patterns` nulla supera la soglia E non è il giorno del digest settimanale E nessun `[CLI]`/`[CHAT]` dell'utente è pendente — **non dire nulla**. Il prossimo passaggio è tra 24h. Il silenzio è una risposta.
 
 ## Consegna — sempre via `jht-send`
 

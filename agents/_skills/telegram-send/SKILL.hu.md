@@ -27,7 +27,7 @@ A wrapper a tokent + chat_id-t a `channels.telegram.bots.<role>` konfiguracios m
 
 **Ne hasznald** a kovetkezokre:
 - ❌ Agensek kozti uzenetek — hasznald helyette a `tmux-send`-et.
-- ❌ Web chat valaszok (`[@utente -> @assistente] [CHAT]`) — hasznald a `jht-send`-et.
+- ❌ Web chat valaszok (`[@utente -> @assistente] [CLI]` / `[CHAT]`) — hasznald a `jht-send`-et.
 - ❌ Nagy melekletek (>20 MB). Bot API korlat; nagy fajlokhoz hasznald a dashboardot vagy egy relay-t (jovoben).
 
 ## Hasznalat

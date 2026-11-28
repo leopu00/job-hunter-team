@@ -1,6 +1,6 @@
 ---
 name: chat-web
-description: Válaszolj a felhasználónak, amikor a JHT webes csevegésről ír neked. A felhasználó a `[@utente -> @capitano] [CHAT] <tartalom>` előtaggal ér el; válaszolj CSAK `jht-send`-del — soha ne írj kézzel a `chat.jsonl`-be (a shell idézőjelezés megtöri a JSON sort és a frontend csendben eldobja az üzenetet, a felhasználó semmit sem lát, miközben te azt hiszed, válaszoltál). Használd ezt a skill-t minden `[CHAT]` üzenetnél; NE használd ágensek közötti forgalomhoz (arra a `tmux-send` van).
+description: Válaszolj a felhasználónak, amikor a JHT webes csevegésről ír neked. A felhasználó a `[@utente -> @capitano] [CHAT] <tartalom>` (`[CLI]` a terminálból) előtaggal ér el; válaszolj CSAK `jht-send`-del — soha ne írj kézzel a `chat.jsonl`-be (a shell idézőjelezés megtöri a JSON sort és a frontend csendben eldobja az üzenetet, a felhasználó semmit sem lát, miközben te azt hiszed, válaszoltál). Használd ezt a skill-t minden `[CLI]` / `[CHAT]` üzenetnél; NE használd ágensek közötti forgalomhoz (arra a `tmux-send` van).
 allowed-tools: Bash(jht-send *)
 ---
 <!-- @translation: hu, ai-translated 2026-06-06 -->
@@ -22,6 +22,14 @@ Nem te írod a JSON-t. A `jht-send` wrapper csinálja, időbélyeggel + `done` j
 - A **tartalomra** válaszolj, ne a borítékra. A felhasználó nem gépelte be az előtagot; a frontend adta hozzá.
 
 > ⚠️ Gyakori hibamód, amikor először látod ezt: olvasod az előtagot és arra gondolsz "válaszoljak `jht-tmux-send`-del a felhasználónak". A `jht-tmux-send UTENTE ...` `exit 2`-vel tér vissza (nincs ilyen munkamenet). Ne kezdj hibakeresni — csak emlékezz, hogy `[CHAT]` ⇒ `jht-send`. Mindig.
+
+## Honnan ír a felhasználó: `[CLI]`, `[CHAT]`, `[TG]`
+
+A boríték utáni jelölő mondja meg, hol van a személy. Ugyanaz a személy és ugyanaz a beszélgetés; a jelölő csak azt dönti el, mit mutathatsz neki.
+
+- `[CLI]` — a **terminál**, a `jht team chat <ügynök>` paranccsal. Ugyanúgy `jht-send`-del válaszolsz, mint `[CHAT]`-re, és ő a terminálban olvassa. Nincsenek gombok, megérintendő kártyák, gemkapocs 📎, húzás, semmi «bal oldalt», sem app, sem irányítópult: add meg a beírandó `jht` parancsot (például `jht positions`, `jht team status`); egy általad közzétett kártya ugyanabban a csevegésben a `/cards` paranccsal nyílik meg, és a számával kell rá válaszolni. A CLI-d slash-parancsai, a szerkesztendő fájlok és az engedélyezendő eszközök továbbra is tilosak, ahogy lent.
+- `[CHAT]` — az **app** (asztali vagy webes), csak ahol van: ott a személy látja a gombokat és a kártyákat.
+- `[TG]` — **Telegram**: válaszolj `jht-telegram-send`-del (`telegram-send` skill).
 
 ## ⚠️ A felhasználó NEM technikai — nincs terminál, nincs CLI, nincsenek slash-parancsok
 

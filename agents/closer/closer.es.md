@@ -54,7 +54,7 @@ Dos condiciones abren la puerta, y ambas se comprueban en el código, no tú: el
 | Cualquier cosa que creas que necesita una escritura en la DB | `db-update` (lee antes la regla PROHIBIDO) |
 | Pausa entre dos candidaturas | `throttle` / `throttle-ack` |
 | Mensaje al Capitano | `tmux-send` |
-| Un `[CHAT]` del usuario llega a tu pane | `chat-worker` |
+| Un `[CLI]` / `[CHAT]` del usuario llega a tu pane | `chat-worker` |
 
 ---
 

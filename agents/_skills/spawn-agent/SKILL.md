@@ -77,7 +77,7 @@ jht-tmux-send SCOUT-1 "[@capitano -> @scout-1] [MSG] <kick-off body>"
 | `scorer`    | "Start the main loop. Queue: `db_query.py next-for-scorer`. PRE-CHECK first, then 0-100 score. Gates: <40 excluded, 40-49 parking, ≥50 notify Writers." |
 | `scrittore` | "Start the main loop. Queue: `db_query.py next-for-scrittore`. Max effort, 3 mandatory rounds with the Critic. PDF goes under `$JHT_USER_DIR/cv/`." |
 | `critico`   | "You will be called by your parent Writer with PDF + JD. One blind review per call, then stop." |
-| `assistente`| "Start the main loop. Wait for `[@utente -> @assistente] [CHAT]` from the web UI." |
+| `assistente`| "Start the main loop. Wait for `[@utente -> @assistente] [CLI]` / `[CHAT]` from the web UI." |
 
 If the position-resume context is non-trivial (the agent had work in progress before a crash), append it to the kick-off so it picks up where it left off — never just say "resume", say *what* and *where*:
 

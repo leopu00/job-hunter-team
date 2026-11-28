@@ -173,7 +173,7 @@ MSG_PAUSA_SENTINELLA = (
 )
 
 MSG_PAUSA_ASSISTENTE = (
-    "[PAUSA] The user has paused the team{reason} (from the app). You are NOT paused: stay "
+    "[PAUSA] The user has paused the team{reason}. You are NOT paused: stay "
     "available to the user. What is true, and what you may tell them: every session is still "
     "on with its context, nobody works, nothing new starts until they resume. Do not wake "
     "the Capitano for new requests or tickets: tell the user they wait for the resume."
