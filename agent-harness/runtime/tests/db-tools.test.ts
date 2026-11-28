@@ -100,7 +100,7 @@ describe("db_insert position against db_insert.py", () => {
         expect(result.ok).toBe(py.exitCode === 0);
         // D-4: the existing row's company and title come back fenced; the rest is the Python's text.
         const unfenced = result.content.replaceAll("\u27e6EXT\u00b70badf00d\u27e7", "").replaceAll("\u27e6/EXT\u00b70badf00d\u27e7", "");
-        expect(unfenced).toBe(py.exitCode === 0 ? py.stdout.trimEnd() : `${py.stdout.trimEnd()}\n(exit code ${py.exitCode})`);
+        expect(unfenced).toBe(py.exitCode === 0 ? py.stdout.trimEnd() : `${(py.stdout + (py.stderr ?? "")).trimEnd()}\n(exit code ${py.exitCode})`);
       }
       // D-5: found_by is the agent, whatever --found-by said; every other column is the Python's.
       const withoutFoundBy = (snap: ReturnType<typeof snapshot>) => ({
@@ -120,8 +120,42 @@ describe("db_insert position against db_insert.py", () => {
     expect(dup.content).toContain(
       "(\u27e6EXT\u00b70badf00d\u27e7Acme\u27e6/EXT\u00b70badf00d\u27e7 \u2014 \u27e6EXT\u00b70badf00d\u27e7Software Engineer, Junior\u27e6/EXT\u00b70badf00d\u27e7)",
     );
-    await insert(["position", "--title", "New", "--company", "Z", "--url", "https://z.example/1", "--found-by", "capitano"]);
+    const candidate = ["position", "--title", "New", "--company", "Z", "--url", "https://z.example/1", "--found-by", "capitano",
+      "--source", "synthetic", "--jd-text", "Complete synthetic description.", "--requirements", "TypeScript"];
+    const checked = await insert([...candidate, "--check-only", "--link-verified", "--filters-checked"]);
+    expect(checked.ok).toBe(true);
+    await insert([...candidate, "--scout-check", JSON.parse(checked.content).scout_check]);
     expect(db.prepare("SELECT found_by FROM positions WHERE url = ?").get("https://z.example/1")).toEqual({ found_by: "scout-1" });
+  });
+
+  it.skipIf(skills === null)("redeems Python and native receipts across both paths, once, with the same candidate data", async () => {
+    const path = join(root, "shared.db");
+    const db = seeded(path);
+    const insert = tools(db)("db_insert");
+    const env = { JHT_DB: path, JHT_HOME: join(root, "home"), JHT_AGENT_NAME: "scout-1" };
+    const args = [...INSERTS[0]!];
+    // Non-ASCII and a newline exercise the identical canonical fingerprint, not just the token table.
+    args[args.indexOf("--title") + 1] = "Développeur 😀";
+    const pyCheck = runPython(skills!, ["db_insert.py", ...args, "--check-only", "--link-verified", "--filters-checked"], env);
+    expect(pyCheck.status, pyCheck.stderr).toBe(0);
+    expect((await insert([...args, "--scout-check", JSON.parse(pyCheck.stdout).scout_check])).ok).toBe(true);
+    expect(db.prepare("SELECT count(*) AS n FROM scout_position_checks").get()).toEqual({ n: 0 });
+    const next = [...args];
+    next[next.indexOf("--url") + 1] = "https://other.example/2";
+    next[next.indexOf("--company") + 1] = "Another Synthetic Company";
+    const nativeCheck = await insert([...next, "--check-only", "--link-verified", "--filters-checked"]);
+    expect(nativeCheck.ok).toBe(true);
+    const token = JSON.parse(nativeCheck.content).scout_check as string;
+    const changed = [...next];
+    changed[changed.indexOf("--company") + 1] = "Changed Company";
+    expect((await insert([...changed, "--scout-check", token])).ok).toBe(false);
+    db.prepare("UPDATE scout_position_checks SET expires = 0").run();
+    expect((await insert([...next, "--scout-check", token])).ok).toBe(false);
+    const renewed = await insert([...next, "--check-only", "--link-verified", "--filters-checked"]);
+    const pyInsert = runPython(skills!, ["db_insert.py", ...next, "--scout-check", JSON.parse(renewed.content).scout_check], env);
+    expect(pyInsert.status, pyInsert.stderr).toBe(0);
+    expect(db.prepare("SELECT count(*) AS n FROM scout_position_checks").get()).toEqual({ n: 0 });
+    db.close();
   });
 
   it("refuses what the SCOUT does not write, and logs a skipped duplicate like the Python", async () => {

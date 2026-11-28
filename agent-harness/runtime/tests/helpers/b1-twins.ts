@@ -202,8 +202,24 @@ export type Step = [agent: string, script: string, tool: string, argv: string[]]
 export async function play(t: Twins, steps: Step[]): Promise<Array<{ step: string; tui: boolean; api: boolean; apiSaid: string }>> {
   const out: Array<{ step: string; tui: boolean; api: boolean; apiSaid: string }> = [];
   for (const [agent, script, tool, argv] of steps) {
-    const py = tui(t, agent, script, argv);
-    const ours = await api(t, agent, tool, argv);
+    let pyArgs = argv;
+    let apiArgs = argv;
+    if (/^scout(?:-\d+)?$/.test(agent) && script === "db_insert.py" && argv[0] === "position"
+        && !argv.some((flag) => ["--check-only", "--scout-check"].includes(flag))) {
+      const candidate = [...argv];
+      for (const [flag, value] of [["--source", "synthetic"], ["--jd-text", "Complete synthetic description."], ["--requirements", "Synthetic requirements."]]) {
+        if (!candidate.includes(flag!)) candidate.push(flag!, value!);
+      }
+      const check = [...candidate, "--check-only", "--link-verified", "--filters-checked"];
+      const pyCheck = tui(t, agent, script, check);
+      const apiCheck = await api(t, agent, tool, check);
+      if (pyCheck.status === 0 && apiCheck.ok) {
+        pyArgs = [...candidate, "--scout-check", JSON.parse(pyCheck.stdout).scout_check as string];
+        apiArgs = [...candidate, "--scout-check", JSON.parse(apiCheck.content).scout_check as string];
+      }
+    }
+    const py = tui(t, agent, script, pyArgs);
+    const ours = await api(t, agent, tool, apiArgs);
     out.push({ step: `${agent} ${tool} ${argv.slice(0, 3).join(" ")}`, tui: py.status === 0, api: ours.ok, apiSaid: ours.content.split("\n")[0] ?? "" });
   }
   return out;

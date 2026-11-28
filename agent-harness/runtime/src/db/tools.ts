@@ -14,6 +14,7 @@
  * runtime's (`jobsDbPath`), never an argument.
  */
 
+import { createHash, randomBytes } from "node:crypto";
 import { appendFileSync, mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 
@@ -174,6 +175,9 @@ export function createDbTools(given: DbToolsOptions): ToolHandler[] {
       if (typeof a[field] === "string") a[field] = flattenExternalValue(a[field]);
     }
 
+    if (placeholderLocation(a["location"])) {
+      return { stdout: "", stderr: "LOCATION_PLACEHOLDER: INSERT refused. Use the ad's actual place or omit --location if unknown.\n", exitCode: 5 };
+    }
     const db = options.db();
     db.exec("BEGIN IMMEDIATE");
     let positionId: number;
@@ -195,6 +199,16 @@ export function createDbTools(given: DbToolsOptions): ToolHandler[] {
           stdout: `⚠\ufe0f  DUPLICATE (${dup.matchType}): '${a["company"]} — ${a["title"]}' already exists as #${dup.row.id} (${fence.inline(dup.row.company)} — ${fence.inline(dup.row.title)}). INSERT aborted.\n`,
           exitCode: 1,
         };
+      }
+      if (/^scout(?:-\d+)?$/i.test(options.agent) || /^scout(?:-\d+)?$/i.test(String(a["found_by"] ?? ""))) {
+        const checked = scoutPositionCheck(db, a, /^scout(?:-\d+)?$/i.test(options.agent) ? options.agent : String(a["found_by"]));
+        if (checked) {
+          db.exec(checked.exitCode === 0 ? "COMMIT" : "ROLLBACK");
+          return checked;
+        }
+      } else if (a["check_only"]) {
+        db.exec("ROLLBACK");
+        return { stdout: "", stderr: "SC09_REFUSED: --check-only is for a Scout; imports use position directly.\n", exitCode: 5 };
       }
       companyId = resolveCompanyId(db, a["company"] as string);
       const country = deriveCountry(a["location"], a["source"] as string | null, a["url"] as string | null);
@@ -613,8 +627,49 @@ const POSITION_INSERT: CommandSpec = {
     { flag: "--found-by" },
     { flag: "--deadline" },
     { flag: "--notes" },
+    { flag: "--check-only", storeTrue: true },
+    { flag: "--link-verified", storeTrue: true },
+    { flag: "--filters-checked", storeTrue: true },
+    { flag: "--scout-check" },
   ],
 };
+
+const SCOUT_CHECK_FLAGS = new Set(["check_only", "link_verified", "filters_checked", "scout_check"]);
+
+function placeholderLocation(value: Parsed[string]): boolean {
+  if (!value) return false;
+  const text = String(value).toLowerCase().trim().replace(/\s+/gu, " ");
+  return new Set(["n/a", "na", "none", "null", "unknown", "tbd", "tbc", "not specified", "not available",
+    "location", "location here", "sede", "sede da verificare", "non specificata", "non specificato", "da definire", "-", "?", "..."]).has(text)
+    || /[<>{}\[\]]|placeholder|segnaposto/u.test(text);
+}
+
+/** Same receipt table and sorted Python JSON fingerprint as db_insert.py; called inside the INSERT transaction. */
+function scoutPositionCheck(db: Database, a: Parsed, actor: string): ScriptResult | null {
+  const refuse = (reason: string): ScriptResult => ({ stdout: "", exitCode: 5,
+    stderr: "SC09_REFUSED: " + reason + ". Run position --check-only --link-verified --filters-checked "
+      + "with this candidate's full data, then position --scout-check <receipt> with the SAME data.\n" });
+  db.exec("CREATE TABLE IF NOT EXISTS scout_position_checks "
+    + "(actor TEXT PRIMARY KEY, token TEXT NOT NULL, fingerprint TEXT NOT NULL, expires REAL NOT NULL)");
+  const data = Object.fromEntries(Object.entries(a).filter(([key]) => !SCOUT_CHECK_FLAGS.has(key)).sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0));
+  const fingerprint = createHash("sha256").update(pyJson(data)).digest("hex");
+  if (a["check_only"]) {
+    if (!a["link_verified"] || !a["filters_checked"]) return refuse("confirm the live canonical link and per-candidate filters after reading the full JD");
+    if (["title", "company", "url", "source", "jd_text", "requirements"].some((key) => !String(a[key] ?? "").trim())) {
+      return refuse("title, company, URL, source, full JD and requirements must be nonempty");
+    }
+    const token = randomBytes(16).toString("hex");
+    db.prepare("INSERT OR REPLACE INTO scout_position_checks VALUES (?, ?, ?, ?)").run(actor, token, fingerprint, Date.now() / 1000 + 900);
+    return { stdout: pyJson({ scout_check: token, expires_in_s: 900 }) + "\n", exitCode: 0 };
+  }
+  const row = db.prepare("SELECT token, fingerprint, expires FROM scout_position_checks WHERE actor = ?").get(actor) as
+    { token: string; fingerprint: string; expires: number } | undefined;
+  if (!a["scout_check"] || !row || row.token !== a["scout_check"] || row.fingerprint !== fingerprint || row.expires < Date.now() / 1000) {
+    return refuse("missing, expired, reused or mismatched per-candidate receipt");
+  }
+  db.prepare("DELETE FROM scout_position_checks WHERE actor = ?").run(actor);
+  return null;
+}
 
 /** The entities of `db_insert.py`, each written here by its own branch. */
 

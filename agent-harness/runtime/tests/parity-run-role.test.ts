@@ -44,7 +44,7 @@ function roleWith(env: Record<string, string>, ...args: string[]) {
 }
 
 describe("npm run role -- --role scout (a product role)", () => {
-  it("runs SCOUT from agents/scout on the native tools and traces every turn", async () => {
+  it("runs SCOUT from agents/scout, refuses unchecked mock inserts and traces every turn", async () => {
     // The image's layout, not this checkout's: /app holds the runtime and agents/, no shared/ (T10b).
     const imageRoot = join(root, "image-app");
     await cp(join(RUNTIME, "..", "..", "agents"), join(imageRoot, "agents"), { recursive: true });
@@ -73,9 +73,9 @@ describe("npm run role -- --role scout (a product role)", () => {
       ["scout_coord", "accepted"],
       ["scout_coord", "accepted"],
       ["feedback_query", "accepted"],
-      // T6: checked and inserted; then the same ad again, skipped by the check and refused by the insert.
+      // The legacy mock skips the per-candidate check: SC-09 refuses both attempts.
       ["scout_dedup", "accepted"],
-      ["db_insert", "accepted"],
+      ["db_insert", "failed"],
       ["scout_dedup", "accepted"],
       ["db_insert", "failed"],
       ["db_query", "accepted"],
@@ -107,17 +107,15 @@ describe("npm run role -- --role scout (a product role)", () => {
     // A role creates its own deliverables folder and no other: the SCOUT delivers none.
     expect(await readdir(join(root, "api", "user"))).toEqual([]);
 
-    // One position in the runtime's jobs.db, and the second attempt was told why.
+    // A canned model can claim it found a position; without SC-09 the database still receives nothing.
     const results = records.filter((r) => r.type === "tool_finished").map((r) => String(r["result"]));
     expect(results[7]).toBe('{"action": "insert"}');
-    expect(results[8]).toMatch(/^Position inserted with ID: 1 \(company_id=NULL/);
-    expect(results[9]).toBe('{"action": "skip", "level": 1, "existing_id": 1, "match": "URL esatto"}\n(exit code 10)');
-    expect(results[10]).toMatch(/^\u26a0\ufe0f  DUPLICATE \(URL esatto\).*INSERT aborted\.\n\(exit code 1\)$/);
-    expect(results[11]).toMatch(/^FOUND: #1 .*Mock Ltd.* \[new\]$/);
+    expect(results[8]).toContain("SC09_REFUSED");
+    expect(results[9]).toBe('{"action": "insert"}');
+    expect(results[10]).toContain("SC09_REFUSED");
+    expect(results[11]).toMatch(/^NOT IN THE DATABASE YET:/);
     const db = openJobsDb(join(root, "api", "db", "jobs.db"));
-    expect(db.prepare("SELECT title, found_by, status FROM positions").all()).toEqual([
-      { title: "Mock Engineer", found_by: "scout-1", status: "new" },
-    ]);
+    expect(db.prepare("SELECT title, found_by, status FROM positions").all()).toEqual([]);
     db.close();
 
     // T10: every document the prompt and the home's Markdown point at is a file this agent can open.
