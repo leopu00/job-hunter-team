@@ -176,6 +176,7 @@ export default {
   "agents.stopped": "leállítva",
   "agents.sessions_in_tmux": "Munkamenetnevek a tmuxban:",
   "team.captain_tools": "A Kapitány és az Őrszem néhány perc múlva magától elindul, amikor a teljes image eszközei készen állnak. A bevezetés kész: nincs teendőd.",
+  "team.captain_tools_failed": "A Kapitány és az Őrszem a teljes image eszközeire vár, de a letöltésük nem sikerült. Futtasd: jht tools pull (a csapat magától elindul, amikor megérkeznek).",
   "container.team_stopped": "A csapat le van állítva (te állítottad le): a konténer fut, az ügynökök nem. Az újraindításhoz: jht team start",
   "team.help.title_usage": "Használat:",
   "team.help.title_arguments": "Argumentumok:",

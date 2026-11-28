@@ -31,7 +31,11 @@ if [ ! -f "$ENGINE" ]; then
   exit 0
 fi
 
-UNTIL="$(python3 "$ENGINE" status "$AGENT" --print until 2>/dev/null || true)"
+UNTIL="$(python3 "$ENGINE" status "$AGENT" --print wait 2>/dev/null || true)"
+if [ "$UNTIL" = IDLE ]; then
+  echo "WAITING_FOR_WORK — END YOUR TURN. Do not poll or rearm; the engine will wake you when work is available."
+  exit 0
+fi
 if [ -z "$UNTIL" ]; then
   exit 0
 fi
@@ -41,7 +45,14 @@ fi
 trap 'exit 0' INT TERM
 while :; do
   NOW=$(date '+%s')
-  if [ "$NOW" -ge "$UNTIL" ]; then break; fi
+  if [ "$NOW" -ge "$UNTIL" ]; then
+    UNTIL="$(python3 "$ENGINE" status "$AGENT" --print wait)"
+    if [ "$UNTIL" = IDLE ]; then
+      echo "WAITING_FOR_WORK — END YOUR TURN. Do not poll or rearm; the engine will wake you when work is available."
+      break
+    fi
+    [ -n "$UNTIL" ] && [ "$NOW" -lt "$UNTIL" ] || break
+  fi
   REMAINING=$(( UNTIL - NOW ))
   CHUNK=15
   if [ "$REMAINING" -lt "$CHUNK" ]; then CHUNK="$REMAINING"; fi

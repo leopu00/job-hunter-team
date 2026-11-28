@@ -154,13 +154,34 @@ function Write-ToolsStatusJson {
 # The pull itself, in a detached process (`jht tools pull-job`): its end is on disk (the image, or the failed marker), and in the notice.
 # With `auto` (the job Invoke-ToolsKick starts) it goes on: it waits for the profile and makes the switch, holding the lock, so a
 # second `jht up` finds the job there and starts no other.
+# A pull that fails (the network went away for a while: JHT-T367) is tried again by itself, as in jht-tools.sh
+# (tools_pull_with_retries): after JHT_TOOLS_RETRY_WAITS seconds (60 120 300 600, then every 900), for JHT_TOOLS_RETRY_FOR seconds
+# in all (a day), as long as the core tier is there; the engine keeps the layers it has. Between two tries the notice says `pulling`
+# with the reason `retrying`.
+function Invoke-ToolsPullWithRetries {
+  param([string]$Since)
+  $waits = @(([string]([Environment]::GetEnvironmentVariable('JHT_TOOLS_RETRY_WAITS')) -split '\s+') | Where-Object { $_ -match '^[0-9]{1,6}$' } | ForEach-Object { [int]$_ })
+  if ($null -eq [Environment]::GetEnvironmentVariable('JHT_TOOLS_RETRY_WAITS')) { $waits = @(60, 120, 300, 600, 900) }
+  $total = Get-ToolsWaitSeconds 'JHT_TOOLS_RETRY_FOR' 86400
+  $spent = 0
+  $wait = 900
+  $next = 0
+  while ($true) {
+    if (Test-ToolsFullHere) { return $true }
+    & { $ErrorActionPreference = 'Continue'; & docker pull $DefaultRuntimeImage *> $null }
+    if ($LASTEXITCODE -eq 0 -and (Test-ToolsFullHere)) { return $true }
+    if (-not (Test-Path -LiteralPath $RuntimeTierFile -PathType Leaf)) { return $false }
+    if ($next -lt $waits.Count) { $wait = $waits[$next]; $next++ }
+    if (($spent + $wait) -gt $total) { return $false }
+    Write-ToolsNotice 'pulling' 'core' 'retrying' $Since
+    Start-Sleep -Seconds $wait
+    $spent += $wait
+  }
+}
+
 function Invoke-ToolsPullJob {
   param([string]$Since, [string]$Auto = '')
-  $here = Test-ToolsFullHere
-  if (-not $here) {
-    & { $ErrorActionPreference = 'Continue'; & docker pull $DefaultRuntimeImage *> $null }
-    $here = ($LASTEXITCODE -eq 0 -and (Test-ToolsFullHere))
-  }
+  $here = Invoke-ToolsPullWithRetries $Since
   if ($here) {
     Remove-Item -LiteralPath $ToolsFailedFile -Force -ErrorAction SilentlyContinue
     Write-ToolsNotice 'ready' 'core' '' $Since
@@ -326,27 +347,11 @@ function Get-ToolsWaitSeconds {
   return $Default
 }
 
-# ready.flag means "the team starts", not "the onboarding is over": the Assistente sets it with three fields and goes on asking.
-# The switch stops the container the conversation runs in, so it waits for the first of: profile\onboarding-done.flag, which the
-# Assistente writes when its questions are over or the person says to stop (skill profile-yaml), or JHT_TOOLS_ONBOARDING_MAX
-# seconds (1800) since ready.flag. The flag is the container's: it only says WHEN, and a link in its place is not believed.
-function Wait-ToolsOnboardingDone {
-  param($Flag)
-  $cap = Get-ToolsWaitSeconds 'JHT_TOOLS_ONBOARDING_MAX' 1800
-  $step = [Math]::Max(1, (Get-ToolsWaitSeconds 'JHT_TOOLS_WAIT_STEP' 15))
-  $doneFlag = Join-Path (Join-Path $JhtHome 'profile') 'onboarding-done.flag'
-  $since = $Flag.LastWriteTimeUtc
-  while ($true) {
-    if (-not (Test-Path -LiteralPath $RuntimeTierFile -PathType Leaf)) { return }
-    $item = Get-Item -LiteralPath $doneFlag -Force -ErrorAction SilentlyContinue
-    if ($item -and -not $item.PSIsContainer -and (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -eq 0)) { return }
-    if (([DateTime]::UtcNow - $since).TotalSeconds -ge $cap) { return }
-    Start-Sleep -Seconds $step
-  }
-}
-
-# The job waits for the profile (the onboarding has closed), then a little more, so the switch does not cut the last answers of the
-# onboarding short; the tier file gone means someone made the switch by hand (`jht tools switch`).
+# The job waits for profile\ready.flag (the team starts), then a few seconds, and makes the switch (JHT-T362). It no longer waits
+# for the end of the onboarding: the Capitano and the roles that search wait for this switch on the core image (captain_gate.py),
+# and a switch held for the end of the onboarding (or half an hour) kept the team without a Scout while its first run went on. The
+# chat of the onboarding says the restart, keeps the line and comes back by itself (JHT-T346). The tier file gone means someone
+# made the switch by hand (`jht tools switch`).
 function Wait-ToolsProfileAndSwitch {
   $flag = Join-Path $JhtHome 'profile\ready.flag'
   $step = Get-ToolsWaitSeconds 'JHT_TOOLS_WAIT_STEP' 15
@@ -356,7 +361,6 @@ function Wait-ToolsProfileAndSwitch {
     $item = Get-Item -LiteralPath $flag -Force -ErrorAction SilentlyContinue
     if ($item -and -not $item.PSIsContainer -and (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -eq 0)) {
       Start-Sleep -Seconds (Get-ToolsWaitSeconds 'JHT_TOOLS_SWITCH_GRACE' 30)
-      Wait-ToolsOnboardingDone $item
       Invoke-ToolsSwitchAuto
       return
     }

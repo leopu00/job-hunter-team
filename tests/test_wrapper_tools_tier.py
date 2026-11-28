@@ -33,7 +33,7 @@ case "$1" in
       [ -e "$FAKE/full-present" ] && { echo sha256:fullid; exit 0; }; exit 1
     fi
     [ -e "$FAKE/full-present" ] && exit 0; exit 1 ;;
-  pull) printf '%s\\n' "$*" >> "$FAKE/pulls"; n=0; while [ -e "$FAKE/pull-hold" ] && [ "$n" -lt 300 ]; do sleep 0.1; n=$((n+1)); done; [ -e "$FAKE/pull-fails" ] && exit 1; touch "$FAKE/full-present"; exit 0 ;;
+  pull) printf '%s\\n' "$*" >> "$FAKE/pulls"; n=0; while [ -e "$FAKE/pull-hold" ] && [ "$n" -lt 300 ]; do sleep 0.1; n=$((n+1)); done; [ -e "$FAKE/pull-fails" ] && exit 1; if [ -s "$FAKE/pull-fails-left" ]; then left=$(cat "$FAKE/pull-fails-left"); if [ "$left" -gt 0 ]; then echo $((left-1)) > "$FAKE/pull-fails-left"; exit 1; fi; fi; touch "$FAKE/full-present"; exit 0 ;;
 esac
 exit 0
 """
@@ -80,7 +80,7 @@ def box(tmp_path):
             + body
         )
         return subprocess.run(["bash", "-c", script, *argv], capture_output=True, text=True, timeout=60,
-                              env={**os.environ, "LC_ALL": "C", **env})
+                              env={**os.environ, "LC_ALL": "C", "JHT_TOOLS_RETRY_FOR": "0", **env})   # one try, unless a test asks more
 
     def tier(attested: bool = True, text: str = "core\n"):
         path = runtime / "runtime-tier"
@@ -343,7 +343,7 @@ def test_a_real_state_folder_and_a_plain_old_tools_json_are_written_as_before(bo
 
 # ── tools_kick: the CLI keeps the tools moving, as the desktop app's round did ───────────────────────────────────────────────
 
-KICK_ENV = {"JHT_TOOLS_WAIT_STEP": "1", "JHT_TOOLS_SWITCH_GRACE": "0", "JHT_TOOLS_SWITCH_NOTICE_WAIT": "0", "JHT_TOOLS_WAIT_MAX": "60", "JHT_TOOLS_QUIET_MAX": "600", "JHT_TOOLS_ONBOARDING_MAX": "0"}   # a switch that waited for nothing would miss every deadline below
+KICK_ENV = {"JHT_TOOLS_WAIT_STEP": "1", "JHT_TOOLS_SWITCH_GRACE": "0", "JHT_TOOLS_SWITCH_NOTICE_WAIT": "0", "JHT_TOOLS_WAIT_MAX": "60", "JHT_TOOLS_QUIET_MAX": "600"}   # a switch that waited for nothing would miss every deadline below
 
 
 def _wait_until(check, what):
@@ -761,50 +761,44 @@ def _ready(box, age: float = 0):
     os.utime(flag, (stamp, stamp))
 
 
-def test_the_switch_waits_for_the_end_of_the_onboarding_not_for_ready_flag(box):
-    """ready.flag is «the team starts» (three fields), not «the onboarding is over»: the Assistente goes on asking. Giro Linux:
-    the switch closed the chat in the middle of the onboarding. It waits for onboarding-done.flag, which the Assistente writes
-    when its questions are over."""
+def test_the_switch_goes_at_ready_flag_without_waiting_for_the_end_of_the_onboarding(box):
+    """JHT-T362: on a Linux server with the CLI only the switch waited for onboarding-done.flag or half an hour after ready.flag,
+    while the Capitano started on the core image after ten minutes and every Scout was refused (exit 75). The switch now goes at
+    ready.flag (the app's round does the same with `jht tools switch`), and the Capitano waits for it."""
     tier = box.tier()
     (box.fake / "full-present").write_text("", encoding="utf-8")
     _ready(box)
-    assert box.run("tools_kick", **{**KICK_ENV, "JHT_TOOLS_ONBOARDING_MAX": "600"}).returncode == 0
-    time.sleep(3)
-    assert tier.exists() and _calls(box) == [], "the switch did not wait for the end of the onboarding"
-    (box.home / "profile" / "onboarding-done.flag").write_text("2026-11-15T21:40:00Z\n", encoding="utf-8")
-    _wait_until(lambda: not tier.exists() and _calls(box) == ["down", "up"], f"no switch after the onboarding: {_calls(box)}")
+    assert not (box.home / "profile" / "onboarding-done.flag").exists()
+    assert box.run("tools_kick", **{**KICK_ENV, "JHT_TOOLS_ONBOARDING_MAX": "1800"}).returncode == 0
+    _wait_until(lambda: not tier.exists() and _calls(box) == ["down", "up"], f"no switch at ready.flag: {_calls(box)}")
 
 
-def test_a_link_in_place_of_onboarding_done_is_not_believed(box, tmp_path):
+def test_an_onboarding_done_early_changes_nothing_the_switch_goes_at_ready_flag(box):
+    """The case of the Mac: onboarding-done.flag already there with ready.flag. The switch goes all the same, once."""
     tier = box.tier()
     (box.fake / "full-present").write_text("", encoding="utf-8")
     _ready(box)
+    (box.home / "profile" / "onboarding-done.flag").write_text("2026-11-15T21:12:00Z\n", encoding="utf-8")
+    assert box.run("tools_kick", **KICK_ENV).returncode == 0
+    _wait_until(lambda: not tier.exists() and _calls(box) == ["down", "up"], f"no switch: {_calls(box)}")
+
+
+def test_a_ready_flag_that_is_a_link_holds_the_switch_of_the_job(box, tmp_path):
+    tier = box.tier()
+    (box.fake / "full-present").write_text("", encoding="utf-8")
     (tmp_path / "elsewhere").write_text("x\n", encoding="utf-8")
-    (box.home / "profile" / "onboarding-done.flag").symlink_to(tmp_path / "elsewhere")
-    assert box.run("tools_kick", **{**KICK_ENV, "JHT_TOOLS_ONBOARDING_MAX": "600"}).returncode == 0
+    (box.home / "profile" / "ready.flag").symlink_to(tmp_path / "elsewhere")
+    assert box.run("tools_kick", **KICK_ENV).returncode == 0
     time.sleep(3)
     assert tier.exists() and _calls(box) == [], "a link made the switch"
-    (box.home / "profile" / "onboarding-done.flag").unlink()
-    (box.home / "profile" / "onboarding-done.flag").write_text("x\n", encoding="utf-8")
-    _wait_until(lambda: not tier.exists(), "no switch")
-
-
-def test_without_the_end_of_the_onboarding_the_tetto_after_ready_flag_decides(box):
-    tier = box.tier()
-    (box.fake / "full-present").write_text("", encoding="utf-8")
+    (box.home / "profile" / "ready.flag").unlink()
     _ready(box)
-    assert box.run("tools_kick", **{**KICK_ENV, "JHT_TOOLS_ONBOARDING_MAX": "4"}).returncode == 0
-    time.sleep(2)
-    assert tier.exists() and _calls(box) == [], "the switch did not wait for the tetto"
-    _wait_until(lambda: not tier.exists() and _calls(box) == ["down", "up"], f"no switch at the tetto: {_calls(box)}")
-
-
-def test_an_onboarding_over_long_ago_lets_the_switch_go_at_once(box):
-    tier = box.tier()
-    (box.fake / "full-present").write_text("", encoding="utf-8")
-    _ready(box, age=4000)
-    assert box.run("tools_kick", **KICK_ENV).returncode == 0   # tetto 0 in KICK_ENV; and an old install: no done flag at all
     _wait_until(lambda: not tier.exists(), "no switch")
+
+
+def test_the_host_no_longer_waits_for_the_end_of_the_onboarding():
+    text = (ROOT / "scripts" / "jht-tools.sh").read_text(encoding="utf-8")
+    assert "onboarding-done.flag" not in text and "JHT_TOOLS_ONBOARDING_MAX" not in text
 
 
 def test_a_switch_that_still_fails_is_said_until_an_up_goes_well(box):
@@ -1429,3 +1423,34 @@ def test_a_command_that_only_reads_the_team_waits_for_the_switch_instead_of_sayi
     assert "wait_for_tools_switch" in body
     assert body.index("wait_for_tools_switch") < body.index("container_up"), "before the check of the container"
     assert "jht_machine_output; then wait_for_tools_switch quiet" in body, "a program reading the output gets no extra line"
+
+
+def test_a_pull_the_network_broke_is_tried_again_by_itself_and_says_so_meanwhile(box):
+    """JHT-T367: the pull fell with the network and nobody started it again; the notice stayed `failed`. It is tried again after
+    growing waits, says `pulling`/`retrying` meanwhile (the Capitano keeps waiting), and ends `ready` the third time."""
+    box.tier()
+    (box.fake / "pull-fails-left").write_text("2\n", encoding="utf-8")
+    assert box.run("tools_main pull", JHT_TOOLS_RETRY_WAITS="1 2", JHT_TOOLS_RETRY_FOR="60").returncode == 0
+    seen = box.wait_for("pulling")
+    for _ in range(100):
+        seen = box.notice()
+        if seen and seen.get("reason") == "retrying":
+            break
+        time.sleep(0.05)
+    assert seen["state"] == "pulling" and seen["reason"] == "retrying", seen
+    for _ in range(150):
+        if (box.notice() or {}).get("state") == "ready":
+            break
+        time.sleep(0.1)
+    assert box.notice()["state"] == "ready", box.notice()
+    assert len((box.fake / "pulls").read_text(encoding="utf-8").splitlines()) == 3
+    box.wait_for_pull_end()
+
+
+def test_the_tries_end_with_failed_when_their_time_is_over(box):
+    box.tier()
+    (box.fake / "pull-fails").write_text("", encoding="utf-8")
+    assert box.run("tools_main pull", JHT_TOOLS_RETRY_WAITS="1", JHT_TOOLS_RETRY_FOR="2").returncode == 0
+    box.wait_for_pull_end()
+    assert box.notice()["state"] == "failed" and box.notice()["reason"] == "pull_failed"
+    assert len((box.fake / "pulls").read_text(encoding="utf-8").splitlines()) == 3, "1 s + 1 s of waits, then the time is over"

@@ -184,7 +184,10 @@ export function captainDeferred(run = execArgvInContainer) {
 // Why the last answer was «wait»: the onboarding is open (`onboarding_open`), or it is over and the tools of the full image
 // are still on their way (`tools_pending`): the second must not tell a person who finished the onboarding to answer questions.
 let lastCaptainReason = null;
-const captainWaiting = () => (lastCaptainReason === 'tools_pending' ? say('team.captain_tools') : say('team.captain_waits'));
+export const captainWaiting = () => {
+  if (lastCaptainReason === 'tools_failed') return say('team.captain_tools_failed');
+  return lastCaptainReason === 'tools_pending' ? say('team.captain_tools') : say('team.captain_waits');
+};
 
 // start-agent.sh holds the Capitano and the Sentinella with its own ask of captain_gate.py (exit 75), also when this
 // start did not ask (the Capitano already up after an update, the gate's answer changed in between): that is a wait, said

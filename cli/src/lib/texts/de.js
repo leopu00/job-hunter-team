@@ -176,6 +176,7 @@ export default {
   "agents.stopped": "gestoppt",
   "agents.sessions_in_tmux": "Sitzungsnamen in tmux:",
   "team.captain_tools": "Der Kapitän und der Wächter starten in ein paar Minuten von selbst, sobald die Werkzeuge des vollständigen Images bereit sind. Das Onboarding ist abgeschlossen: Es gibt nichts zu tun.",
+  "team.captain_tools_failed": "Der Kapitän und der Wächter warten auf die Werkzeuge des vollständigen Images, deren Download fehlgeschlagen ist. Führe aus: jht tools pull (das Team startet von selbst, sobald sie da sind).",
   "container.team_stopped": "Das Team ist gestoppt (du hast es gestoppt): Der Container läuft, die Agenten nicht. Um sie wieder zu starten: jht team start",
   "team.help.title_usage": "Aufruf:",
   "team.help.title_arguments": "Argumente:",

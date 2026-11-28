@@ -176,6 +176,7 @@ export default {
   "agents.stopped": "arrêté",
   "agents.sessions_in_tmux": "Noms des sessions dans tmux :",
   "team.captain_tools": "Le Capitaine et la Sentinelle démarrent d'eux-mêmes dans quelques minutes, quand les outils de l'image complète sont prêts. L'onboarding est terminé : il n'y a rien à faire.",
+  "team.captain_tools_failed": "Le Capitaine et la Sentinelle attendent les outils de l'image complète, dont le téléchargement a échoué. Lance : jht tools pull (l'équipe démarre d'elle-même quand ils sont là).",
   "container.team_stopped": "L'équipe est arrêtée (c'est toi qui l'as arrêtée) : le conteneur tourne, les agents non. Pour les relancer : jht team start",
   "team.help.title_usage": "Utilisation :",
   "team.help.title_arguments": "Arguments :",

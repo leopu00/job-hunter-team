@@ -35,6 +35,14 @@ test('the reason of the wait is kept, so a closed onboarding that waits for the 
   assert.equal(ask(() => ({ ok: false, stdout: 'not json', stderr: '', code: 1 })), true);
 });
 
+test('a failed download of the tools is said with the command to give, not as a wait of a few minutes (JHT-T362)', async () => {
+  const { captainDeferred: ask, captainWaiting } = await import('../src/commands/team/start.js');
+  assert.equal(ask(() => ({ ok: false, stdout: '{"captain_due": false, "reason": "tools_failed"}\n', stderr: '', code: 1 })), true);
+  assert.match(captainWaiting(), /jht tools pull/);
+  ask(() => ({ ok: false, stdout: '{"captain_due": false, "reason": "tools_pending"}\n', stderr: '', code: 1 }));
+  assert.doesNotMatch(captainWaiting(), /jht tools pull/);
+});
+
 test('after an update, a Capitano or a Sentinella that start-agent.sh holds (exit 75) is a wait, not a failed agent', async () => {
   const { heldByCaptainGate } = await import('../src/commands/team/start.js');
   assert.equal(heldByCaptainGate('sentinella', 75), true);

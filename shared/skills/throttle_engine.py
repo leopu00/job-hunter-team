@@ -657,6 +657,7 @@ def _daily_halt_active() -> bool:
 # Lo Scout che ha esaurito il tetto del primo passaggio (first_run.sourcing_cap) resta fermo questo tanto per
 # volta: il gradino 13 minuti della ladder, un giro ogni tanto per accorgersi che il burst e' finito.
 FIRST_PASS_HOLD_SEC = 780
+IDLE_RECHECK_SEC = 60  # only the engine checks again; this is never a model wake
 
 
 def _burst(rule: str, *args):  # le regole del burst: throttle_burst.py (T309); senza il modulo o con un errore, nessuna
@@ -666,6 +667,29 @@ def _burst(rule: str, *args):  # le regole del burst: throttle_burst.py (T309); 
     except Exception as exc:  # noqa: BLE001
         _log("throttle_burst.%s failed: %s" % (rule, exc))
         return None
+
+
+def idle_wait_reason(agent: str):
+    """A certain lack of work, or None (including unreadable/locked databases).
+
+    Use the same readings as budget recovery. An empty queue needs no model
+    even while sourcing is open: writers and the engine's event sweep wake it.
+    User requests are work too. Scouts wait only at the first-pass ceiling.
+    """
+    try:
+        role = _role_of(agent)
+        if role in _QUEUED_ROLES:
+            demand = _load_shared("queue_demand", "queue_demand.py")
+            if demand is not None and demand.queue_count(role) == 0:
+                if not waiting_user_requests(agent):
+                    return "empty-queue"
+        elif role == "scout":
+            cap = _burst("first_pass_cap", agent)
+            if cap is not None and cap.get("reached"):
+                return "first-pass-cap"
+    except Exception as exc:  # noqa: BLE001 — uncertainty keeps the existing wake
+        _log("could not read idle work for %s: %s" % (agent, exc))
+    return None
 
 
 # ── Registrazione (la chiama l'agente, e ritorna SUBITO) ──────────────────
@@ -791,6 +815,9 @@ def _register(agent: str, seconds=None, reason=None, session=None,
         applied, shortened_from, held = FIRST_PASS_HOLD_SEC, None, None
     burst_cut = None if first_pass_held else _burst("wait_cap", agent, applied, now)
     shortened_from, applied = (applied, burst_cut["cap_sec"]) if burst_cut else (shortened_from, applied)
+    idle_wait = idle_wait_reason(agent)
+    if idle_wait and applied <= 0:
+        applied = IDLE_RECHECK_SEC
     if applied <= 0:
         # Throttle 0 = nessuna pausa (il core interattivo ci sta per scelta:
         # deve restare reattivo per la chat dell'utente). L'agente resta ACTIVE
@@ -823,6 +850,7 @@ def _register(agent: str, seconds=None, reason=None, session=None,
         "notify_attempts": 0,
         "pause_id": pause_id,
         "empty_streak": empty_streak,
+        "idle_wait": idle_wait,
     }
     write_flags(state)
     # Una pausa accorciata lo dice, con il valore che il Capitano aveva messo
@@ -853,7 +881,7 @@ def _register(agent: str, seconds=None, reason=None, session=None,
                source="explicit" if seconds is not None else "config",
                **shortened)
     return {"agent": agent, "armed": True, "applied_sec": applied,
-            "until": until, **shortened}
+            "until": until, **({"idle_wait": idle_wait} if idle_wait else {}), **shortened}
 
 
 # ── Ack (lo fa l'AGENTE: è ciò che rende NOTIFIED una prova) ──────────────
@@ -926,7 +954,8 @@ def _ack(agent: str, now=None) -> dict:
                 "previous": ACTIVE}
 
     until = entry.get("until")
-    if previous == IN_THROTTLE and isinstance(until, (int, float)) and now < until:
+    if (previous == IN_THROTTLE and isinstance(until, (int, float)) and now < until
+            and not entry.get("idle_wait")):
         remaining = int(until - now)
         emit("ack_refused", agent=agent, ts=now, remaining_sec=remaining)
         return {"agent": agent, "ok": False, "state": IN_THROTTLE,
@@ -941,7 +970,7 @@ def _ack(agent: str, now=None) -> dict:
     applied = entry.get("applied_sec")
     entry.update({"state": ACTIVE, "since": int(now), "until": None,
                   "timer_armed_at": None, "notify_attempts": 0,
-                  "pause_id": None})
+                  "pause_id": None, "idle_wait": None})
     write_flags(state)
     emit("acked", agent=agent, ts=now, previous=previous,
          ack_delay_sec=waited if previous == NOTIFIED else None,
@@ -1225,6 +1254,14 @@ def _handle_entry(agent, entry, now, sessions) -> bool:
         entry["until"] = int(now + GATE_RETRY_SEC)
         return False
 
+    idle_wait = idle_wait_reason(agent)
+    if idle_wait:
+        if entry.get("idle_wait") != idle_wait:
+            emit("waiting_for_work", agent=agent, ts=now, reason=idle_wait)
+        entry.update(idle_wait=idle_wait, until=int(now + IDLE_RECHECK_SEC))
+        return False
+
+    entry.pop("idle_wait", None)
     rc = send_wakeup(session, agent, wake_message(agent))
     if rc == 0:
         waited = None
@@ -1607,10 +1644,17 @@ def health(now=None) -> dict:
 def _print_register(res: dict, fmt: str) -> None:
     if fmt == "json":
         print(json.dumps(res, ensure_ascii=False))
-    elif fmt == "until":
+    elif fmt == "wait" and res.get("idle_wait"):
+        print("IDLE")
+    elif fmt in ("until", "wait"):
         print(res["until"] if res.get("until") else "")
     else:
         if res.get("armed"):
+            if res.get("idle_wait"):
+                print("WAITING_FOR_WORK agent=%s — END YOUR TURN. Do not poll or rearm; "
+                      "the engine checks for work and wakes you on an event."
+                      % res["agent"])
+                return
             line = ("THROTTLE_ARMED agent=%s applied_sec=%d until=%d"
                     % (res["agent"], res["applied_sec"], res["until"]))
             if res.get("shortened_from") and res.get("user_requests_waiting"):
@@ -1641,7 +1685,7 @@ def main(argv=None) -> int:
     p_reg.add_argument("--reason", default=None)
     p_reg.add_argument("--session", default=None)
     p_reg.add_argument("--print", dest="fmt", default="line",
-                       choices=("line", "json", "until"))
+                       choices=("line", "json", "until", "wait"))
 
     p_ack = sub.add_parser("ack", help="NOTIFIED → ACTIVE (performed by the agent)")
     p_ack.add_argument("agent")
@@ -1654,7 +1698,7 @@ def main(argv=None) -> int:
     p_st.add_argument("agent", nargs="?", default=None)
     p_st.add_argument("--json", action="store_true")
     p_st.add_argument("--print", dest="fmt", default=None,
-                      choices=("until",))
+                      choices=("until", "wait"))
 
     sub.add_parser("daemon", help="loop (default when no command is provided)")
 
@@ -1704,7 +1748,12 @@ def main(argv=None) -> int:
         return 1
 
     if args.cmd == "status":
-        if args.fmt == "until":
+        if args.fmt == "wait" and args.agent:
+            entry = get_flag(str(args.agent).strip().lower())
+            if entry.get("state") == IN_THROTTLE and idle_wait_reason(args.agent):
+                print("IDLE")
+                return 0
+        if args.fmt in ("until", "wait"):
             until = pending_until(args.agent) if args.agent else None
             print(int(until) if until else "")
             return 0
