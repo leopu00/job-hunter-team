@@ -79,7 +79,7 @@ def test_the_assistente_reads_where_it_runs_and_gives_only_the_ways_of_that_plac
     assert "📎" in where
     # the folder of the person is named only with the path of the person's own system
     docs = next(line for line in text.splitlines() if line.startswith("> 📁 "))
-    assert WHERE_HEADING[lang] in docs
+    assert "where.folders" in docs
 
 
 @pytest.mark.parametrize("lang", LANGS)
