@@ -402,14 +402,16 @@ async function runSetupSteps(prompter, state, { diskRefusal = diskLowRefusal } =
   // Asked BEFORE the config is saved, so it lands in jht.config.json at the first write and the brake of pi reads it at
   // the first tick. «No limit» asks the working hours as before.
   const asked = await promptBudget(prompter, {
-    t, tf, provider: providerChoice, lang: currentLang(),
+    t, tf, provider: providerChoice, lang: currentLang(), authMethod,
     askHours: () => promptWorkingHours(prompter, baseConfig.team?.working_hours),
   });
   const { kind: budgetKind, workingHours, dailyUsd } = asked;
   // the pace (spreading the spending over the period, with pauses) is the person's to ask for: off unless they say yes
   const budget = await askPace(prompter, { t, budget: asked.budget });
   const paceNote = budgetPaceNote(t, { budget });
-  await prompter.note(budgetSummary(t, tf, { budget, workingHours, kind: budgetKind, dailyUsd }) + (paceNote ? `\n\n${paceNote}` : ''), t('wizard.budget.title'));
+  // one line of what was chosen, the note of the pace when there is one, and how to change it later (JHT-T345b)
+  const summary = budgetSummary(t, tf, { budget, workingHours, kind: budgetKind, dailyUsd, lang: currentLang() });
+  await prompter.note([summary, paceNote, t('wizard.budget.change_later')].filter(Boolean).join('\n\n'), t('wizard.budget.title'));
 
   // --- Salva e riepilogo ---
   await assembleAndSaveConfig(prompter, {

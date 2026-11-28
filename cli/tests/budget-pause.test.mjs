@@ -175,3 +175,17 @@ test('the quota of the subscription: said in the status while the pause stands, 
   assert.equal(quotaWallText({ home: root, now: NOW }), null, 'an expired flag says nothing');
   assert.equal(quotaWallText({ home: home(), now: NOW }), null);
 });
+
+test('a pause of a budget the config no longer has is not said: the setup chose a ceiling per day, or jht budget clear (JHT-T345b)', () => {
+  const root = home(cap({ why: 'period', spent: 3.1 }));
+  writeFileSync(join(root, 'jht.config.json'), JSON.stringify({ version: 1, no_quota_cap: { usd: 10 } }));
+  assert.equal(budgetPause({ home: root }), null);
+  // the stop the Capitano committed to is no budget of the person: it is still said
+  const stop = home(cap({ why: 'stop_at', spent: 2.4, ceiling: 2.4 }));
+  writeFileSync(join(stop, 'jht.config.json'), JSON.stringify({ version: 1 }));
+  assert.equal(budgetPause({ home: stop }).why, 'stop_at');
+  // a config that cannot be read changes nothing: the pause is said
+  const broken = home(cap({ why: 'budget' }));
+  writeFileSync(join(broken, 'jht.config.json'), '{ not json');
+  assert.equal(budgetPause({ home: broken }).why, 'budget');
+});

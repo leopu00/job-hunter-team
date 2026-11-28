@@ -42,11 +42,16 @@ export function whenOf(iso, now = new Date(), zone = '') {
  * run: it must not say «the period of its budget ended» with the old figures. Three signs, any of which says it is an old one:
  * the period the flag names started, or ended, before the budget in the config was saved (a new period starts after saved_at; this
  * one does not change when something rewrites the flag), or the file itself was written before it was saved. A pause the brake
- * writes for the new budget is later than saved_at on all three and is said. No budget, no saved_at: not stale.
+ * writes for the new budget is later than saved_at on all three and is said. No budget in the config at all: stale (but a stop_at
+ * of the Capitano, which is no budget). A budget without saved_at: not stale.
  */
 function staleForTheSavedBudget(home, flagPath, cap) {
   try {
-    const saved = Date.parse(JSON.parse(readFileSync(join(home, 'jht.config.json'), 'utf8'))?.team?.budget?.saved_at);
+    const config = JSON.parse(readFileSync(join(home, 'jht.config.json'), 'utf8'));
+    // a pause of a budget when the config has no budget any more (a setup that chose a ceiling per day, `jht budget clear`):
+    // the brake lifts it at its next tick, and it is not the person's budget to talk about (JHT-T345b)
+    if (cap?.why !== 'stop_at' && config && typeof config === 'object' && !config.team?.budget) return true;
+    const saved = Date.parse(config?.team?.budget?.saved_at);
     if (!Number.isFinite(saved)) return false;
     const before = (iso) => typeof iso === 'string' && Date.parse(iso) < saved;
     return before(cap?.starts_at) || before(cap?.ends_at) || statSync(flagPath).mtimeMs < saved;
