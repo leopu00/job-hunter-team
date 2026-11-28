@@ -112,7 +112,11 @@ def _case(shell: str, tmp_path: Path, *, proposed: str = "it", answer: str | Non
         "$script:Asked = $false",
         reader,
         "$chosen = Confirm-JhtLanguage",
+        "[Console]::Out.WriteLine('')",
         "[Console]::Out.WriteLine('RESULT ' + $chosen + ' ' + $script:Asked + ' ' + $env:JHT_LANG)",
+        # the names with a letter outside ASCII, as code points: Write-Host of Windows PowerShell 5.1 writes a redirected output
+        # in the encoding of the console, so the printed letters cannot be compared here
+        "[Console]::Out.WriteLine('NAMES ' + ((@('es', 'fr', 'pt') | ForEach-Object { ([int[]][char[]](Get-JhtLanguageName $_)) -join '.' }) -join ' '))",
     ]) + "\n"
     path = tmp_path / "probe.ps1"
     path.write_text(script, encoding="utf-8-sig")
@@ -124,8 +128,12 @@ def _case(shell: str, tmp_path: Path, *, proposed: str = "it", answer: str | Non
     done = subprocess.run(argv, env=env, capture_output=True, timeout=120, check=False, stdin=subprocess.DEVNULL)
     out = done.stdout.decode("utf-8", "replace")
     assert done.returncode == 0, out + done.stderr.decode("utf-8", "replace")
-    result = re.search(r"^RESULT (\S+) (\S+) ?(\S*)\s*$", out, re.M)
+    result = re.search(r"RESULT (\S+) (\S+) ?(\S*)\s*$", out, re.M)
     assert result, out
+    names = re.search(r"^NAMES (.+?)\s*$", out, re.M)
+    assert names, out
+    assert [bytes(int(c) for c in word.split(".")).decode("latin-1") for word in names.group(1).split()] == [
+        "Espa\u00f1ol", "Fran\u00e7ais", "Portugu\u00eas"]
     prefs_file = home / "i18n-prefs.json"
     env_file = home / "host.env"
     return {
@@ -142,7 +150,7 @@ def test_enter_keeps_the_language_proposed_and_saves_it_for_the_setup(shell, tmp
     r = _case(shell, tmp_path, proposed="it", answer="")
     assert r["asked"] and r["chosen"] == "it" and r["env"] == "it"
     assert "Lingua: Italiano. Va bene? Premi Invio per s" in r["out"]
-    for number, name in enumerate(("English", "Italiano", "Magyar", "Español", "Deutsch", "Français", "Português"), 1):
+    for number, name in enumerate(("English", "Italiano", "Magyar", "Espa", "Deutsch", "Fran", "Portugu"), 1):
         assert f"    {number}) {name}" in r["out"], name
     assert r["prefs"]["locale"] == "it"
     assert before - 5 <= r["prefs"]["asked_at"] <= int(time.time()) + 5, "asked_at: the wizard does not ask again within the hour"
