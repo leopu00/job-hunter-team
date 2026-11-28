@@ -9043,54 +9043,71 @@ convert_setup_key_args() {
   return 0
 }
 
-# ChatGPT's short callback relay uses the team's locally present image, including core.
+# ChatGPT host observer. A relay is created only after the CLI asks to start a login.
 CHATGPT_LOGIN_HELPER=/app/cli/src/auth/chatgpt-login.js
 CHATGPT_LOGIN_ENV=()
 chatgpt_login_url_allowed() {
-  case "$1" in https://auth.openai.com/*) ;; *) return 1 ;; esac
   case "$1" in *[[:space:]]*|*\\*) return 1 ;; esac
+  [ "$1" != https://auth.openai.com/codex/device ] || return 0
+  printf '%s\n' "$1" | LC_ALL=C grep -Eq '^https://auth\.openai\.com/oauth/authorize\?response_type=code&client_id=app_EMoamEEZ73f0CkXaXp7hrann&redirect_uri=http%3A%2F%2Flocalhost%3A1455%2Fauth%2Fcallback&scope=openid\+profile\+email\+offline_access&code_challenge=[A-Za-z0-9_-]{43}&code_challenge_method=S256&state=[a-f0-9]{32}&id_token_add_organizations=true&codex_cli_simplified_flow=true&originator=pi$'
 }
 chatgpt_bridge_cleanup() {
   [ -z "${CHATGPT_LOGIN_SESSION:-}" ] || docker exec "$ATTESTED_CONTAINER_ID" node "$CHATGPT_LOGIN_HELPER" --cancel "$CHATGPT_LOGIN_SESSION" >/dev/null 2>&1 || true
   [ -z "${CHATGPT_WATCH_PID:-}" ] || { kill "$CHATGPT_WATCH_PID" 2>/dev/null || true; wait "$CHATGPT_WATCH_PID" 2>/dev/null || true; }
   [ -z "${CHATGPT_RELAY:-}" ] || docker stop --time 10 "$CHATGPT_RELAY" >/dev/null 2>&1 || true
 }
+chatgpt_relay_start() {
+  local image n
+  image="$(docker inspect "$ATTESTED_CONTAINER_ID" --format '{{.Image}}')" || return 1
+  if docker run -d --rm --pull=never --name "$CHATGPT_RELAY" --publish 127.0.0.1:1455:1455 --read-only --tmpfs /tmp:rw,noexec,nosuid,size=1m --cap-drop ALL --security-opt no-new-privileges --log-driver none --user 1001:1001 --entrypoint node "$image" "$CHATGPT_LOGIN_HELPER" --relay >/dev/null 2>&1; then
+    for n in 1 2 3 4 5; do
+      docker exec "$CHATGPT_RELAY" node "$CHATGPT_LOGIN_HELPER" --health >/dev/null 2>&1 && return 0
+      sleep 0.2
+    done
+  fi
+  docker stop --time 10 "$CHATGPT_RELAY" >/dev/null 2>&1 || true
+  return 1
+}
 chatgpt_bridge_watch() {
-  local previous='' url callback
+  local prepared=0 opened_auth=0 opened_device=0 url callback state method open_url
   while :; do
     url="$(docker exec "$ATTESTED_CONTAINER_ID" node "$CHATGPT_LOGIN_HELPER" --request "$CHATGPT_LOGIN_SESSION" 2>/dev/null)" || url=''
-    if [ -n "$url" ] && [ "$url" != "$previous" ] && chatgpt_login_url_allowed "$url"; then
-      previous="$url"
+    if [ "$url" = probe ] && [ "$prepared" -eq 0 ]; then
+      prepared=1; method=device_code
+      if [ "$(uname -s)" = Darwin ] || { [ -n "${DISPLAY:-}${WAYLAND_DISPLAY:-}" ] && command -v xdg-open >/dev/null 2>&1; }; then
+        if chatgpt_relay_start; then method=browser; fi
+      fi
+      docker exec "$ATTESTED_CONTAINER_ID" node "$CHATGPT_LOGIN_HELPER" --mode "$CHATGPT_LOGIN_SESSION" "$method" >/dev/null 2>&1 || true
+    fi
+    open_url=0
+    if chatgpt_login_url_allowed "$url"; then
+      if [ "$url" = https://auth.openai.com/codex/device ]; then
+        if [ "$opened_device" -eq 0 ]; then opened_device=1; open_url=1; fi
+      elif [ "$opened_auth" -eq 0 ]; then
+        opened_auth=1; open_url=1
+        state="${url#*&state=}"; state="${state%%&*}"
+        docker exec "$CHATGPT_RELAY" node "$CHATGPT_LOGIN_HELPER" --arm "$state" >/dev/null 2>&1 || true
+      fi
+    fi
+    if [ "$open_url" -eq 1 ]; then
       case "$(uname -s)" in
         Darwin) open "$url" >/dev/null 2>&1 || true ;;
         *) [ -z "${DISPLAY:-}${WAYLAND_DISPLAY:-}" ] || xdg-open "$url" >/dev/null 2>&1 || true ;;
       esac
     fi
-    if [ -n "${CHATGPT_RELAY:-}" ]; then
+    if [ "$prepared" -eq 1 ]; then
       callback="$(docker exec "$CHATGPT_RELAY" node "$CHATGPT_LOGIN_HELPER" --relay-read 2>/dev/null)" || callback=''
-      case "$callback" in ''|*[!A-Za-z0-9_-]*) ;; *) docker exec "$ATTESTED_CONTAINER_ID" node "$CHATGPT_LOGIN_HELPER" --accept "$CHATGPT_LOGIN_SESSION" "$callback" >/dev/null 2>&1 || true ;; esac
+      case "$callback" in ''|*[!A-Za-z0-9_-]*) ;; *) printf '%s' "$callback" | docker exec -i "$ATTESTED_CONTAINER_ID" node "$CHATGPT_LOGIN_HELPER" --accept "$CHATGPT_LOGIN_SESSION" >/dev/null 2>&1 || true ;; esac
     fi
     sleep 1
   done
 }
 chatgpt_bridge_start() {
-  local image method=device_code relay
-  CHATGPT_LOGIN_SESSION="$(docker exec "$ATTESTED_CONTAINER_ID" node -e 'process.stdout.write(require("crypto").randomBytes(16).toString("hex"))')" || return 1
-  case "$CHATGPT_LOGIN_SESSION" in ''|*[!a-f0-9]*) return 1 ;; esac
-  [ "${#CHATGPT_LOGIN_SESSION}" -eq 32 ] || return 1
-  CHATGPT_RELAY=''
-  if [ "$(uname -s)" = Darwin ] || { [ -n "${DISPLAY:-}${WAYLAND_DISPLAY:-}" ] && command -v xdg-open >/dev/null 2>&1; }; then
-    image="$(docker inspect "$ATTESTED_CONTAINER_ID" --format '{{.Image}}')" || return 1
-    relay="jht-chatgpt-$CHATGPT_LOGIN_SESSION"
-    # No pull, host network, shared mounts or provider packages in this relay.
-    if docker run -d --rm --pull=never --name "$relay" --publish 127.0.0.1:1455:1455 --read-only --tmpfs /tmp:rw,noexec,nosuid,size=1m --cap-drop ALL --security-opt no-new-privileges --log-driver none --user 1001:1001 --entrypoint node "$image" "$CHATGPT_LOGIN_HELPER" --relay >/dev/null 2>&1; then
-      CHATGPT_RELAY="$relay"; method=browser
-    else
-      # A failed port publication may leave a stopped container: it belongs to this session only.
-      docker stop --time 10 "$relay" >/dev/null 2>&1 || true
-    fi
-  fi
-  CHATGPT_LOGIN_ENV=(-e "JHT_LOGIN_CLIPBOARD=$(if [ "$(uname -s)" = Darwin ]; then printf pbcopy; else printf clipboard; fi)" -e "JHT_CHATGPT_LOGIN_SESSION=$CHATGPT_LOGIN_SESSION" -e "JHT_CHATGPT_LOGIN_METHOD=$method")
+  CHATGPT_LOGIN_SESSION="$(od -An -N16 -tx1 /dev/urandom 2>/dev/null | tr -d ' \n')" || CHATGPT_LOGIN_SESSION=''
+  case "$CHATGPT_LOGIN_SESSION" in ''|*[!a-f0-9]*) return 0 ;; esac
+  [ "${#CHATGPT_LOGIN_SESSION}" -eq 32 ] || return 0
+  CHATGPT_RELAY="jht-chatgpt-$CHATGPT_LOGIN_SESSION"
+  CHATGPT_LOGIN_ENV=(-e "JHT_LOGIN_CLIPBOARD=$(if [ "$(uname -s)" = Darwin ]; then printf pbcopy; else printf clipboard; fi)" -e "JHT_CHATGPT_LOGIN_SESSION=$CHATGPT_LOGIN_SESSION" -e JHT_CHATGPT_LOGIN_METHOD=bridge)
   chatgpt_bridge_watch &
   CHATGPT_WATCH_PID=$!
   trap 'chatgpt_bridge_cleanup' EXIT
@@ -10395,7 +10412,7 @@ case "$SUB" in
     require_compose_file
     require_docker
     ensure_up
-    chatgpt_bridge_start || exit 1
+    chatgpt_bridge_start
     docker exec $EXEC_FLAGS ${CHATGPT_LOGIN_ENV[@]+"${CHATGPT_LOGIN_ENV[@]}"} "$ATTESTED_CONTAINER_ID" node "$NODE_ENTRY" login chatgpt
     exit $?
     ;;
@@ -10431,7 +10448,7 @@ case "$SUB" in
     agents_room_cleanup
     tools_tell_person kick
     rc=0
-    chatgpt_bridge_start || exit 1
+    chatgpt_bridge_start
     setup_exec_container "$@" || rc=$?
     chatgpt_bridge_cleanup
     trap - EXIT INT TERM

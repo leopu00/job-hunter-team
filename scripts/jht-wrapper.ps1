@@ -8058,19 +8058,15 @@ Register-JhtRunningCommand $Sub $Rest
 # Il contrario - Ensure-Up in cima al default - faceva si' che un semplice
 # `jht --help` scaricasse l'immagine (~300 MB) e creasse container e volumi,
 # cioe' il primo comando di chi non ha ancora deciso se installare (P-07).
-# The relay is Node-only and uses the team's present image (also core), with no pull or shared mount.
+# This observer publishes no port until the CLI asks for a ChatGPT sign-in.
 function Test-SubscriptionLoginUrl {
   param([string]$Url)
-  if ($Url -cmatch '[\s\\]') { return $false }
-  $parsed = $null
-  return ([Uri]::TryCreate($Url, [UriKind]::Absolute, [ref]$parsed) -and
-    $parsed.Scheme -ceq 'https' -and $parsed.Host -ceq 'auth.openai.com' -and
-    $parsed.IsDefaultPort -and -not $parsed.UserInfo -and $Url.StartsWith('https://auth.openai.com/'))
+  return ($Url -ceq 'https://auth.openai.com/codex/device' -or $Url -cmatch '^https://auth\.openai\.com/oauth/authorize\?response_type=code&client_id=app_EMoamEEZ73f0CkXaXp7hrann&redirect_uri=http%3A%2F%2Flocalhost%3A1455%2Fauth%2Fcallback&scope=openid\+profile\+email\+offline_access&code_challenge=[A-Za-z0-9_-]{43}&code_challenge_method=S256&state=[a-f0-9]{32}&id_token_add_organizations=true&codex_cli_simplified_flow=true&originator=pi\z')
 }
 
 function Stop-SubscriptionLoginBridge {
-  if ($script:ChatGptSession) {
-    & { $ErrorActionPreference = 'Continue'; & docker exec $Container node $script:ChatGptHelper --cancel $script:ChatGptSession 2>$null | Out-Null }
+  if ($script:ChatGptSession -and $script:ChatGptTeam) {
+    & { $ErrorActionPreference = 'Continue'; & docker exec $script:ChatGptTeam node $script:ChatGptHelper --cancel $script:ChatGptSession 2>$null | Out-Null }
   }
   if ($script:ChatGptWatcher) {
     Stop-Job $script:ChatGptWatcher -ErrorAction SilentlyContinue
@@ -8086,33 +8082,58 @@ function Stop-SubscriptionLoginBridge {
 function Start-SubscriptionLoginBridge {
   $script:ChatGptHelper = '/app/cli/src/auth/chatgpt-login.js'
   $script:ChatGptSession = [Guid]::NewGuid().ToString('N')
-  $script:ChatGptRelay = $null
-  $method = 'device_code'
-  $relay = 'jht-chatgpt-' + $script:ChatGptSession
-  $image = (& { $ErrorActionPreference = 'Continue'; & docker inspect $Container --format '{{.Image}}' 2>$null }) -join ''
-  if ($LASTEXITCODE -ne 0 -or -not $image) { throw 'Cannot identify the local team image for ChatGPT sign-in.' }
-  & { $ErrorActionPreference = 'Continue'; & docker run -d --rm --pull=never --name $relay --publish '127.0.0.1:1455:1455' --read-only --tmpfs '/tmp:rw,noexec,nosuid,size=1m' --cap-drop ALL --security-opt no-new-privileges --log-driver none --user '1001:1001' --entrypoint node $image $script:ChatGptHelper --relay 2>$null | Out-Null }
-  if ($LASTEXITCODE -eq 0) { $script:ChatGptRelay = $relay; $method = 'browser' }
-  else { & { $ErrorActionPreference = 'Continue'; & docker stop --time 10 $relay 2>$null | Out-Null } }
-  $script:ChatGptEnv = @('-e', "JHT_CHATGPT_LOGIN_SESSION=$script:ChatGptSession", '-e', "JHT_CHATGPT_LOGIN_METHOD=$method")
-  $dockerPath = (Get-Command docker -CommandType Application -ErrorAction Stop).Source
-  $script:ChatGptWatcher = Start-Job -ArgumentList $dockerPath, $Container, $script:ChatGptHelper, $script:ChatGptSession, $script:ChatGptRelay, (${function:Test-SubscriptionLoginUrl}.ToString()) -ScriptBlock {
-    param($Engine, $Team, $Helper, $Session, $Relay, $UrlCheck)
-    Set-Item Function:Test-SubscriptionLoginUrl ([ScriptBlock]::Create($UrlCheck))
-    $ErrorActionPreference = 'Continue'
-    $previous = ''
-    while ($true) {
-      $url = ((& $Engine exec $Team node $Helper --request $Session 2>$null) -join '').Trim()
-      if ($url -and $url -cne $previous -and (Test-SubscriptionLoginUrl $url)) {
-        $previous = $url
-        try { Start-Process -FilePath $url -ErrorAction Stop | Out-Null } catch { }
+  $script:ChatGptRelay = 'jht-chatgpt-' + $script:ChatGptSession
+  $script:ChatGptEnv = @()
+  try {
+    $script:ChatGptTeam = Get-RunningComposeServiceId 'jht'
+    if (-not $script:ChatGptTeam -or $script:ChatGptTeam -cnotmatch '^[0-9a-f]{12,64}\z') { return }
+    $dockerPath = (Get-Command docker -CommandType Application -ErrorAction Stop).Source
+    $script:ChatGptWatcher = Start-Job -ArgumentList $dockerPath, $script:ChatGptTeam, $script:ChatGptHelper, $script:ChatGptSession, $script:ChatGptRelay, (${function:Test-SubscriptionLoginUrl}.ToString()) -ScriptBlock {
+      param($Engine, $Team, $Helper, $Session, $Relay, $UrlCheck)
+      Set-Item Function:Test-SubscriptionLoginUrl ([ScriptBlock]::Create($UrlCheck))
+      $ErrorActionPreference = 'Continue'
+      $OutputEncoding = New-Object System.Text.UTF8Encoding($false)
+      $prepared = $false; $openedAuth = $false; $openedDevice = $false
+      while ($true) {
+        $url = ((& $Engine exec $Team node $Helper --request $Session 2>$null) -join '').Trim()
+        if ($url -ceq 'probe' -and -not $prepared) {
+          $prepared = $true; $method = 'device_code'
+          $image = ((& $Engine inspect $Team --format '{{.Image}}' 2>$null) -join '').Trim()
+          if ($LASTEXITCODE -eq 0 -and $image) {
+            & $Engine run -d --rm --pull=never --name $Relay --publish '127.0.0.1:1455:1455' --read-only --tmpfs '/tmp:rw,noexec,nosuid,size=1m' --cap-drop ALL --security-opt no-new-privileges --log-driver none --user '1001:1001' --entrypoint node $image $Helper --relay 2>$null | Out-Null
+            if ($LASTEXITCODE -eq 0) {
+              foreach ($attempt in 1..5) {
+                & $Engine exec $Relay node $Helper --health 2>$null | Out-Null
+                if ($LASTEXITCODE -eq 0) { $method = 'browser'; break }
+                Start-Sleep -Milliseconds 200
+              }
+            }
+          }
+          if ($method -ceq 'device_code') { & $Engine stop --time 10 $Relay 2>$null | Out-Null }
+          & $Engine exec $Team node $Helper --mode $Session $method 2>$null | Out-Null
+        }
+        $openUrl = $false
+        if (Test-SubscriptionLoginUrl $url) {
+          if ($url -ceq 'https://auth.openai.com/codex/device') {
+            if (-not $openedDevice) { $openedDevice = $true; $openUrl = $true }
+          } elseif (-not $openedAuth) {
+            $openedAuth = $true; $openUrl = $true
+            $state = (($url -split '&state=')[1] -split '&')[0]
+            & $Engine exec $Relay node $Helper --arm $state 2>$null | Out-Null
+          }
+        }
+        if ($openUrl) { try { Start-Process -FilePath $url -ErrorAction Stop | Out-Null } catch { } }
+        if ($prepared) {
+          $callback = ((& $Engine exec $Relay node $Helper --relay-read 2>$null) -join '').Trim()
+          if ($callback -cmatch '^[A-Za-z0-9_-]+\z') { $callback | & $Engine exec -i $Team node $Helper --accept $Session 2>$null | Out-Null }
+        }
+        Start-Sleep -Milliseconds 500
       }
-      if ($Relay) {
-        $callback = ((& $Engine exec $Relay node $Helper --relay-read 2>$null) -join '').Trim()
-        if ($callback -cmatch '^[A-Za-z0-9_-]+$') { & $Engine exec $Team node $Helper --accept $Session $callback 2>$null | Out-Null }
-      }
-      Start-Sleep -Milliseconds 750
     }
+    $script:ChatGptEnv = @('-e', "JHT_CHATGPT_LOGIN_SESSION=$script:ChatGptSession", '-e', 'JHT_CHATGPT_LOGIN_METHOD=bridge')
+  } catch {
+    # The CLI defaults to device_code: observer errors never block an API-key or headless setup.
+    $script:ChatGptEnv = @()
   }
 }
 
@@ -8446,8 +8467,9 @@ switch ($Sub) {
     Ensure-Up
     try {
       Start-SubscriptionLoginBridge
+      if (-not $script:ChatGptTeam) { throw 'Cannot attest the team for ChatGPT sign-in.' }
       $terminalEnv = if (Get-Variable JhtTerminalEnv -ErrorAction SilentlyContinue) { $JhtTerminalEnv } else { @() }
-      & { $ErrorActionPreference = 'Continue'; & docker exec @ExecFlags @terminalEnv @ChatGptEnv $Container node $NodeEntry login chatgpt }
+      & { $ErrorActionPreference = 'Continue'; & docker exec @ExecFlags @terminalEnv @ChatGptEnv $script:ChatGptTeam node $NodeEntry login chatgpt }
       $loginCode = $LASTEXITCODE
     } finally { Stop-SubscriptionLoginBridge }
     exit $loginCode
@@ -8492,7 +8514,7 @@ switch ($Sub) {
         & { $ErrorActionPreference = 'Continue'; & docker exec @ExecFlags @setupEnv $Container node $NodeEntry 'setup' @Rest }
       }
       $setupCode = $LASTEXITCODE
-    } finally { Stop-SubscriptionLoginBridge }
+    } finally { $keyPlan.Key = $null; Stop-SubscriptionLoginBridge }
     $global:LASTEXITCODE = $setupCode
     if (Test-JhtSetupWizardArgs $Rest) { Remove-JhtSetupOpenFlag }
     break
