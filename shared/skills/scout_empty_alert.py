@@ -104,7 +104,8 @@ def _rows(path: Path) -> list:
             continue
         if isinstance(row, dict) and isinstance(row.get("ts"), (int, float)) and not isinstance(row.get("ts"), bool):
             rows.append(row)
-    return rows
+    from scout_pass_log import effective_rows
+    return effective_rows(rows)
 
 
 def is_empty(row: dict) -> bool:

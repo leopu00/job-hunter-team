@@ -448,7 +448,7 @@ def test_sei_scout_sullo_stesso_url_scrivono_una_riga_sola(tmp_path):
     seed = subprocess.run(
         [sys.executable, DB_INSERT, 'position', '--title', 'Seed',
          '--company', 'Seed Co', '--url', 'https://jobs.example/seed',
-         '--source', 'test', '--found-by', 'scout-0'],
+         '--source', 'test', '--found-by', 'import-synthetic'],
         capture_output=True, text=True, env=env)
     assert seed.returncode == 0, seed.stderr
 
@@ -457,7 +457,7 @@ def test_sei_scout_sullo_stesso_url_scrivono_una_riga_sola(tmp_path):
         subprocess.Popen(
             [sys.executable, DB_INSERT, 'position', '--title', f'Ruolo {i}',
              '--company', f'Azienda {i}', '--url', url,
-             '--source', 'test', '--found-by', f'scout-{i}'],
+             '--source', 'test', '--found-by', f'import-synthetic-{i}'],
             stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=env)
         for i in range(1, 7)
     ]

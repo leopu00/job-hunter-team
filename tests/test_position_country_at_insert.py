@@ -4,6 +4,8 @@ Until the Analista read the ad the country was empty: the Scouts write only the 
 the place (a country it names, a place written the Italian way) or from the portal (talent-com-it, randstad.it, it.talent.com), and
 left empty when nothing says it: a city name never implies a country.
 """
+from scout_insert_helper import checked_position
+
 import os
 import sqlite3
 import subprocess
@@ -46,7 +48,8 @@ def _insert(tmp_path, n, location, source, url, agent="scout-1"):
            "--source", source, "--found-by", agent, "--remote-type", "onsite"]
     if location is not None:
         cmd += ["--location", location]
-    return subprocess.run(cmd, capture_output=True, text=True, env=env, timeout=60)
+    run = checked_position if agent.startswith("scout") else subprocess.run
+    return run(cmd, capture_output=True, text=True, env=env, timeout=60)
 
 
 def _row(tmp_path, n):

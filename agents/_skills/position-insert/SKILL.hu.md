@@ -156,3 +156,10 @@ Ha 2 Analistad van, valtogasd a ping celpontot a terheles elosztasa erdekeben (a
 - `db-insert` — a wrapper belso mukodese + `position` sema.
 - `agents/_manual/anti-collision.md` — tágabb Scout koordinacios szerzodes.
 - `agents/scout/scout.md` — az orkesztralo prompt, amely ezt a skillt hivja a fo ciklusban.
+
+
+## A parancs által kikényszerített SC-09
+
+Az öt ellenőrzés után futtasd a `db_insert.py position` parancsot az összes adattal és a `--check-only --link-verified --filters-checked` kapcsolókkal. Ezzel megerősíted az élő kanonikus linket, a teljes leírás elolvasását és a szűrőket; a parancs a duplikációt és a területet is ellenőrzi. Az eredmény `scout_check`. Ezt az EGY jelöltet ugyanazokkal az adatokkal és a `--scout-check <bizonylat>` kapcsolóval szúrd be, majd throttle. A bizonylat 15 percig érvényes, egyszer használható, és a Scouthoz és jelölthöz tartozik. Másik jelölt ellenőrzése érvényteleníti az előző bizonylatot. Hiányzó vagy eltérő bizonylat: exit 5, nincs INSERT. Egész portálhoz ne készíts elő ellenőrzéseket.
+
+Ne találj ki helyszínt: a helykitöltőket a parancs elutasítja (`LOCATION_PLACEHOLDER`); hagyd el a `--location` kapcsolót, ha a hirdetésben nincs helyszín. A távoli munkavégzés területei különböznek: Spanyolország és Portugália maradjon külön.

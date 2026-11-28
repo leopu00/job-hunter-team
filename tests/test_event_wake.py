@@ -327,7 +327,7 @@ def writers(tmp_path, monkeypatch):
 
 def _position_args(db_insert, url):
     return db_insert.build_parser().parse_args(
-        ["position", "--title", "Engineer", "--company", "Acme", "--url", url, "--source", "test", "--found-by", "scout-1"])
+        ["position", "--title", "Engineer", "--company", "Acme", "--url", url, "--source", "test", "--found-by", "import-synthetic"])
 
 
 def _update(db_update, monkeypatch, pid, *extra):

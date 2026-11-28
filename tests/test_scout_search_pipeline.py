@@ -25,6 +25,7 @@ def test_a_foreign_reply_is_explicit_and_a_local_fake_source_can_feed_the_real_q
     import db_insert
     import db_query
     from scout_dedup import dedup_check
+    from scout_pass_report import read_rows
     path, _ = profile
     monkeypatch.setenv("JHT_DB", str(source.home / "jobs.db"))
     source.replies.extend([reply(text=card("Austin, Texas, United States")), reply(text="")])
@@ -33,7 +34,7 @@ def test_a_foreign_reply_is_explicit_and_a_local_fake_source_can_feed_the_real_q
     assert output[0]["scope_match"] == "unmatched"
     assert output[-1]["code"] == "scout_search_geo_mismatch"
     entry = {"slug": "linkedin", "country": "it", "portal_language": "it", "access": "search"}
-    assert scout_coverage.measure(entry, rows(source))["passes"] == 0
+    assert scout_coverage.measure(entry, read_rows(source.home / "logs/scout-passes.jsonl"))["passes"] == 0
     assert not (source.home / "jobs.db").exists()
     # Supply a different fake source, still through the real search/parser API.
     monkeypatch.setattr(access, "GUEST_SEARCH", "https://alternative.example.invalid/guest")
@@ -52,6 +53,10 @@ def test_a_foreign_reply_is_explicit_and_a_local_fake_source_can_feed_the_real_q
         "position", "--title", job["title"], "--company", job["company"], "--location", job["location"],
         "--url", candidate["url"], "--source", "linkedin", "--found-by", "scout-1",
         "--jd-text", job["jd_text"], "--requirements", "SQL", "--remote-type", "hybrid"])
+    args.check_only = args.link_verified = args.filters_checked = True
+    db_insert.insert_position(args)
+    args.scout_check = json.loads(capsys.readouterr().out)["scout_check"]
+    args.check_only = False
     db_insert.insert_position(args)
     capsys.readouterr()
     db_query.next_for_role("analista", as_json=True)

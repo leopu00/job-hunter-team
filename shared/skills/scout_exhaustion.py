@@ -132,23 +132,8 @@ def window_start(now: float) -> float | None:
 
 
 def read_rows(since_ts: float, path: Path | None = None) -> list:
-    rows = []
-    for candidate in ((path or log_path()).with_suffix(".jsonl.1"), path or log_path()):
-        try:
-            text = candidate.read_text(encoding="utf-8")
-        except OSError:
-            continue
-        for line in text.splitlines():
-            try:
-                row = json.loads(line)
-            except ValueError:
-                continue
-            ts = row.get("ts") if isinstance(row, dict) else None
-            if isinstance(ts, (int, float)) and not isinstance(ts, bool) and ts >= since_ts \
-                    and row.get("kind") in ("pass", "candidate"):
-                rows.append(row)
-    rows.sort(key=lambda r: r["ts"])
-    return rows
+    from scout_pass_report import read_rows as read_passes
+    return read_passes(path or log_path(), since_ts)
 
 
 def measure(rows: list, since_declared: float | None = None) -> dict:

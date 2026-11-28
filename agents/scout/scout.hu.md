@@ -154,3 +154,14 @@ STEP 7 → TÉRJ VISSZA a STEP 3-hoz a KÖVETKEZŐ pozícióért (következő
 Örökli a csapat-szintű T01..T19 szabályokat innen: `agents/_team/team-rules.md`: no kill más tmux session, jht-tmux-send kötelező, no hallucinations, deliverables a `$JHT_USER_DIR`-ben, `tmp/+tools/` housekeeping, install Python `uv pip install --user`-rel. A fenti szabályok (SC-01..SC-04) role-specific-ek.
 
 **[SCOUT-SEARCH-SCOPE]** A `broad` keresés bővíti a szerep kulcsszavait, de megtartja a profil keresési területét. Keresés előtt kövesd a `scout-coverage` földrajzi hatókörre és kifejezett eredményekre vonatkozó eljárását. A portál `country` mezője naplócímke, nem költözési engedély. Shell nélküli natív harness esetén ugyanez a terület maradjon a natív lekérdezésben; a konténer parancsait ne futtasd a gazdagépen.
+
+
+## A parancs által kikényszerített SC-09
+
+Az öt ellenőrzés után futtasd a `db_insert.py position` parancsot az összes adattal és a `--check-only --link-verified --filters-checked` kapcsolókkal. Ezzel megerősíted az élő kanonikus linket, a teljes leírás elolvasását és a szűrőket; a parancs a duplikációt és a területet is ellenőrzi. Az eredmény `scout_check`. Ezt az EGY jelöltet ugyanazokkal az adatokkal és a `--scout-check <bizonylat>` kapcsolóval szúrd be, majd throttle. A bizonylat 15 percig érvényes, egyszer használható, és a Scouthoz és jelölthöz tartozik. Másik jelölt ellenőrzése érvényteleníti az előző bizonylatot. Hiányzó vagy eltérő bizonylat: exit 5, nincs INSERT. Egész portálhoz ne készíts elő ellenőrzéseket.
+
+Ne találj ki helyszínt: a helykitöltőket a parancs elutasítja (`LOCATION_PLACEHOLDER`); hagyd el a `--location` kapcsolót, ha a hirdetésben nincs helyszín. A távoli munkavégzés területei különböznek: Spanyolország és Portugália maradjon külön.
+
+A forrás által visszaadott jelölteket számold a helyi szűrők ELŐTT, ne a beszúrásokat. `remoteok` és `jobspresso`: `--country remote`; `concorsipubblici-it`: `--country it`. Minden valódi keresést egyszer naplózz a tényleges lekérdezéssel; a gyorsítótár nem új keresés. Üres lista: `--returned 0 --status empty`; hozzáférési/hálózati hiba: closed/blocked/gone. Ha az oldalak nem hozzáférhetők, használd a Himalayas API-t.
+
+Javításhoz vedd a `pass_id` (`scout_pass_log.py pass ... --json`) értéket az eredeti válaszból vagy a `scout_pass_report.py --json` kimenetéből, majd `scout_pass_log.py correct --pass-id <id> --source <forrás> --country <cc> --agent <eredeti-scout> --returned <valós-darabszám> --status <állapot>`. A javítás a naplóban marad, megőrzi a lekérdezést és az időt, frissíti a jelentést és a lefedettséget új keresés nélkül. Az importokhoz (`--found-by import-*`, Scout-munkameneten kívül) nem kell SC-09-bizonylat.

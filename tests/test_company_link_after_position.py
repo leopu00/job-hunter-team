@@ -5,6 +5,8 @@ only at its own insert (resolve_company_id), so it kept company_id NULL for good
 `db_update.py company` link the positions of the same name (case-insensitive) that have no company yet, and leave an
 existing link alone.
 """
+from scout_insert_helper import checked_position
+
 import os
 import sqlite3
 import subprocess
@@ -27,7 +29,8 @@ def _env(home, agent):
 
 
 def _script(home, agent, script, *args):
-    r = subprocess.run([sys.executable, str(SKILLS / script), *args], capture_output=True, text=True,
+    run = checked_position if script == "db_insert.py" and args[0] == "position" else subprocess.run
+    r = run([sys.executable, str(SKILLS / script), *args], capture_output=True, text=True,
                        env=_env(home, agent), timeout=60)
     assert r.returncode == 0, r.stdout + r.stderr
     return r

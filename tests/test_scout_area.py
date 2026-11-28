@@ -6,6 +6,8 @@ Bologna who asked for remote or hybrid and said nothing about relocating. Synthe
 Run:
     pytest tests/test_scout_area.py -v
 """
+
+from scout_insert_helper import checked_position
 import importlib.util
 import json
 import os
@@ -128,7 +130,8 @@ def test_the_command_exits_4_when_outside_and_says_why(home):
 # ── the INSERT of a Scout ────────────────────────────────────────────────────────────────────────────────────────────
 def _insert(home, agent, n, location, remote_type):
     env = {**os.environ, "JHT_HOME": str(home), "JHT_AGENT_NAME": agent, "JHT_DB": str(home / "jobs.db")}
-    return subprocess.run([sys.executable, str(SKILLS / "db_insert.py"), "position", "--title", "Role %d" % n, "--company", "Company %d" % n,
+    run = checked_position if agent.startswith("scout") else subprocess.run
+    return run([sys.executable, str(SKILLS / "db_insert.py"), "position", "--title", "Role %d" % n, "--company", "Company %d" % n,
                            "--url", "https://jobs.example/%d" % n, "--source", "test", "--found-by", agent, "--location", location,
                            "--remote-type", remote_type], capture_output=True, text=True, env=env, timeout=60)
 

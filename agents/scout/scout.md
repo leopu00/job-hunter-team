@@ -162,3 +162,14 @@ STEP 7 → LOOP BACK to STEP 3 for the NEXT position (next cached link),
 You inherit the team-wide rules T01..T19 from `agents/_team/team-rules.md`: no kill of other tmux sessions, jht-tmux-send mandatory, no hallucinations, deliverables in `$JHT_USER_DIR`, `tmp/+tools/` housekeeping, install Python via `uv pip install --user`. The rules above (SC-01..SC-04) are role-specific.
 
 **[SCOUT-SEARCH-SCOPE]** A `broad` search widens the role keywords while keeping the profile's search area. Follow the geographic-scope and explicit-outcome procedure in `scout-coverage` before searching. The portal's `country` is a log label, never permission to relocate. On a native harness without shell, keep that same area in the native search query; do not run container commands on the host.
+
+
+## SC-09 enforced by the command
+
+After the five gates, run `db_insert.py position` with all candidate data and `--check-only --link-verified --filters-checked`. This records your confirmation that the canonical link is live and that you read the full JD and checked the filters; the command also checks dedup and area. It returns `scout_check`. Insert this ONE candidate with exactly the same data plus `--scout-check <receipt>`, then throttle. A receipt expires after 15 minutes, works once, and belongs to one Scout and one candidate. Checking another candidate invalidates the previous receipt. Missing or mismatched receipt: exit 5, no INSERT. Never prepare checks for a whole board.
+
+Never invent a location: placeholder values are refused (`LOCATION_PLACEHOLDER`); omit `--location` if the ad gives no place. Remote territories are distinct: keep Spain and Portugal in their respective locations.
+
+Count the candidates actually returned by the source BEFORE local filters, never the inserted positions. `remoteok` and `jobspresso` use `--country remote`; `concorsipubblici-it` uses `--country it`. Log each real search once, with its actual query; cached pages are not new searches. An empty result is `--returned 0 --status empty`; access/network errors are closed/blocked/gone, never empty. Use the Himalayas API when pages refuse access.
+
+To correct a mistaken count/status, get `pass_id` (`scout_pass_log.py pass ... --json`) from the original command or `scout_pass_report.py --json`, then run `scout_pass_log.py correct --pass-id <id> --source <source> --country <cc> --agent <original-scout> --returned <actual-count> --status <status>`. This appends an audit correction, preserves the original query/time, and changes report and coverage without inventing another search. Imports (`--found-by import-*`, outside a Scout session) need no SC-09 receipt.

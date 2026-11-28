@@ -155,3 +155,14 @@ STEP 7 → GEH ZURÜCK zu STEP 3 für die NÄCHSTE Position (nächster
 Du erbst die team-wide Regeln T01..T19 aus `agents/_team/team-rules.md`: no kill anderer tmux-Sessions, jht-tmux-send obligatorisch, no hallucinations, Deliverables in `$JHT_USER_DIR`, `tmp/+tools/` Housekeeping, Python via `uv pip install --user` installieren. Die obigen Regeln (SC-01..SC-04) sind role-specific.
 
 **[SCOUT-SEARCH-SCOPE]** Eine `broad`-Suche erweitert die Rollenstichwörter und behält das Suchgebiet des Profils bei. Befolge vor der Suche das Verfahren für geografischen Umfang und ausdrückliche Ergebnisse in `scout-coverage`. Das `country` des Portals ist eine Protokollangabe, keine Umzugserlaubnis. Im nativen Harness ohne Shell bleibt dasselbe Gebiet in der nativen Suchanfrage; Containerbefehle nicht auf dem Host ausführen.
+
+
+## SC-09 durch den Befehl erzwungen
+
+Nach den fünf Prüfungen führe `db_insert.py position` mit allen Daten und `--check-only --link-verified --filters-checked` aus. Du bestätigst den aktiven kanonischen Link, das Lesen der vollständigen Beschreibung und die Filter; der Befehl prüft auch Duplikate und Gebiet. Er liefert `scout_check`. Füge diesen EINEN Kandidaten mit denselben Daten und `--scout-check <Beleg>` ein, dann throttle. Der Beleg gilt 15 Minuten, einmalig und nur für diesen Scout und Kandidaten. Eine andere Prüfung entwertet den vorherigen Beleg. Fehlender oder abweichender Beleg: exit 5, kein INSERT. Keine Prüfungen für ein ganzes Portal vorbereiten.
+
+Erfinde keinen Ort: Platzhalter werden abgelehnt (`LOCATION_PLACEHOLDER`); lasse `--location` weg, wenn die Anzeige keinen Ort nennt. Remote-Gebiete bleiben getrennt: Spanien und Portugal behalten ihren jeweiligen Ort.
+
+Zähle die gelieferten Kandidaten VOR lokalen Filtern, nie die Einfügungen. `remoteok` und `jobspresso`: `--country remote`; `concorsipubblici-it`: `--country it`. Jede echte Suche einmal mit der echten Anfrage protokollieren; Cache-Seiten sind keine neuen Suchen. Leere Liste: `--returned 0 --status empty`; Zugriffs-/Netzfehler: closed/blocked/gone. Nutze die Himalayas-API, wenn Seiten den Zugriff verweigern.
+
+Für Korrekturen hole `pass_id` (`scout_pass_log.py pass ... --json`) aus der ursprünglichen Antwort oder `scout_pass_report.py --json`, dann `scout_pass_log.py correct --pass-id <id> --source <Quelle> --country <cc> --agent <ursprünglicher-scout> --returned <echte-Anzahl> --status <Status>`. Die Korrektur bleibt im Protokoll, erhält Anfrage und Zeit und aktualisiert Bericht und Abdeckung ohne neue Suche. Imports (`--found-by import-*`, außerhalb einer Scout-Sitzung) brauchen keinen SC-09-Beleg.

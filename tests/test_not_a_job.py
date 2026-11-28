@@ -2,6 +2,8 @@
 
 Two of the 19 inserted were ads the Scout itself called «not a job» in its notes (a franchise, «lead marketplace, non posizione di lavoro»).
 """
+from scout_insert_helper import checked_position
+
 import os
 import sqlite3
 import subprocess
@@ -39,7 +41,8 @@ def _insert(tmp_path, agent, title, notes=None, n=1):
            "--source", "test", "--found-by", agent, "--location", "Rimini", "--remote-type", "onsite"]
     if notes:
         cmd += ["--notes", notes]
-    return subprocess.run(cmd, capture_output=True, text=True, env=env, timeout=60)
+    run = checked_position if agent.startswith("scout") else subprocess.run
+    return run(cmd, capture_output=True, text=True, env=env, timeout=60)
 
 
 def _count(tmp_path):

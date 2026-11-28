@@ -121,7 +121,7 @@ def test_saved_preference_is_used_and_named_in_the_persisted_judgment(salary_hom
     command("db_insert.py", "position", "--title", "Synthetic Analyst", "--company", "Example Company",
             "--url", "https://jobs.example.test/1", "--jd-text", "Annual gross salary: EUR 30000–40000.",
             "--salary-declared-min", "30000",
-            "--salary-declared-max", "40000", "--salary-declared-currency", "EUR", "--found-by", "scout-1")
+            "--salary-declared-max", "40000", "--salary-declared-currency", "EUR", "--found-by", "import-synthetic")
     command("db_update.py", "position", "1", "--status", "checked", "--loc-city", "Exampletown")
     monkeypatch.setattr(local_scorer, "check_liveness", lambda position: {"state": "OPEN", "http": 200})
     monkeypatch.setattr(local_scorer, "query_feedback_context", lambda position: ([], {"outcome": "no-signal"}))

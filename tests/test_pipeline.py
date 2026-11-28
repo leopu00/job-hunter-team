@@ -224,7 +224,7 @@ class TestDbInsertPosition:
             '--remote-type', 'hybrid',
             '--url', 'https://acme.example.com/jobs/1',
             '--source', 'linkedin',
-            '--found-by', 'scout-1',
+            '--found-by', 'import-synthetic',
         ], tmp_db, tmp_path)
 
         conn = sqlite3.connect(tmp_db)

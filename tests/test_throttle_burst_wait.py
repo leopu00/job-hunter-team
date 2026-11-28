@@ -12,6 +12,8 @@ Run:
 
 import importlib.util
 import json
+from scout_insert_helper import checked_position
+
 import os
 import sqlite3
 import subprocess
@@ -41,7 +43,7 @@ def first_run_state(home, phase="burst", began=None):
 def insert(home, n, agent="scout-1"):
     env = {**os.environ, "JHT_HOME": str(home), "JHT_AGENT_NAME": agent}
     env.pop("JHT_DB", None)
-    done = subprocess.run(
+    done = checked_position(
         [sys.executable, str(DB_INSERT), "position", "--title", f"Role {n}", "--company", f"Company {n}",
          "--url", f"https://jobs.example/{n}", "--source", "test", "--found-by", agent],
         capture_output=True, text=True, env=env, timeout=60)

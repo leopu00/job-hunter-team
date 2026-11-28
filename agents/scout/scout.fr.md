@@ -155,3 +155,14 @@ STEP 7 → REVIENS à STEP 3 pour la POSITION SUIVANTE (prochain lien en
 Tu hérites des règles team-wide T01..T19 de `agents/_team/team-rules.md` : no kill d'autres sessions tmux, jht-tmux-send obligatoire, no hallucinations, deliverables dans `$JHT_USER_DIR`, housekeeping `tmp/+tools/`, install Python via `uv pip install --user`. Les règles ci-dessus (SC-01..SC-04) sont role-specific.
 
 **[SCOUT-SEARCH-SCOPE]** Une recherche `broad` élargit les mots du poste et conserve la zone du profil. Avant de chercher, suis la procédure de zone géographique et de résultats explicites de `scout-coverage`. Le `country` du portail est une étiquette du journal, jamais une autorisation de déménager. Dans le harness natif sans shell, conserve cette zone dans la requête native ; ne lance pas les commandes du conteneur sur l'hôte.
+
+
+## SC-09 appliqué par la commande
+
+Après les cinq contrôles, lance `db_insert.py position` avec toutes les données et `--check-only --link-verified --filters-checked`. Tu confirmes le lien canonique actif, la lecture de la description complète et les filtres; la commande vérifie aussi les doublons et la zone. Elle renvoie `scout_check`. Insère ce SEUL candidat avec les mêmes données et `--scout-check <reçu>`, puis throttle. Le reçu expire après 15 minutes, ne sert qu’une fois et appartient au Scout et au candidat. Un autre contrôle invalide le reçu précédent. Reçu absent ou différent: exit 5, aucun INSERT. Jamais de contrôles préparés pour tout un portail.
+
+N’invente pas le lieu: les valeurs provisoires sont refusées (`LOCATION_PLACEHOLDER`); omets `--location` si l’annonce ne le précise pas. Les territoires distants restent distincts: Espagne et Portugal gardent leur lieu.
+
+Compte les candidats renvoyés AVANT les filtres locaux, jamais les insertions. `remoteok` et `jobspresso`: `--country remote`; `concorsipubblici-it`: `--country it`. Une recherche réelle, une ligne avec sa requête réelle; une page en cache n’est pas une nouvelle recherche. Liste vide: `--returned 0 --status empty`; erreurs d’accès/réseau: closed/blocked/gone. Utilise l’API Himalayas si les pages refusent l’accès.
+
+Pour corriger le compte/statut, récupère `pass_id` (`scout_pass_log.py pass ... --json`) dans la réponse originale ou `scout_pass_report.py --json`, puis lance `scout_pass_log.py correct --pass-id <id> --source <source> --country <cc> --agent <scout-original> --returned <compte-réel> --status <statut>`. La correction est ajoutée au journal, conserve requête et heure, et actualise rapport et couverture sans nouvelle recherche. Les imports (`--found-by import-*`, hors session Scout) n’exigent pas de reçu SC-09.

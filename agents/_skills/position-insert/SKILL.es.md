@@ -156,3 +156,10 @@ Si tienes 2 Analysts, alterna el objetivo del ping para balancear carga (los Ana
 - `db-insert` — internos del wrapper + esquema de `position`.
 - `agents/_manual/anti-collision.md` — contrato más amplio de coordinación de Scout.
 - `agents/scout/scout.md` — el prompt orquestador que llama esta skill en el bucle principal.
+
+
+## SC-09 aplicado por el comando
+
+Tras los cinco controles, ejecuta `db_insert.py position` con todos los datos y `--check-only --link-verified --filters-checked`. Confirmas el enlace canónico activo, la lectura de la descripción completa y los filtros; el comando comprueba también duplicados y zona. Devuelve `scout_check`. Inserta este ÚNICO candidato con los mismos datos y `--scout-check <recibo>`, después throttle. El recibo caduca a los 15 minutos, sirve una vez y pertenece al Scout y al candidato. Otro control invalida el recibo anterior. Recibo ausente o distinto: exit 5, ningún INSERT. Nunca prepares controles para todo un portal.
+
+No inventes la sede: se rechazan los marcadores (`LOCATION_PLACEHOLDER`); omite `--location` si falta en el anuncio. Distingue los territorios remotos: España y Portugal conservan sus sedes.

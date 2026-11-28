@@ -11,6 +11,7 @@ Eseguire con:
     pytest tests/test_pipeline_agents.py -v
 """
 
+import json
 import os
 import re
 import sqlite3
@@ -120,10 +121,14 @@ def fresh_db(tmp_path):
 
 def insert_position(db_path, tmp, title, company, url=None, source='test', found_by='scout-1'):
     url = url or f'https://example.com/{company.lower()}-{title.lower().replace(" ", "-")}'
-    r = run_cli(DB_INSERT, [
-        'position', '--title', title, '--company', company,
-        '--url', url, '--source', source, '--found-by', found_by,
-    ], db_path, tmp)
+    args = ['position', '--title', title, '--company', company,
+            '--url', url, '--source', source, '--found-by', found_by,
+            '--jd-text', 'Complete synthetic description.', '--requirements', 'Synthetic requirements.']
+    if found_by.startswith('scout'):
+        checked = run_cli(DB_INSERT, args + ['--check-only', '--link-verified', '--filters-checked'], db_path, tmp)
+        assert checked.returncode == 0, checked.stderr
+        args += ['--scout-check', json.loads(checked.stdout)['scout_check']]
+    r = run_cli(DB_INSERT, args, db_path, tmp)
     assert r.returncode == 0, f"insert position fallito:\n{r.stderr}"
     conn = sqlite3.connect(db_path)
     row = conn.execute(

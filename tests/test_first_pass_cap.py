@@ -9,6 +9,8 @@ Run:
     pytest tests/test_first_pass_cap.py -v
 """
 
+from scout_insert_helper import checked_position
+
 import importlib.util
 import json
 import os
@@ -38,7 +40,8 @@ def insert(home, n, agent="scout-1", **env):
     """One `db_insert.py position` as the agent runs it."""
     e = {**os.environ, "JHT_HOME": str(home), "JHT_AGENT_NAME": agent, **env}
     e.pop("JHT_DB", None)
-    return subprocess.run(
+    run = checked_position if agent.startswith("scout") else subprocess.run
+    return run(
         [sys.executable, str(DB_INSERT), "position", "--title", f"Role {n}", "--company", f"Company {n}",
          "--url", f"https://jobs.example/{n}", "--source", "test", "--found-by", agent],
         capture_output=True, text=True, env=e, timeout=60)
@@ -157,11 +160,18 @@ def test_six_scouts_at_once_take_exactly_the_places_there_are(tmp_path):
     burst_state(tmp_path, cap=3)
     env = {**os.environ, "JHT_HOME": str(tmp_path)}
     env.pop("JHT_DB", None)
-    procs = [subprocess.Popen(
-        [sys.executable, str(DB_INSERT), "position", "--title", f"Role {i}", "--company", f"Company {i}",
-         "--url", f"https://jobs.example/race-{i}", "--source", "test", "--found-by", f"scout-{i}"],
-        stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env={**env, "JHT_AGENT_NAME": f"scout-{i}"})
-        for i in range(1, 7)]
+    commands = []
+    for i in range(1, 7):
+        args = [sys.executable, str(DB_INSERT), "position", "--title", f"Role {i}", "--company", f"Company {i}",
+                "--url", f"https://jobs.example/race-{i}", "--source", "test", "--found-by", f"scout-{i}",
+                "--jd-text", "Complete synthetic description.", "--requirements", "Synthetic requirements."]
+        scout_env = {**env, "JHT_AGENT_NAME": f"scout-{i}"}
+        checked = subprocess.run(args + ["--check-only", "--link-verified", "--filters-checked"],
+                                 capture_output=True, text=True, env=scout_env, timeout=60)
+        assert checked.returncode == 0, checked.stderr
+        commands.append((args + ["--scout-check", json.loads(checked.stdout)["scout_check"]], scout_env))
+    procs = [subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, env=scout_env)
+             for args, scout_env in commands]
     codes = sorted(p.wait(timeout=60) for p in procs)
     assert codes == [0, 0, 0, 3, 3, 3], codes
     assert rows(tmp_path) == 4

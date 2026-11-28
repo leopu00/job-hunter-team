@@ -51,7 +51,7 @@ def query(db: Path, sql: str, *params):
 def insert(db: Path, n: int, *extra: str) -> int:
     done = run(db, "db_insert.py", "position", "--title", f"Warehouse operator {n}", "--company", f"Acme {n}",
                "--url", f"https://example.org/jobs/{n}", "--source", "example", "--location", "Rome, Italy",
-               "--remote-type", "onsite", "--found-by", "scout-1", *extra)
+               "--remote-type", "onsite", "--found-by", "import-synthetic", *extra)
     assert done.returncode == 0, done.stdout + done.stderr
     return query(db, "SELECT id FROM positions WHERE url = ?", f"https://example.org/jobs/{n}")[0][0]
 

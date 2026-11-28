@@ -351,3 +351,79 @@ def test_the_page_words_still_make_the_same_question_after_the_pattern_change(a,
 
 def test_a_word_that_only_looks_like_a_page_word_is_part_of_the_question():
     assert plog.query_hash("junior pageant 3") != plog.query_hash("junior")
+
+
+@pytest.mark.parametrize("source,country", [("remoteok", "remote"), ("jobspresso", "remote"), ("concorsipubblici-it", "it")])
+def test_source_registry_and_corrections_are_used_by_report_coverage_and_exhaustion(home, source, country):
+    import scout_coverage
+    import scout_exhaustion
+    import scout_empty_alert
+    assert _run("pass", "--source", source, "--country", country, "--returned", "0", "--status", "empty") == 0
+    original = _lines(home)[0]
+    ident = plog.pass_id(original)
+    assert _run("correct", "--pass-id", ident, "--source", source, "--country", country,
+                "--returned", "13", "--status", "ok") == 0
+    raw = _lines(home)
+    assert raw[0] == original and raw[1]["kind"] == "correction", "the original is retained for audit"
+    rows = report.read_rows(plog.log_path())
+    assert len(rows) == 1 and rows[0]["returned"] == 13
+    assert rows[0]["ts"] == original["ts"] and plog.pass_id(rows[0]) == ident
+    assert report.fold(rows)["summary"][0]["returned"] == 13
+    entry = {"slug": source, "country": country, "portal_language": "en", "access": "search"}
+    assert scout_coverage.measure(entry, rows)["passes"] == 1
+    assert scout_exhaustion.read_rows(0, plog.log_path())[0]["returned"] == 13
+    assert scout_empty_alert.streak(scout_empty_alert._rows(plog.log_path()), "scout-1") == []
+    # A second correction targets the SAME pass, not the previous correction's time or count.
+    assert _run("correct", "--pass-id", ident, "--source", source, "--country", country,
+                "--returned", "7", "--status", "ok") == 0
+    assert report.read_rows(plog.log_path())[0]["returned"] == 7
+
+
+@pytest.mark.parametrize("alias,canonical,country", [("remoteok.com", "remoteok", "remote"),
+    ("jobspresso.co", "jobspresso", "remote"), ("concorsipubblici", "concorsipubblici-it", "it")])
+def test_source_aliases_and_territories_are_canonical_for_pass_and_candidate(home, alias, canonical, country):
+    assert _run("pass", "--source", alias, "--returned", "3") == 0
+    assert _run("candidate", "--source", alias, "--outcome", "inserted", "--opened") == 0
+    assert all((r["source"], r["country"]) == (canonical, country) for r in _lines(home))
+    assert report.fold(report.read_rows(plog.log_path()))["passes"][0]["inserted"] == 1
+
+
+@pytest.mark.parametrize("returned,status", [(3, "empty"), (0, "ok")])
+def test_inconsistent_pass_count_and_status_are_refused(home, returned, status):
+    assert _run("pass", "--source", "remoteok", "--returned", str(returned), "--status", status) == 2
+    assert not _lines(home)
+
+
+def test_unknown_correction_target_or_wrong_agent_writes_nothing(home):
+    assert _run("correct", "--pass-id", "0" * 16, "--source", "remoteok", "--returned", "1", "--status", "ok") == 2
+    assert not _lines(home)
+    _run("pass", "--source", "remoteok", "--returned", "0")
+    ident = plog.pass_id(_lines(home)[0])
+    assert _run("correct", "--pass-id", ident, "--source", "remoteok", "--agent", "scout-2",
+                "--returned", "1", "--status", "ok") == 2
+    assert len(_lines(home)) == 1
+
+
+def test_correction_can_fix_an_old_wrong_territory_and_keeps_candidates_attached(home):
+    old = _pass(T0, source="remoteok", country="it", returned=0)
+    plog.append(old)
+    plog.append(_cand(T0 + 1, "inserted", source="remoteok", country="it"))
+    ident = plog.pass_id(old)
+    assert _run("correct", "--pass-id", ident, "--source", "remoteok", "--returned", "3", "--status", "ok") == 0
+    rows = report.read_rows(plog.log_path())
+    assert all(r["country"] == "remote" for r in rows)
+    folded = report.fold(rows)
+    assert folded["passes"][0]["inserted"] == 1 and not folded["orphan"]
+
+
+def test_a_broken_correction_is_ignored_without_losing_the_original_pass(home):
+    row = _pass(T0)
+    plog.append(row)
+    plog.append({"kind": "correction", "ts": T0 + 1, "agent": "scout-1", "source": "greenhouse", "pass_id": plog.pass_id(row)})
+    assert report.read_rows(plog.log_path())[0]["returned"] == row["returned"]
+
+
+def test_a_partial_search_retains_returned_candidates_when_a_later_page_is_blocked(home):
+    assert _run("pass", "--source", "remoteok", "--returned", "13", "--status", "blocked") == 0
+    row = _lines(home)[0]
+    assert row["returned"] == 13 and row["status"] == "blocked"

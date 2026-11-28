@@ -14,6 +14,10 @@ Salary (V2 — dichiarato vs stimato):
 """
 
 import argparse
+import hashlib
+import json
+import secrets
+import time
 import re
 import sqlite3
 import sys
@@ -50,6 +54,7 @@ POSITION_INTERNAL_FIELDS = (
     "salary_estimated_source",
     "found_by",
     "notes",
+    "check_only", "link_verified", "filters_checked", "scout_check",
 )
 
 # Campi di uno score che, cambiando, dicono che la rivalutazione è avvenuta.
@@ -105,6 +110,66 @@ from city_names import (
     share_a_place as _share_a_place,
     CITY_SYNONYMS as _CITY_SYNONYMS,
 )
+
+
+def _compatible_territory(a, b):
+    from scout_area import country_of
+    ca, cb = country_of(a), country_of(b)
+    if ca and cb and ca != cb:
+        return False
+    city_a, city_b = _normalize_city_canonical(a), _normalize_city_canonical(b)
+    if city_a == city_b and city_a in ("remote", "remoto", "remote worldwide", "worldwide"):
+        return " ".join((a or "").casefold().split()) == " ".join((b or "").casefold().split())
+    return True
+
+
+def _same_location(a, b):
+    """Keep city/province synonyms without collapsing distinct remote territories."""
+    return _compatible_territory(a, b) and _same_place(a, b)
+
+
+def _placeholder_location(value):
+    if not value:
+        return False  # genuinely unknown is stored as NULL, never invented
+    text = " ".join(value.casefold().split())
+    return (text in {"n/a", "na", "none", "null", "unknown", "tbd", "tbc", "not specified",
+                     "not available", "location", "location here", "sede", "sede da verificare",
+                     "non specificata", "non specificato", "da definire", "-", "?", "..."}
+            or bool(re.search(r"[<>{}\[\]]|placeholder|segnaposto", text)))
+
+
+# Operational brake, like db_role_policy: it does not protect against raw SQL or a changed environment.
+# One outstanding receipt per Scout; checking a second candidate invalidates the first.
+_CHECK_FIELDS = EXTERNAL_INLINE_FIELDS + EXTERNAL_BLOCK_FIELDS + tuple(
+    f for f in POSITION_INTERNAL_FIELDS if f not in {"check_only", "link_verified", "filters_checked", "scout_check"})
+
+
+def _scout_check(conn, args, actor):
+    def refuse(reason):
+        print("SC09_REFUSED: " + reason + ". Run position --check-only --link-verified --filters-checked "
+              "with this candidate's full data, then position --scout-check <receipt> with the SAME data.", file=sys.stderr)
+        raise SystemExit(5)
+
+    conn.execute("CREATE TABLE IF NOT EXISTS scout_position_checks "
+                 "(actor TEXT PRIMARY KEY, token TEXT NOT NULL, fingerprint TEXT NOT NULL, expires REAL NOT NULL)")
+    fingerprint = hashlib.sha256(json.dumps(
+        {f: getattr(args, f, None) for f in _CHECK_FIELDS}, sort_keys=True).encode()).hexdigest()
+    if getattr(args, "check_only", False):
+        if not (getattr(args, "link_verified", False) and getattr(args, "filters_checked", False)):
+            refuse("confirm the live canonical link and per-candidate filters after reading the full JD")
+        if not all(str(getattr(args, f, None) or "").strip() for f in
+                   ("title", "company", "url", "source", "jd_text", "requirements")):
+            refuse("title, company, URL, source, full JD and requirements must be nonempty")
+        token = secrets.token_hex(16)
+        conn.execute("INSERT OR REPLACE INTO scout_position_checks VALUES (?, ?, ?, ?)",
+                     (actor, token, fingerprint, time.time() + 900))
+        return token
+    token = getattr(args, "scout_check", None)
+    row = conn.execute("SELECT token, fingerprint, expires FROM scout_position_checks WHERE actor = ?", (actor,)).fetchone()
+    if not token or not row or row[0] != token or row[1] != fingerprint or row[2] < time.time():
+        refuse("missing, expired, reused or mismatched per-candidate receipt")
+    conn.execute("DELETE FROM scout_position_checks WHERE actor = ?", (actor,))
+    return None
 
 
 def _log_dedup_skip(level, existing_id, skipped_url, company, title):
@@ -244,7 +309,7 @@ def check_duplicate(conn, url, company, title, location=None):
             except (sqlite3.Error, OverflowError):
                 cand = None
             # la riga deve esistere ed essere piu' vecchia del rifiuto: un log di un db precedente (stessi numeri di id) non conta
-            if cand and str(cand['created_at'] or '')[:19] <= refused_at:
+            if cand and _compatible_territory(cand['location'], location) and str(cand['created_at'] or '')[:19] <= refused_at:
                 _log_dedup_skip(1, cand['id'], url, company, title)
                 return cand, "URL gia' rifiutato come doppione"
 
@@ -261,7 +326,7 @@ def check_duplicate(conn, url, company, title, location=None):
             (company, title)
         ).fetchall()
         for cand in candidates_l2:
-            if _same_place(cand['location'], location):
+            if _same_location(cand['location'], location):
                 _log_dedup_skip(2, cand['id'], url, company, title)
                 return cand, "azienda+titolo+city-norm"
 
@@ -273,7 +338,7 @@ def check_duplicate(conn, url, company, title, location=None):
             (company,)
         ).fetchall()
         for cand in candidates_l3:
-            if not _same_place(cand['location'], location):
+            if not _same_location(cand['location'], location):
                 continue
             if _title_similarity(title, cand['title']) > 0.85:
                 _log_dedup_skip(3, cand['id'], url, company, title)
@@ -349,7 +414,8 @@ def check_duplicate_text(conn, jd_text, location=None, title=None):
         "SELECT id, title, company, location, SUBSTR(jd_text, 1, 6000) AS jd FROM positions "
         "WHERE jd_text IS NOT NULL AND LENGTH(jd_text) >= 200").fetchall()
     for cand in rows:
-        if not (_same_place(cand['location'], location) or _share_a_place(cand['location'], location)):
+        if not (_compatible_territory(cand['location'], location) and
+                (_same_place(cand['location'], location) or _share_a_place(cand['location'], location))):
             continue
         theirs = _jd_shingles(cand['jd'])
         if not theirs:
@@ -383,6 +449,9 @@ def insert_position(args):
     # di formattazione — è il pezzo che permette a un annuncio di ridisegnare
     # l'intestazione che l'agente legge come testo nostro.
     normalize_external_inline_fields(args)
+    if _placeholder_location(getattr(args, "location", None)):
+        print("LOCATION_PLACEHOLDER: INSERT refused. Use the ad's actual place or omit --location if unknown.", file=sys.stderr)
+        raise SystemExit(5)
 
     conn = get_db()
     ensure_schema(conn)
@@ -478,6 +547,19 @@ def insert_position(args):
             conn.close()
             sys.exit(1)
 
+        scout = first_run.is_scout(actor) or first_run.is_scout(args.found_by)
+        if scout:
+            check_actor = actor if first_run.is_scout(actor) else args.found_by
+            token = _scout_check(conn, args, check_actor)
+            if token:
+                conn.execute("COMMIT")
+                conn.close()
+                print(json.dumps({"scout_check": token, "expires_in_s": 900}))
+                return
+        elif getattr(args, "check_only", False):
+            print("SC09_REFUSED: --check-only is for a Scout; imports use position directly.", file=sys.stderr)
+            raise SystemExit(5)
+
         # Auto-resolve company_id
         company_id = resolve_company_id(conn, args.company)
 
@@ -519,6 +601,8 @@ def insert_position(args):
         )
         conn.execute("COMMIT")
     except SystemExit:
+        _rollback_quietly(conn)
+        conn.close()
         raise
     except sqlite3.IntegrityError as exc:
         _rollback_quietly(conn)
@@ -776,6 +860,10 @@ def build_parser():
     p.add_argument('--found-by')
     p.add_argument('--deadline', help='Deadline date YYYY-MM-DD or "not present"')
     p.add_argument('--notes')
+    p.add_argument('--check-only', action='store_true', help='Check ONE Scout candidate and issue a single-use receipt without inserting')
+    p.add_argument('--link-verified', action='store_true', help='The Scout verified the canonical posting is live')
+    p.add_argument('--filters-checked', action='store_true', help='The Scout read the full JD and checked the per-candidate filters')
+    p.add_argument('--scout-check', help='Single-use receipt from --check-only, bound to this Scout and all position data')
 
     # company
     c = sub.add_parser('company')

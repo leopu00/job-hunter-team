@@ -33,6 +33,8 @@ from collections import defaultdict
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE))
+from scout_pass_log import effective_rows, pass_id
 OUTCOMES = ("inserted", "duplicate", "dead_link", "closed_ad", "seniority", "work_auth", "domain", "experience",
             "language", "role", "area", "other")
 
@@ -54,12 +56,11 @@ def read_rows(path: Path, since_ts: float = 0.0) -> list:
                 row = json.loads(line)
             except ValueError:
                 continue
-            if (isinstance(row, dict) and row.get("kind") in ("pass", "candidate")
-                    and isinstance(row.get("ts"), (int, float)) and row["ts"] >= since_ts
+            if (isinstance(row, dict) and row.get("kind") in ("pass", "candidate", "correction")
+                    and isinstance(row.get("ts"), (int, float)) and not isinstance(row["ts"], bool)
                     and isinstance(row.get("agent"), str) and isinstance(row.get("source"), str)):
                 rows.append(row)
-    rows.sort(key=lambda r: r["ts"])
-    return rows
+    return [r for r in effective_rows(rows) if r["ts"] >= since_ts]
 
 
 def weight(row: dict) -> int:
@@ -101,7 +102,7 @@ def fold(rows: list, events=None) -> dict:
         last_line[agent] = row["ts"]
         if row["kind"] == "pass":
             current = {"agent": agent, "source": source, "country": country, "ts": row["ts"],
-                       "query_kind": row.get("query_kind"), "query_hash": row.get("query_hash"),
+                       "pass_id": pass_id(row), "query_kind": row.get("query_kind"), "query_hash": row.get("query_hash"),
                        "returned": int(row.get("returned") or 0), "opened": 0,
                        "outcomes": {o: 0 for o in OUTCOMES}, "_from": before, "_to": row["ts"]}
             passes.append(current)

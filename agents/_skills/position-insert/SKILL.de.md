@@ -156,3 +156,10 @@ Wenn du 2 Analysten hast, wechsle das Ping-Ziel ab, um die Last zu verteilen (An
 - `db-insert` — die Wrapper-Interna + `position`-Schema.
 - `agents/_manual/anti-collision.md` — breiterer Scout-Koordinationsvertrag.
 - `agents/scout/scout.md` — der Orchestrator-Prompt, der diesen Skill in der Hauptschleife aufruft.
+
+
+## SC-09 durch den Befehl erzwungen
+
+Nach den fünf Prüfungen führe `db_insert.py position` mit allen Daten und `--check-only --link-verified --filters-checked` aus. Du bestätigst den aktiven kanonischen Link, das Lesen der vollständigen Beschreibung und die Filter; der Befehl prüft auch Duplikate und Gebiet. Er liefert `scout_check`. Füge diesen EINEN Kandidaten mit denselben Daten und `--scout-check <Beleg>` ein, dann throttle. Der Beleg gilt 15 Minuten, einmalig und nur für diesen Scout und Kandidaten. Eine andere Prüfung entwertet den vorherigen Beleg. Fehlender oder abweichender Beleg: exit 5, kein INSERT. Keine Prüfungen für ein ganzes Portal vorbereiten.
+
+Erfinde keinen Ort: Platzhalter werden abgelehnt (`LOCATION_PLACEHOLDER`); lasse `--location` weg, wenn die Anzeige keinen Ort nennt. Remote-Gebiete bleiben getrennt: Spanien und Portugal behalten ihren jeweiligen Ort.

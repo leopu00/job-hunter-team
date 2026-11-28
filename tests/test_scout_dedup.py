@@ -8,6 +8,8 @@ Eseguire:
     pytest tests/test_scout_dedup.py -v
 """
 
+from scout_insert_helper import checked_position
+
 import json
 import os
 import subprocess
@@ -26,7 +28,7 @@ def jht_home(tmp_path):
     """JHT_HOME isolato + una posizione seed nel DB."""
     env = {**os.environ, "JHT_HOME": str(tmp_path)}
     # seed: Canonical / Software Engineer / Milano
-    r = subprocess.run(
+    r = checked_position(
         [sys.executable, DB_INSERT, "position",
          "--title", "Software Engineer", "--company", "Canonical",
          "--location", "Milano, Italy", "--url", "https://jobs.example/seed-1",

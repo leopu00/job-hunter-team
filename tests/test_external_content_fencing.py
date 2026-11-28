@@ -118,7 +118,7 @@ def seed_hostile_position(db_path):
         "--location", "Milano",
         "--jd-text", HOSTILE,
         "--requirements", "Python",
-        "--found-by", "scout-1",
+        "--found-by", "import-synthetic",
         db=db_path,
     )
     match = re.search(r"ID:\s*(\d+)", result.stdout)

@@ -6,9 +6,10 @@ what it could have excluded before spending? The product could not say. A candid
 link, a filter of Gate 4, a language seen in the JD) left no trace anywhere but the Scout's own session. Now it leaves
 one line.
 
-Two kinds of line, appended to `$JHT_HOME/logs/scout-passes.jsonl`:
+Three kinds of line, appended to `$JHT_HOME/logs/scout-passes.jsonl`:
 
   pass       the Scout asked a source and got a list: how many candidates came back.
+  correction a counted pass is corrected by its id, preserving its original query and timestamp.
   candidate  one candidate of that list went through the gates: where it ended (inserted, or the reason it was dropped)
              and whether the full JD was fetched for it (`--opened`: the expensive step).
 
@@ -126,9 +127,14 @@ def _count(name: str, value) -> int:
 
 def _common(args, kind: str, now: float) -> dict:
     source = str(args.source or "").strip().lower()
+    source = {"remoteok.com": "remoteok", "remoteok.io": "remoteok", "remote-ok": "remoteok",
+              "jobspresso.co": "jobspresso", "concorsipubblici": "concorsipubblici-it",
+              "concorsipubblici.com": "concorsipubblici-it"}.get(source, source)
     if not SOURCE.match(source):
         raise Refused("source must be a slug of a-z 0-9 . _ - (at most 40 characters)")
     country = str(args.country or "multi").strip().lower()
+    # These are worldwide boards, or an Italian national board; the query's city is not the source's territory.
+    country = {"remoteok": "remote", "jobspresso": "remote", "concorsipubblici-it": "it"}.get(source, country)
     if not COUNTRY.match(country):
         raise Refused("country must be a two-letter code, `multi` or `remote`")
     return {"v": VERSION, "kind": kind, "ts": round(now, 3), "agent": _agent(args.agent),
@@ -138,8 +144,8 @@ def _common(args, kind: str, now: float) -> dict:
 def build(args, now: float = None) -> dict:
     """The line for these arguments, or `Refused`."""
     now = time.time() if now is None else now
-    if args.cmd == "pass":
-        row = _common(args, "pass", now)
+    if args.cmd in ("pass", "correct"):
+        row = _common(args, "pass" if args.cmd == "pass" else "correction", now)
         row["returned"] = _count("returned", args.returned)
         kind = args.query_kind or "other"
         if kind not in QUERY_KINDS:
@@ -151,6 +157,16 @@ def build(args, now: float = None) -> dict:
             if args.status not in STATUSES:
                 raise Refused("status must be one of: %s" % ", ".join(STATUSES))
             row["status"] = args.status
+        status = row.get("status")
+        if row["returned"] > 0 and status == "empty":
+            raise Refused("an empty pass cannot have returned candidates")
+        if row["returned"] == 0 and status == "ok":
+            raise Refused("zero candidates is empty, not ok; use blocked/closed/gone for errors")
+        if args.cmd == "correct":
+            if not re.fullmatch(r"[a-f0-9]{16}", args.pass_id or ""):
+                raise Refused("pass-id must be the 16 hex digits printed by pass or report --json")
+            row = {k: v for k, v in row.items() if k not in ("query_kind", "query_hash")}
+            row["pass_id"] = args.pass_id
         return row
     row = _common(args, "candidate", now)
     if args.outcome not in OUTCOMES:
@@ -201,7 +217,16 @@ def parser() -> argparse.ArgumentParser:
         p.add_argument("--source", required=True)
         p.add_argument("--country", default="multi")
         p.add_argument("--agent", default=None, help="default: JHT_AGENT_NAME")
+    c = sub.add_parser("correct", help="append an auditable correction of one pass, never a new search")
+    c.add_argument("--source", required=True)
+    c.add_argument("--country", default="multi")
+    c.add_argument("--agent", default=None)
+    c.add_argument("--pass-id", required=True)
+    c.add_argument("--returned", type=int, required=True)
+    c.add_argument("--status", choices=STATUSES, required=True)
+    c.set_defaults(query_kind="other", query=None)
     p = sub.choices["pass"]
+    p.add_argument("--json", action="store_true", help="print the pass id for later correction")
     p.add_argument("--returned", type=int, required=True, help="how many candidates the source gave back")
     p.add_argument("--query-kind", default="other", choices=QUERY_KINDS)
     p.add_argument("--query", default=None, help="only its hash is stored, never the text")
@@ -221,8 +246,68 @@ def main(argv=None) -> int:
     except Refused as exc:
         print("scout_pass_log: refused: %s" % exc, file=sys.stderr)
         return 2
-    record(row)
+    if args.cmd == "correct":
+        from scout_pass_report import read_rows
+        targets = [r for r in read_rows(log_path()) if r.get("kind") == "pass" and pass_id(r) == args.pass_id]
+        if len(targets) != 1 or targets[0].get("agent") != row["agent"]:
+            print("scout_pass_log: refused: no unique pass for this id and agent", file=sys.stderr)
+            return 2
+        if not append(row):
+            return 1  # a correction must not claim success when it was not written
+        print(json.dumps({"corrected": args.pass_id}))
+    else:
+        record(row)
+        if args.cmd == "pass" and args.json:
+            print(json.dumps({"pass_id": pass_id(row)}))
     return 0
+
+
+def pass_id(row: dict) -> str:
+    return row.get("pass_id") or hashlib.sha256(
+        json.dumps(row, sort_keys=True, separators=(",", ":")).encode()).hexdigest()[:16]
+
+
+def effective_rows(rows: list) -> list:
+    """Resolve append-only corrections before any time filter; keep original timestamps and query hashes."""
+    ordered = sorted(rows, key=lambda r: r["ts"])
+    originals = {pass_id(r): r for r in ordered if r.get("kind") == "pass"}
+    corrections = {}
+    for row in ordered:
+        if row.get("kind") != "correction":
+            continue
+        target = originals.get(row.get("pass_id"))
+        if not target or target.get("agent") != row.get("agent"):
+            continue
+        try:
+            _count("returned", row.get("returned"))
+            if (row.get("status") not in STATUSES
+                    or not SOURCE.fullmatch(str(row.get("source", "")))
+                    or not COUNTRY.fullmatch(str(row.get("country", "")))):
+                continue
+            if (row["returned"] > 0 and row["status"] == "empty") or (row["returned"] == 0 and row["status"] == "ok"):
+                continue
+        except Refused:
+            continue
+        corrections[row["pass_id"]] = row
+    result, active = [], {}
+    for row in ordered:
+        if row.get("kind") == "correction":
+            continue
+        copy = dict(row)
+        if copy.get("kind") == "pass":
+            ident = pass_id(copy)
+            copy["pass_id"] = ident
+            correction = corrections.get(ident)
+            if correction:
+                for key in ("returned", "status", "source", "country"):
+                    copy[key] = correction[key]
+            active[copy["agent"]] = (row.get("source"), row.get("country"), copy["source"], copy["country"])
+        elif copy.get("kind") == "candidate":
+            scope = active.get(copy.get("agent"))
+            if scope and (copy.get("source"), copy.get("country")) == scope[:2]:
+                copy["source"], copy["country"] = scope[2:]
+        result.append(copy)
+    return result
 
 
 def record(row: dict) -> bool:

@@ -153,3 +153,14 @@ STEP 7 → VOLTA a STEP 3 para a POSIÇÃO SEGUINTE (próximo link em
 Herdas as regras team-wide T01..T19 de `agents/_team/team-rules.md`: no kill de outras sessões tmux, jht-tmux-send obrigatório, no hallucinations, deliverables em `$JHT_USER_DIR`, housekeeping `tmp/+tools/`, instalar Python via `uv pip install --user`. As regras acima (SC-01..SC-04) são role-specific.
 
 **[SCOUT-SEARCH-SCOPE]** A pesquisa `broad` alarga as palavras da função e mantém a área do perfil. Antes de pesquisar segue o procedimento de âmbito geográfico e resultados explícitos em `scout-coverage`. O `country` do portal é uma etiqueta do registo, nunca autorização para mudar de residência. No harness nativo sem shell mantém a mesma área na consulta nativa; não executes comandos do contentor no host.
+
+
+## SC-09 aplicado pelo comando
+
+Após os cinco controlos, executa `db_insert.py position` com todos os dados e `--check-only --link-verified --filters-checked`. Confirmas o link canónico ativo, a leitura da descrição completa e os filtros; o comando verifica também duplicados e área. Devolve `scout_check`. Insere este ÚNICO candidato com os mesmos dados e `--scout-check <recibo>`, depois throttle. O recibo expira após 15 minutos, vale uma vez e pertence ao Scout e candidato. Outro controlo invalida o recibo anterior. Recibo ausente ou diferente: exit 5, nenhum INSERT. Nunca prepares controlos para um portal inteiro.
+
+Não inventes a sede: os marcadores são recusados (`LOCATION_PLACEHOLDER`); omite `--location` se faltar no anúncio. Distingue territórios remotos: Espanha e Portugal mantêm as respetivas sedes.
+
+Conta os candidatos devolvidos ANTES dos filtros locais, nunca as inserções. `remoteok` e `jobspresso`: `--country remote`; `concorsipubblici-it`: `--country it`. Regista cada pesquisa real uma vez com a consulta real; a cache não é uma nova pesquisa. Lista vazia: `--returned 0 --status empty`; erros de acesso/rede: closed/blocked/gone. Usa a API Himalayas quando as páginas recusam acesso.
+
+Para corrigir contagem/estado, obtém `pass_id` (`scout_pass_log.py pass ... --json`) da resposta original ou de `scout_pass_report.py --json`, depois `scout_pass_log.py correct --pass-id <id> --source <fonte> --country <cc> --agent <scout-original> --returned <contagem-real> --status <estado>`. A correção fica no registo, conserva consulta e hora e atualiza relatório e cobertura sem nova pesquisa. Os imports (`--found-by import-*`, fora de sessão Scout) não exigem recibo SC-09.

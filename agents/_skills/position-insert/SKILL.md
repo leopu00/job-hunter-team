@@ -200,3 +200,10 @@ If you have 2 Analysts, alternate the ping target to balance load (Analysts also
 - `db-insert` — the wrapper internals + `position` schema.
 - `agents/_manual/anti-collision.md` — broader Scout coordination contract.
 - `agents/scout/scout.md` — the orchestrator prompt that calls this skill in the main loop.
+
+
+## SC-09 enforced by the command
+
+After the five gates, run `db_insert.py position` with all candidate data and `--check-only --link-verified --filters-checked`. This records your confirmation that the canonical link is live and that you read the full JD and checked the filters; the command also checks dedup and area. It returns `scout_check`. Insert this ONE candidate with exactly the same data plus `--scout-check <receipt>`, then throttle. A receipt expires after 15 minutes, works once, and belongs to one Scout and one candidate. Checking another candidate invalidates the previous receipt. Missing or mismatched receipt: exit 5, no INSERT. Never prepare checks for a whole board.
+
+Never invent a location: placeholder values are refused (`LOCATION_PLACEHOLDER`); omit `--location` if the ad gives no place. Remote territories are distinct: keep Spain and Portugal in their respective locations.

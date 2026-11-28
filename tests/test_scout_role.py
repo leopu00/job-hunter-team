@@ -6,6 +6,8 @@ Measured 16/11: a bricklayer got 22 off-trade positions out of 32 (cashier, coun
 Run:
     pytest tests/test_scout_role.py -v
 """
+
+from scout_insert_helper import checked_position
 import json
 import os
 import sqlite3
@@ -147,7 +149,8 @@ def _run(home, *args, agent="scout-1"):
 
 def _insert(home, agent, n, title, requirements="requisiti generici"):
     env = {**os.environ, "JHT_HOME": str(home), "JHT_AGENT_NAME": agent, "JHT_DB": str(home / "jobs.db")}
-    return subprocess.run([sys.executable, str(SKILLS / "db_insert.py"), "position", "--title", title, "--company", "Azienda %d" % n,
+    run = checked_position if agent.startswith("scout") else subprocess.run
+    return run([sys.executable, str(SKILLS / "db_insert.py"), "position", "--title", title, "--company", "Azienda %d" % n,
                            "--url", "https://jobs.example/%d" % n, "--source", "test", "--found-by", agent, "--location", "Bari, Italy",
                            "--remote-type", "onsite", "--jd-text", "annuncio sintetico", "--requirements", requirements],
                           capture_output=True, text=True, env=env, timeout=60)
