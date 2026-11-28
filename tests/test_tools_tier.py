@@ -1,5 +1,6 @@
-"""The Capitano and the tools of the full image: it waits at most ten minutes after the onboarding closed, then starts with
-only the roles that do not need them (tools_tier.py, captain_gate.py, captain_boot.py, start-agent.sh)."""
+"""The Capitano and the tools of the full image (tools_tier.py, captain_gate.py, captain_boot.py, start-agent.sh), JHT-T362:
+before the first run opens it waits for the switch to the full image, however long it takes, and a failed pull holds it with
+its own reason; a first run already open on the core image starts degraded, with only the roles that do not need the tools."""
 
 from __future__ import annotations
 
@@ -55,12 +56,30 @@ def _gate(home: Path, tier: str | None = "core") -> tuple[int, dict]:
 def test_the_capitano_waits_while_the_full_image_is_on_its_way(tmp_path: Path, state: str):
     code, out = _gate(_home(tmp_path, _tools(state)))
     assert (code, out["captain_due"], out["reason"]) == (1, False, "tools_pending")
-    assert 0 < out["tools"]["left"] <= tools_tier.WAIT_SECONDS
+    assert out["tools"]["wait"] is True and "left" not in out["tools"]
 
 
-def test_after_ten_minutes_it_starts_and_the_gate_says_degraded(tmp_path: Path):
-    code, out = _gate(_home(tmp_path, _tools("pulling", since_ago=900), flag_age=700))
-    assert (code, out["reason"], out["tools"]["degraded"]) == (0, "ready_flag", "timeout")
+def test_the_case_of_the_server_ten_minutes_are_no_longer_a_reason_to_open_the_first_run_on_the_core_image(tmp_path: Path):
+    """A server with the CLI only: the full image pulled hours before (state ready), ready.flag eleven minutes old, the switch
+    of the host still to come. The Capitano used to start at ten minutes and open the first run with every Scout refused."""
+    code, out = _gate(_home(tmp_path, _tools("ready", since_ago=3 * 3600), flag_age=660))
+    assert (code, out["reason"], out["phase"]) == (1, "tools_pending", "awaiting_profile")
+    code, out = _gate(_home(tmp_path / "day", _tools("pulling", since_ago=86400), flag_age=86000))
+    assert (code, out["reason"]) == (1, "tools_pending"), "no cap: it waits for the switch"
+
+
+def test_once_the_switch_is_made_the_capitano_starts_at_once(tmp_path: Path):
+    home = _home(tmp_path, {**_tools("ready"), "tier": "full"})
+    assert _gate(home, tier="full")[:1] == (0,)
+    assert _gate(home, tier="full")[1]["reason"] == "ready_flag"
+
+
+def test_an_onboarding_done_early_on_the_core_image_waits_for_the_switch_too(tmp_path: Path):
+    """The case of the Mac: onboarding-done.flag written early. On the core image it waits for the switch like ready.flag."""
+    home = _home(tmp_path, _tools("ready"), flag_age=None)
+    (home / "profile" / "onboarding-done.flag").write_text("x\n", encoding="utf-8")
+    assert _gate(home)[1]["reason"] == "tools_pending"
+    assert _gate(home, tier="full")[1]["reason"] == "onboarding_done"
 
 
 @pytest.mark.parametrize(
@@ -71,7 +90,7 @@ def test_a_reason_that_is_not_a_short_code_is_dropped_before_it_reaches_anything
     import captain_boot
     state = tools_tier.read_state(_home(tmp_path, _tools("failed", reason=reason)))
     assert state is not None and state["reason"] == ""
-    code, out = _gate(_home(tmp_path / "again", _tools("failed", reason=reason)))
+    code, out = _gate(_home(tmp_path / "again", _tools("failed", reason=reason), phase="burst"))
     assert (code, out["tools"]["degraded"], out["tools"]["reason"]) == (0, "failed", "")
     assert "unknown reason" in captain_boot.tools_line(out)
 
@@ -81,14 +100,15 @@ def test_a_short_code_passes_as_it_is(tmp_path: Path, reason: str):
     assert tools_tier.read_state(_home(tmp_path, _tools("failed", reason=reason)))["reason"] == reason
 
 
-def test_a_pull_that_began_after_the_onboarding_closed_has_its_own_ten_minutes(tmp_path: Path):
-    code, out = _gate(_home(tmp_path, _tools("pulling", since_ago=60), flag_age=3000))
-    assert (code, out["reason"]) == (1, "tools_pending")
-
-
-def test_a_failed_pull_does_not_hold_it(tmp_path: Path):
+def test_a_failed_pull_holds_it_with_its_own_reason_before_the_first_run(tmp_path: Path):
     code, out = _gate(_home(tmp_path, _tools("failed", reason="pull_failed")))
-    assert (code, out["reason"], out["tools"]["degraded"], out["tools"]["reason"]) == (0, "ready_flag", "failed", "pull_failed")
+    assert (code, out["reason"], out["tools"]["degraded"], out["tools"]["reason"]) == (1, "tools_failed", "failed", "pull_failed")
+
+
+@pytest.mark.parametrize("phase", ["burst", "steady"])
+def test_a_first_run_already_open_on_the_core_image_is_not_held_and_starts_degraded(tmp_path: Path, phase: str):
+    code, out = _gate(_home(tmp_path, _tools("pulling"), phase=phase))
+    assert (code, out["reason"], out["tools"]["degraded"]) == (0, "ready_flag", "pending")
 
 
 @pytest.mark.parametrize("tools", [None, "{not json", json.dumps({"schema": 2, "state": "pulling"}), json.dumps({"schema": 1, "state": "weird"}), "[]"])
@@ -110,22 +130,12 @@ def test_a_symlinked_state_file_is_not_believed(tmp_path: Path):
     assert _gate(home)[1]["reason"] == "ready_flag"
 
 
-def test_a_wrong_clock_in_the_future_ends_the_wait(tmp_path: Path):
-    home = _home(tmp_path, _tools("pulling", since_ago=-7200), flag_age=-7200)
-    assert _gate(home)[1]["tools"]["degraded"] == "timeout"
-
-
-def test_no_onboarding_close_time_means_no_wait(tmp_path: Path):
-    home = _home(tmp_path, _tools("pulling"))
-    assert tools_tier.verdict(None, home=home, tier="core") is None
-
-
 def test_the_boot_block_tells_the_degraded_start(tmp_path: Path):
     import captain_boot
-    line = captain_boot.tools_line({"tools": {"degraded": "timeout"}})
+    line = captain_boot.tools_line({"tools": {"degraded": "pending"}})
     assert line and "notify-user" in line and "scout" in line
     failed = captain_boot.tools_line({"tools": {"degraded": "failed", "reason": "pull_failed"}})
-    assert failed and "pull_failed" in failed
+    assert failed and "pull_failed" in failed and "jht tools pull" in failed
     assert captain_boot.tools_line({"reason": "ready_flag"}) is None
 
 

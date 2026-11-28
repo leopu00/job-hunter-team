@@ -13,10 +13,15 @@ The host writes `$JHT_HOME/state/tools.json`, atomically:
   * `failed`           the pull gave up (`reason`).
 No file, an unreadable one or another schema: nothing is known, the team behaves as it always did.
 
-What the Capitano does with it (captain_gate.py, captain_boot.py, start-agent.sh):
-  * it WAITS for the full image for at most WAIT_SECONDS after the onboarding closed (`ready.flag`), then starts anyway;
-  * a failed pull, or the end of the wait, is `degraded`: it starts, tells the user once, and starts only the roles that
-    do not need the tools (ROLES_NEEDING_TOOLS stay down: start-agent.sh refuses them with exit 75 while the image is core).
+What the Capitano does with it (captain_gate.py, captain_boot.py, start-agent.sh), JHT-T362:
+  * before the first run opens, it WAITS for the switch to the full image, however long it takes: the host switches at
+    ready.flag as soon as the image is here (jht-tools.sh, the app's round). A Capitano started on the core image opened the
+    first run with every Scout refused (exit 75): the window of the first run went by with nobody searching. A ten-minute
+    cap did exactly that on a server where the switch came half an hour later;
+  * a failed pull holds it too (`tools_failed`): the person is told the command (`jht tools pull`), not a team that searches
+    with nobody;
+  * a first run already open on the core image (an install from before this rule) is not held: it is `degraded` and the
+    Capitano starts only the roles that do not need the tools (ROLES_NEEDING_TOOLS stay down: start-agent.sh exit 75).
 
   python3 tools_tier.py status             # {"tier": ..., "state": ..., "wait": ..., "degraded": ..., "missing_for": [...]}
   python3 tools_tier.py role-ready <role>  # exit 1 = that role needs the tools and this image does not have them yet
@@ -31,8 +36,6 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 
-WAIT_SECONDS = 600  # the Capitano waits at most 10 minutes after the onboarding closed
-CLOCK_SLACK = 300  # a flag dated further in the future than this is a wrong clock: no wait
 STATES = ("pending", "pulling", "ready", "failed")
 REASON_CODE = re.compile(r"[a-z0-9_-]{1,40}")  # what a reason of the notice may be: lowercase code words, nothing else
 # The roles whose work needs what only the full image has: the Scout and the Analista render JS pages in the browser,
@@ -77,33 +80,21 @@ def _epoch(stamp: object) -> float | None:
     return when.timestamp() if when.tzinfo else when.replace(tzinfo=timezone.utc).timestamp()
 
 
-def verdict(closed_at: float | None, home: Path | None = None, now: float | None = None,
-            tier: str | None = None) -> dict | None:
-    """What the Capitano's start has to know about the tools, or None when there is nothing to say.
+def verdict(home: Path | None = None, tier: str | None = None) -> dict | None:
+    """What the Capitano's start has to know about the tools, or None when there is nothing to say (the full image, or no
+    readable notice of the host: the team behaves as it always did).
 
-    `closed_at` is the time (epoch seconds) at which the onboarding closed, None when it is not known: then there is no
-    wait (a start with no clock to measure from never holds the Capitano). The wait runs from the later of that and the
-    start of the pull (`since`): a pull that began after the onboarding closed has its own ten minutes. The answer carries `wait` (do not start
-    yet, `left` seconds to go) or `degraded` (`timeout` or `failed`: start, with the tools missing).
+    On the core image: `wait` True while the full image is on its way or here and not switched to yet (pending, pulling,
+    ready: the switch is the host's, at ready.flag), and `degraded` "failed" with the `reason` when the pull gave up.
     """
     if (image_tier() if tier is None else tier) != "core":
         return None
     seen = read_state(home)
     if seen is None:
         return None
-    out: dict = {"state": seen["state"], "wait": False, "degraded": None}
     if seen["state"] == "failed":
-        out.update(degraded="failed", reason=seen["reason"])
-        return out
-    if closed_at is None:
-        return None
-    started = max(closed_at, seen["since"]) if seen["since"] else closed_at
-    age = (time.time() if now is None else now) - started
-    if age < -CLOCK_SLACK or age >= WAIT_SECONDS:
-        out["degraded"] = "timeout"
-    else:
-        out.update(wait=True, left=int(WAIT_SECONDS - max(age, 0)))
-    return out
+        return {"state": "failed", "wait": True, "degraded": "failed", "reason": seen["reason"]}
+    return {"state": seen["state"], "wait": True, "degraded": None}
 
 
 def role_ready(role: str, tier: str | None = None) -> bool:

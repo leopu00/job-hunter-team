@@ -461,7 +461,7 @@ def test_the_ids_of_the_answer_are_the_ones_of_the_helper():
 
 # ── Invoke-ToolsKick: the CLI keeps the tools moving, as the desktop app's round did ──────────────────────────────────────────
 
-KICK_ENV = {"JHT_TOOLS_WAIT_STEP": "1", "JHT_TOOLS_SWITCH_GRACE": "0", "JHT_TOOLS_WAIT_MAX": "120", "JHT_TOOLS_QUIET_MAX": "20", "JHT_TOOLS_ONBOARDING_MAX": "0"}
+KICK_ENV = {"JHT_TOOLS_WAIT_STEP": "1", "JHT_TOOLS_SWITCH_GRACE": "0", "JHT_TOOLS_WAIT_MAX": "120", "JHT_TOOLS_QUIET_MAX": "20"}
 
 
 def _until(check, what, rounds=600):
@@ -795,25 +795,18 @@ def test_the_wrapper_tells_the_fresh_one_why_the_chat_resumes():
         assert body.index(f"$env:JHT_TEAM_CHAT_RESUME_AFTER = '{why}'") < body.index("-File $WrapperPath 'team' @ChatArgs"), name
 
 
-def test_the_switch_waits_for_the_end_of_the_onboarding_not_for_ready_flag(box):
+def test_the_switch_goes_at_ready_flag_without_waiting_for_the_end_of_the_onboarding(box):
+    """JHT-T362: the switch goes at ready.flag, without onboarding-done.flag; the Capitano waits for it on the core image."""
     tier = box.tier()
     (box.fake / "full-present").write_text("", encoding="utf-8")
     (box.home / "profile" / "ready.flag").write_text("2026-11-15T21:10:19Z\n", encoding="utf-8")
-    assert box.run("exit (Invoke-ToolsKick)", **{**KICK_ENV, "JHT_TOOLS_ONBOARDING_MAX": "600"}).returncode == 0
-    time.sleep(6)
-    assert tier.exists() and _calls(box) == [], "the switch did not wait for the end of the onboarding"
-    (box.home / "profile" / "onboarding-done.flag").write_text("2026-11-15T21:40:00Z\n", encoding="utf-8")
-    _until(lambda: not tier.exists() and _calls(box) == ["down", "up"], f"no switch after the onboarding: {_calls(box)}")
+    assert box.run("exit (Invoke-ToolsKick)", **{**KICK_ENV, "JHT_TOOLS_ONBOARDING_MAX": "1800"}).returncode == 0
+    _until(lambda: not tier.exists() and _calls(box) == ["down", "up"], f"no switch at ready.flag: {_calls(box)}")
 
 
-def test_without_the_end_of_the_onboarding_the_tetto_after_ready_flag_decides(box):
-    tier = box.tier()
-    (box.fake / "full-present").write_text("", encoding="utf-8")
-    (box.home / "profile" / "ready.flag").write_text("2026-11-15T21:10:19Z\n", encoding="utf-8")
-    assert box.run("exit (Invoke-ToolsKick)", **{**KICK_ENV, "JHT_TOOLS_ONBOARDING_MAX": "8"}).returncode == 0
-    time.sleep(3)
-    assert tier.exists() and _calls(box) == [], "the switch did not wait for the tetto"
-    _until(lambda: not tier.exists() and _calls(box) == ["down", "up"], f"no switch at the tetto: {_calls(box)}")
+def test_the_windows_host_no_longer_waits_for_the_end_of_the_onboarding():
+    text = (ROOT / "scripts" / "jht-tools.ps1").read_text(encoding="utf-8")
+    assert "onboarding-done.flag" not in text and "JHT_TOOLS_ONBOARDING_MAX" not in text
 
 
 def test_a_team_the_person_stopped_stays_stopped_only_the_tier_goes(box):

@@ -176,6 +176,7 @@ export default {
   "agents.stopped": "parado",
   "agents.sessions_in_tmux": "Nomes das sessões no tmux:",
   "team.captain_tools": "O Capitano e a Sentinella arrancam sozinhos dentro de alguns minutos, quando as ferramentas da imagem completa estiverem prontas. O onboarding está feito: não há nada a fazer.",
+  "team.captain_tools_failed": "O Capitano e a Sentinella esperam pelas ferramentas da imagem completa, cujo download falhou. Executa: jht tools pull (a equipa arranca sozinha quando chegarem).",
   "container.team_stopped": "A equipa está parada (foste tu que a paraste): o contentor está ligado, os agentes não. Para os voltar a arrancar: jht team start",
   "team.help.title_usage": "Uso:",
   "team.help.title_arguments": "Argumentos:",

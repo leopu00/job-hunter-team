@@ -885,6 +885,18 @@ def _tell_the_capitano(message: str, timeout: float = START_NUDGE_SEND_S, allowe
     return (took and freed) or (pressed > 0 and freed), pressed
 
 
+def _captain_held() -> Optional[str]:
+    """The reason captain_gate.py holds the Capitano, or None when it is due (or the gate cannot be read: as it always was)."""
+    gate = _load_module("captain_gate", "captain_gate.py")
+    try:
+        answer = gate.check() if gate is not None else None
+    except Exception:  # noqa: BLE001
+        return None
+    if isinstance(answer, dict) and answer.get("captain_due") is False:
+        return str(answer.get("reason") or "not yet")
+    return None
+
+
 def _start_nudge(state: dict, info: dict, now: datetime, imported: Optional[float] = None) -> dict:
     """The plan is declared and the profile imported: while the first run has not opened, tell the Capitano to open it."""
     if state["phase"] != PHASE_AWAITING:
@@ -894,6 +906,11 @@ def _start_nudge(state: dict, info: dict, now: datetime, imported: Optional[floa
     declared = max((moment for moment in (_plan_declared_at(), imported) if moment is not None), default=None)
     if declared is not None and now.timestamp() - declared < START_NUDGE_SETTLE_S:
         return {"action": "waiting", "seconds_left": int(START_NUDGE_SETTLE_S - (now.timestamp() - declared))}
+    # a Capitano the gate holds (the switch to the full tools still to come, JHT-T362) has no session to be told in: a reminder
+    # sent now is lost (exit 2) and counts against the three, which were all spent before it started
+    held = _captain_held()
+    if held:
+        return {"action": "waiting", "reason": f"the Capitano is held: {held}"}
     record = _read_nudge()
     plan = info.get("plan")
     count, last = 0, None

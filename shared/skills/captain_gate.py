@@ -17,9 +17,11 @@ The onboarding is closed when ANY of these holds (`reason`):
   * `unknown`      the state cannot be read: it starts, as it always did.
 Otherwise `onboarding_open`: only the Assistente (and the daemons) run.
 
-A closed onboarding on the CORE image (the tools of the full image still on their way, tools_tier.py) holds the Capitano
-at most ten more minutes: `tools_pending`. After that, or when the pull failed, it is due with `tools` saying
-`degraded`: captain_boot.py tells it, and the roles that need the tools stay down (start-agent.sh).
+A closed onboarding on the CORE image holds the Capitano until the host has switched the team to the full image
+(tools_tier.py, JHT-T362): `tools_pending` while the image is on its way or here and not switched to yet, `tools_failed`
+when its pull gave up. The Capitano opens the first run, and a first run on the core image has every Scout refused: the
+window and the budget would go by with nobody searching. A first run already open (burst, steady) is never held: it is
+due with `tools` saying `degraded`, captain_boot.py tells it, and the roles that need the tools stay down (start-agent.sh).
 
   python3 captain_gate.py        # {"captain_due": bool, "reason": ..., "phase": ...}; exit 0 = due, 1 = wait
 Same contract as `first_run.py mentor-due`; the CLI (`jht team start`) and the agent watchdog both ask it.
@@ -29,7 +31,10 @@ Scorer scores positions against the profile, so before the profile is whole its 
 person's yet, and it spends: on giro Windows 16/11 a Scorer made 19 calls during the onboarding, and its first call started
 the budget's period half an hour early. It is due on the first of (`reason`):
   * `onboarding_done`  profile/onboarding-done.flag (the Assistente's questions are over, or the person said to stop);
-  * `onboarding_cap`   JHT_SCORER_ONBOARDING_MAX seconds (1800) since ready.flag, as the switch to the full image waits;
+  * `profile_valid`    ready.flag and a profile the validator passes whole (validate_profile.py: VALID_PROFILE), JHT-T362: the
+                       questionnaire that goes on after it is optional, and a Scorer held for it left fifty positions with no
+                       score while the budget ran out;
+  * `onboarding_cap`   JHT_SCORER_ONBOARDING_MAX seconds (1800) since ready.flag;
   * `phase`            the first run is steady (an installation that has worked for a while);
   * `profile_fit`      no ready.flag, and a profile that passes the gate to start the search (imported, or from before);
   * `override`         JHT_SCORER_BEFORE_PROFILE=1;
@@ -49,19 +54,21 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 
 def _with_tools(answer: dict, flag: Path) -> dict:
-    """The tools of the full image: wait for them (a little), or start degraded. Never raises: no clock, no wait."""
+    """The tools of the full image: before the first run, wait for the switch to them; once it is open, start degraded.
+    Never raises: a notice that cannot be read holds nothing."""
     try:
+        import first_run
         import tools_tier
-        seen = tools_tier.verdict(flag.stat().st_mtime, home=flag.parent.parent)
+        seen = tools_tier.verdict(home=flag.parent.parent)
     except Exception:
         return answer
     if seen is None:
         return answer
-    if seen["wait"]:
-        return {"captain_due": False, "reason": "tools_pending", "phase": answer["phase"], "tools": seen}
-    if seen["degraded"]:
-        answer["tools"] = seen
-    return answer
+    if answer["phase"] in (first_run.PHASE_BURST, first_run.PHASE_STEADY):
+        answer["tools"] = {**seen, "wait": False, "degraded": seen["degraded"] or "pending"}
+        return answer
+    reason = "tools_failed" if seen["degraded"] == "failed" else "tools_pending"
+    return {"captain_due": False, "reason": reason, "phase": answer["phase"], "tools": seen}
 
 
 def check() -> dict:
@@ -81,7 +88,7 @@ def check() -> dict:
         if phase in (first_run.PHASE_BURST, first_run.PHASE_STEADY):
             return {"captain_due": True, "reason": "phase", "phase": phase}
         if first_run._profile_imported() is not None:
-            return {"captain_due": True, "reason": "profile_fit", "phase": phase}
+            return _with_tools({"captain_due": True, "reason": "profile_fit", "phase": phase}, flag)
         return {"captain_due": False, "reason": "onboarding_open", "phase": phase}
     except Exception:  # whatever cannot be read, the Capitano starts as it always did
         return {"captain_due": True, "reason": "unknown", "phase": phase}
@@ -89,6 +96,20 @@ def check() -> dict:
 
 def _real_file(path: Path) -> bool:
     return path.is_file() and not path.is_symlink()
+
+
+def _profile_valid(path: Path) -> bool:
+    """The profile passes validate_profile.py whole (not only the minimum to start). A file that is not there, a link, or a
+    validator that cannot answer is «not yet»: the other ways to start the Scorer still hold."""
+    import subprocess
+    if not _real_file(path):
+        return False
+    try:
+        done = subprocess.run([sys.executable, "-I", str(Path(__file__).resolve().parent / "validate_profile.py"), str(path), "--json"],
+                              capture_output=True, text=True, timeout=30, check=False)
+        return json.loads(done.stdout).get("ok") is True
+    except (OSError, ValueError, subprocess.SubprocessError, AttributeError):
+        return False
 
 
 def scorer_check(now: float | None = None) -> dict:
@@ -104,6 +125,8 @@ def scorer_check(now: float | None = None) -> dict:
         if first_run.status().get("phase") == first_run.PHASE_STEADY:
             return {"scorer_due": True, "reason": "phase"}
         ready = profile / "ready.flag"
+        if _real_file(ready) and _profile_valid(profile / "candidate_profile.yml"):
+            return {"scorer_due": True, "reason": "profile_valid"}
         if _real_file(ready):
             try:
                 cap = int(os.environ.get("JHT_SCORER_ONBOARDING_MAX", "1800"))

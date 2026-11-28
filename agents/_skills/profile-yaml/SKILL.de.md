@@ -219,7 +219,12 @@ Diese Nachricht ist der Trigger seiner Skill `first-run-burst` (vollstandiges
 Roster sofort statt schrittweisem Hochfahren). Ohne sie sieht der Benutzer am
 ersten Tag alle zehn Minuten eine Position und halt die Anwendung fur kaputt.
 
-Antwortet `jht-tmux-send`, dass die Sitzung des Capitano nicht existiert (Exit 2, „nicht zugestellt“), ist das kein Fehler: Das Team startet NACH dem Speichern des Profils, und der Capitano liest beim Aufwachen `first_run.py status` und eröffnet die erste Runde selbst. Nicht erneut senden, nicht in einer Schleife wiederholen und der Person nicht sagen, dass etwas schiefgegangen ist; weiter mit der nächsten Frage.
+Antwortet `jht-tmux-send`, dass die Sitzung des Capitano nicht existiert (Exit 2, „nicht zugestellt“), ist das kein Fehler: Der Capitano startet von selbst, aber nicht immer sofort. Nicht erneut senden und nicht in einer Schleife wiederholen. Führe einmal `python3 /app/shared/skills/captain_gate.py` aus und sag der Person in ihrer Sprache und in einem Satz, worauf das Team wartet und wie lange, nach seinem `reason`:
+- `captain_due` true (`ready_flag`, `onboarding_done`, …): Das Team startet innerhalb einer Minute.
+- `tools_pending` mit `tools.state` `ready`: Das Team wechselt jetzt auf die vollständigen Werkzeuge der Scouts; in ein paar Minuten schließt sich dieser Chat und kommt von selbst zurück, das gerade Getippte bleibt erhalten, und gleich danach startet die Suche.
+- `tools_pending` mit `tools.state` `pending` oder `pulling`: Die Werkzeuge der Scouts (etwa 3 GB) werden noch heruntergeladen; sobald sie da sind, startet das Team einmal darauf neu (der Chat kommt von selbst zurück) und die Suche beginnt. Nichts zu tun.
+- `tools_failed`: Der Download der Werkzeuge ist fehlgeschlagen; die Suche startet, nachdem die Person `jht tools pull` im Terminal ihres Computers ausgeführt hat.
+Sag nie, dass das Team startet, „wenn der Capitano aufwacht“, ohne eine dieser Angaben. Dann weiter mit der nächsten Frage.
 
 ### Anti-Halluzination von Schritt 2
 

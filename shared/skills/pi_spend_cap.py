@@ -90,11 +90,14 @@ def day_start(now_ts):
     return datetime.fromtimestamp(now_ts).replace(hour=0, minute=0, second=0, microsecond=0).timestamp()
 
 
-WORKER_ROLES = ("scout", "analista", "scorer")  # the first call of one of them starts a budget of a duration
+# The first call of a Scout starts a budget of a duration: the first real work of search (JHT-T362). An Analista or a Scorer
+# that works before any Scout (a profile just saved, the core image that holds the Scouts) has nothing found to work on, and
+# starting the period with it let the period run out with no position: 20 minutes, 0 positions, the pause.
+WORKER_ROLES = ("scout",)
 
 
 def _is_worker(agent):
-    return isinstance(agent, str) and agent.split("-", 1)[0] in WORKER_ROLES
+    return isinstance(agent, str) and agent.split("-", 1)[0].lower() in WORKER_ROLES
 
 
 FLAG_MAX_BYTES = 1024 * 1024   # the flag of the halt carries the signatures of the panes: the bridge writes it, a few KiB

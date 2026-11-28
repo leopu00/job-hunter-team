@@ -326,27 +326,11 @@ function Get-ToolsWaitSeconds {
   return $Default
 }
 
-# ready.flag means "the team starts", not "the onboarding is over": the Assistente sets it with three fields and goes on asking.
-# The switch stops the container the conversation runs in, so it waits for the first of: profile\onboarding-done.flag, which the
-# Assistente writes when its questions are over or the person says to stop (skill profile-yaml), or JHT_TOOLS_ONBOARDING_MAX
-# seconds (1800) since ready.flag. The flag is the container's: it only says WHEN, and a link in its place is not believed.
-function Wait-ToolsOnboardingDone {
-  param($Flag)
-  $cap = Get-ToolsWaitSeconds 'JHT_TOOLS_ONBOARDING_MAX' 1800
-  $step = [Math]::Max(1, (Get-ToolsWaitSeconds 'JHT_TOOLS_WAIT_STEP' 15))
-  $doneFlag = Join-Path (Join-Path $JhtHome 'profile') 'onboarding-done.flag'
-  $since = $Flag.LastWriteTimeUtc
-  while ($true) {
-    if (-not (Test-Path -LiteralPath $RuntimeTierFile -PathType Leaf)) { return }
-    $item = Get-Item -LiteralPath $doneFlag -Force -ErrorAction SilentlyContinue
-    if ($item -and -not $item.PSIsContainer -and (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -eq 0)) { return }
-    if (([DateTime]::UtcNow - $since).TotalSeconds -ge $cap) { return }
-    Start-Sleep -Seconds $step
-  }
-}
-
-# The job waits for the profile (the onboarding has closed), then a little more, so the switch does not cut the last answers of the
-# onboarding short; the tier file gone means someone made the switch by hand (`jht tools switch`).
+# The job waits for profile\ready.flag (the team starts), then a few seconds, and makes the switch (JHT-T362). It no longer waits
+# for the end of the onboarding: the Capitano and the roles that search wait for this switch on the core image (captain_gate.py),
+# and a switch held for the end of the onboarding (or half an hour) kept the team without a Scout while its first run went on. The
+# chat of the onboarding says the restart, keeps the line and comes back by itself (JHT-T346). The tier file gone means someone
+# made the switch by hand (`jht tools switch`).
 function Wait-ToolsProfileAndSwitch {
   $flag = Join-Path $JhtHome 'profile\ready.flag'
   $step = Get-ToolsWaitSeconds 'JHT_TOOLS_WAIT_STEP' 15
@@ -356,7 +340,6 @@ function Wait-ToolsProfileAndSwitch {
     $item = Get-Item -LiteralPath $flag -Force -ErrorAction SilentlyContinue
     if ($item -and -not $item.PSIsContainer -and (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -eq 0)) {
       Start-Sleep -Seconds (Get-ToolsWaitSeconds 'JHT_TOOLS_SWITCH_GRACE' 30)
-      Wait-ToolsOnboardingDone $item
       Invoke-ToolsSwitchAuto
       return
     }

@@ -13,8 +13,8 @@
 #
 # tools_kick is what the wrapper calls on `jht up` and `jht setup` of a core install: it keeps the tools moving on a computer
 # with the CLI only, as the round of the desktop app does (desktop/src-tauri/src/tools_tier.rs). It starts one detached job, at
-# most, that pulls the full image when it is not here yet, waits for profile/ready.flag and then makes the switch itself, once no
-# other `jht` command runs: `down` of the core team, the tier goes, `up` on the full image (a team the person stopped stays
+# most, that pulls the full image when it is not here yet, waits for profile/ready.flag and then makes the switch itself (as the
+# app does at ready.flag: the Capitano waits for this switch, JHT-T362), once no other `jht` command runs: `down` of the core team, the tier goes, `up` on the full image (a team the person stopped stays
 # stopped); a switch that fails is written down for `jht up` and `jht status` to say, with the commands to give.
 #
 # The state comes from the engine and from the host files of the runtime, never from a file the container can write. The file
@@ -212,34 +212,17 @@ tools_kick() {
   return 0
 }
 
-tools_mtime() { stat -c %Y "$1" 2>/dev/null || stat -f %m "$1" 2>/dev/null; }
-
-# ready.flag means «the team starts», not «the onboarding is over»: the Assistente sets it with three fields and goes on asking.
-# The switch stops the container the conversation runs in, so it waits for the first of: profile/onboarding-done.flag, which the
-# Assistente writes when its questions are over or the person says to stop (skill profile-yaml), or JHT_TOOLS_ONBOARDING_MAX
-# seconds (1800) since ready.flag. The flag is the container's: it only says WHEN, and a link in its place is not believed.
-tools_wait_onboarding_done() {
-  local flag="$1" cap="${JHT_TOOLS_ONBOARDING_MAX:-1800}" step="${JHT_TOOLS_WAIT_STEP:-15}"
-  local done_flag="${JHT_HOME_HOST:-$HOME/.jht}/profile/onboarding-done.flag" since now
-  since="$(tools_mtime "$flag")" || since="$(date +%s)"
-  while :; do
-    [ -f "$RUNTIME_TIER_FILE" ] || return 0
-    [ -f "$done_flag" ] && [ ! -L "$done_flag" ] && return 0
-    now="$(date +%s)"
-    [ $((now - since)) -ge "$cap" ] && return 0
-    sleep "$step"
-  done
-}
-
-# The job waits for the profile (the onboarding has closed), then a little more, so the switch does not cut the last answers of
-# the onboarding short; the tier file gone means someone made the switch by hand (`jht tools switch`).
+# The job waits for profile/ready.flag (the team starts), then a few seconds, and makes the switch (JHT-T362). It no longer waits
+# for the end of the onboarding: the Capitano and the roles that search wait for this switch on the core image (captain_gate.py),
+# and a switch held for the end of the onboarding (or half an hour) kept the team without a Scout while its first run went on. The
+# chat of the onboarding says the restart, keeps the line and comes back by itself (JHT-T346). The tier file gone means someone
+# made the switch by hand (`jht tools switch`).
 tools_wait_and_switch() {
   local flag="${JHT_HOME_HOST:-$HOME/.jht}/profile/ready.flag" step="${JHT_TOOLS_WAIT_STEP:-15}" left="${JHT_TOOLS_WAIT_MAX:-86400}"
   while [ "$left" -gt 0 ]; do
     [ -f "$RUNTIME_TIER_FILE" ] || return 0
     if [ -f "$flag" ] && [ ! -L "$flag" ]; then
       sleep "${JHT_TOOLS_SWITCH_GRACE:-30}"
-      tools_wait_onboarding_done "$flag"
       tools_switch_auto
       return 0
     fi

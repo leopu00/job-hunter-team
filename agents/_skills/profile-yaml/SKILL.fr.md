@@ -219,7 +219,12 @@ message est le déclencheur de sa skill `first-run-burst` (effectif complet tout
 suite au lieu de la montée par paliers). Sans lui, le premier jour l'utilisateur
 voit une position toutes les dix minutes et en conclut que l'application est cassée.
 
-Si `jht-tmux-send` répond que la session du Capitano n'existe pas (sortie 2, « non remis »), ce n'est pas une erreur : l'équipe démarre APRÈS l'enregistrement du profil, et le Capitano lit `first_run.py status` à son réveil et ouvre seul le premier tour. Ne le renvoyez pas, ne réessayez pas en boucle et ne dites pas à la personne que quelque chose a mal tourné ; passez à la question suivante.
+Si `jht-tmux-send` répond que la session du Capitano n'existe pas (sortie 2, « non remis »), ce n'est pas une erreur : le Capitano démarre de lui-même, mais pas toujours tout de suite. Ne le renvoie pas et ne réessaie pas en boucle. Lance une fois `python3 /app/shared/skills/captain_gate.py` et dis à la personne, dans sa langue et en une phrase, ce que l'équipe attend et pour combien de temps, selon son `reason` :
+- `captain_due` true (`ready_flag`, `onboarding_done`, …) : l'équipe démarre dans la minute.
+- `tools_pending` avec `tools.state` `ready` : l'équipe passe maintenant aux outils complets des Scout ; dans quelques minutes ce chat se ferme et revient tout seul, en gardant ce qui est en train d'être tapé, et la recherche démarre juste après.
+- `tools_pending` avec `tools.state` `pending` ou `pulling` : les outils des Scout (environ 3 Go) sont encore en téléchargement ; quand ils sont là, l'équipe redémarre une fois dessus (le chat revient tout seul) et la recherche démarre. Rien à faire.
+- `tools_failed` : le téléchargement des outils a échoué ; la recherche démarre après que la personne a lancé `jht tools pull` dans le terminal de son ordinateur.
+Ne dis jamais que l'équipe démarre « quand le Capitano se réveille » sans l'un de ces cas. Puis passe à la question suivante.
 
 ### Anti-hallucination de l'étape 2
 
