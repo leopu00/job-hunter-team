@@ -7,6 +7,14 @@ is used by humans, by the native Godot app, and by AI agents driving JHT
 - **Package:** `jht-cli` · **Bin:** `jht` → [`bin/jht.js`](bin/jht.js)
 - **Stack:** Node.js · Commander
 
+## Terminal symbols
+
+On Windows, an unrecognized console uses plain symbols and omits emoji. Windows
+Terminal keeps Unicode symbols. Font support cannot be detected directly: set
+`$env:JHT_UNICODE = '0'` for ASCII or `$env:JHT_UNICODE = '1'` for Unicode before
+running `jht setup` or another CLI command. The setting affects terminal output;
+redirected output and `--json` keep their original contents.
+
 ## Layout
 
 ```

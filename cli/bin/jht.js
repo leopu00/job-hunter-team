@@ -29,7 +29,9 @@
  */
 
 import { installWarningFilter } from '../src/lib/quiet-warnings.js';
+import { installTerminalSymbols } from '../src/lib/terminal-symbols.js';
 installWarningFilter();
+installTerminalSymbols();
 
 /** Argomenti senza opzioni: `['cloud', 'daemon']` per `jht cloud daemon -v`. */
 const words = process.argv.slice(2).filter((a) => !a.startsWith('-'));

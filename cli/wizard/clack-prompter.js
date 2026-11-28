@@ -22,6 +22,7 @@ import pc from 'picocolors';
 import { WizardCancelledError } from './prompts.js';
 import { t } from './i18n.js';
 import { wrapNote } from './note-width.js';
+import { installTerminalSymbols } from '../src/lib/terminal-symbols.js';
 
 /** «Yes» / «No» in the person's language: clack's own are English. */
 export function answerWord(key) {
@@ -43,6 +44,7 @@ function guardCancel(value) {
  * @returns {import('./prompts.js').WizardPrompter}
  */
 export function createClackPrompter() {
+  installTerminalSymbols();
   return {
     intro: async (title) => {
       intro(pc.bold(title));

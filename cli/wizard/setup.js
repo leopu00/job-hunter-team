@@ -47,6 +47,7 @@ import { piApiProvider } from '../../shared/runtime/provider-models.js';
 import { RELEASE_PROVIDERS, RELEASE_HARNESS, codexLegacy, configOffered, offeredWay } from '../../shared/runtime/release-providers.js';
 import pc from 'picocolors';
 import { diskLowRefusal } from '../src/lib/disk-guard.js';
+import { setupOutro } from './setup-outro.js';
 
 /** «[2/3] text»: the slow steps after the choices, numbered the same way as the installer's. */
 export function stepLine(n, total, text) {
@@ -514,6 +515,6 @@ async function runSetupSteps(prompter, state, { diskRefusal = diskLowRefusal } =
   // the key is right and the account is empty: the Assistente will not answer until it is topped up (collaudo Linux, 12/11)
   // the onboarding is over when the Assistente wrote profile/ready.flag: «answer its questions to start the onboarding» would be false
   const onboardingDone = existsSync(join(dirname(JHT_CONFIG_PATH), 'profile', 'ready.flag'));
-  await prompter.outro(keyVerdict?.state === 'no_credit' ? tf('wizard.outro_no_credit', keyVerdict.label) : t(onboardingDone ? 'wizard.outro_done_running' : 'wizard.outro_done'));
+  await prompter.outro(setupOutro(keyVerdict?.state === 'no_credit' ? tf('wizard.outro_no_credit', keyVerdict.label) : t(onboardingDone ? 'wizard.outro_done_running' : 'wizard.outro_done')));
   return true;
 }
