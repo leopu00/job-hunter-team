@@ -127,7 +127,8 @@ test('openai: Codex is not a way of this release, and is refused with the way th
 test('openai on pi with the ChatGPT subscription: a way of this release, no key, no email, the sign-in is Pi\'s own (made by jht setup afterwards)', async () => {
   const { code, text } = await setup({ provider: 'openai', harness: 'pi', authMethod: 'subscription' });
   assert.equal(code, 0, text);
-  assert.match(text, /ChatGPT subscription \(the sign-in is Pi's own/);
+  assert.match(text, /ChatGPT subscription \(sign in with jht login chatgpt/);
+  assert.match(text, /Then sign in to ChatGPT: jht login chatgpt/);
   assert.match(text, /jht providers update pi/);
   const saved = config();
   assert.equal(saved.active_provider, 'openai');

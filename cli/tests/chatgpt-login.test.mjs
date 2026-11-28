@@ -24,6 +24,13 @@ test('browser login receives a real relay callback and saves only through the pr
         interaction.notify({ type: 'auth_url', url: `https://auth.openai.com/oauth/authorize?state=${state}` });
         assert.equal(fs.statSync(join(home, 'state/login-request.json')).mode & 0o777, 0o600);
         assert.equal(readLoginRequest(session).session, session);
+        const requestFile = join(home, 'state/login-request.json');
+        const request = fs.readFileSync(requestFile, 'utf8');
+        for (const expires of [Date.now() - 1000, 'invalid', null, Date.now() + 30 * 60 * 1000]) {
+          fs.writeFileSync(requestFile, JSON.stringify({ ...JSON.parse(request), expires }));
+          assert.throws(() => readLoginRequest(session));
+        }
+        fs.writeFileSync(requestFile, request);
         assert.throws(() => readLoginRequest('b'.repeat(32)));
         assert.throws(() => acceptRedirect(session, 'http://localhost:1455/auth/callback?code=x&state=wrong'));
         assert.throws(() => acceptRedirect(session, `https://evil.invalid/auth/callback?code=x&state=${state}`));

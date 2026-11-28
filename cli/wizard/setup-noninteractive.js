@@ -396,7 +396,7 @@ function saveNonInteractiveConfig({ providerName, selectedProvider, authMethod, 
   } else {
     console.log(subscriptionConfig
       ? `  Auth:       subscription (${subscriptionConfig.email}${subscriptionConfig.session_token ? ' · token preset' : ''})`
-      : '  Auth:       ChatGPT subscription (the sign-in is Pi\'s own, made after the setup)');
+      : '  Auth:       ChatGPT subscription (sign in with jht login chatgpt after the setup)');
   }
   console.log(summarizeRoleModels(config));
   if (budgetChoice.budget && Number(budgetChoice.budget.usd) < minimumFor(providerName)) {
@@ -409,7 +409,7 @@ function saveNonInteractiveConfig({ providerName, selectedProvider, authMethod, 
     const updateId = harness === 'pi' ? 'pi' : providerName === 'openai' ? 'codex' : providerName; // claude/kimi mantengono il nome
     console.log(pc.dim(`  Next step: jht providers update ${updateId}`));
     console.log(pc.dim(harness === 'pi' && !subscriptionConfig
-      ? '  Then sign in to Pi: jht setup (keep the configuration), which opens Pi for its /login.\n'
+      ? '  Then sign in to ChatGPT: jht login chatgpt.\n'
       : '  Then start the CLI OAuth login provider (device flow).\n'));
   }
 }

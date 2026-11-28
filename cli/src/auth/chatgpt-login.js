@@ -36,7 +36,7 @@ function readSmall(path) {
 }
 export function readLoginRequest(id) {
   const request = readSmall(requestPath());
-  if (request.session !== sessionId(id) || request.expires <= Date.now() || request.expires > Date.now() + TTL) throw new Error('Expired login request');
+  if (request.session !== sessionId(id) || typeof request.expires !== 'number' || !Number.isFinite(request.expires) || request.expires <= Date.now() || request.expires > Date.now() + TTL) throw new Error('Expired login request');
   request.url = loginUrl(request.url);
   return request;
 }
