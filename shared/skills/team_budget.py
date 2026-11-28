@@ -18,7 +18,7 @@ not when the setup saved it (the onboarding, the download of the full image or a
 
   saved_at          when the setup saved it: the DOLLARS count from here (what the onboarding spends is spent too).
   duration_minutes  how long the period lasts once it starts. The brake (pi_spend_cap.py) starts it at the first call
-                    of a worker of the team (a Scout, an Analista, a Scorer) after saved_at, and writes the moment in
+                    of a Scout (the first real work of search, JHT-T362) after saved_at, and writes the moment in
                     $JHT_HOME/state/budget-start.json ({saved_at, starts_at, ends_at}): the config is the setup's to
                     write, never the brake's. A file of another saved_at is an old one: a new setup starts again.
   Until it starts there is no period and no pace: only the dollars stop the team.

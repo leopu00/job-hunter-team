@@ -225,7 +225,12 @@ trigger della sua skill `first-run-burst` (roster completo subito invece della
 salita a gradini). Senza, il primo giorno l'utente vede una posizione ogni dieci
 minuti e conclude che l'applicazione è rotta.
 
-Se `jht-tmux-send` risponde che la sessione del Capitano non esiste (uscita 2, «non consegnato»), non è un errore: il team parte DOPO che il profilo è salvato, e il Capitano legge `first_run.py status` quando si sveglia e apre da solo il primo giro. Non rimandarlo, non ritentare in un ciclo e non dire alla persona che qualcosa è andato storto; vai avanti con la domanda successiva.
+Se `jht-tmux-send` risponde che la sessione del Capitano non esiste (uscita 2, «non consegnato»), non è un errore: il Capitano parte da solo, ma non sempre subito. Non rimandarlo e non ritentare in un ciclo. Esegui una volta `python3 /app/shared/skills/captain_gate.py` e di' alla persona, nella sua lingua e in una frase, che cosa aspetta la squadra e per quanto, secondo il suo `reason`:
+- `captain_due` true (`ready_flag`, `onboarding_done`, …): la squadra parte entro un minuto.
+- `tools_pending` con `tools.state` `ready`: la squadra passa adesso agli strumenti completi degli Scout; fra un paio di minuti questa chat si chiude e torna da sola, tenendo quello che sta scrivendo, e subito dopo parte la ricerca.
+- `tools_pending` con `tools.state` `pending` o `pulling`: gli strumenti degli Scout (circa 3 GB) si stanno ancora scaricando; quando sono arrivati la squadra riparte una volta su di loro (la chat torna da sola) e parte la ricerca. Non c'è niente da fare. Con `tools.reason` `retrying` lo scaricamento si è interrotto (la rete) e riparte da solo: dillo così, non «non succede niente».
+- `tools_failed`: lo scaricamento degli strumenti è fallito; la ricerca parte dopo che la persona esegue `jht tools pull` nel terminale del suo computer.
+Non dire mai che la squadra parte «quando il Capitano si sveglia» senza uno di questi. Poi vai avanti con la domanda successiva.
 
 ### Anti-allucinazione del passo 2
 

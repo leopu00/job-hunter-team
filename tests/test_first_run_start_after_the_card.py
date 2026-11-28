@@ -399,3 +399,21 @@ def test_a_free_composer_after_the_transport_needs_no_enter(capitano):
     box.pane("empty")
     out = run(box, "plan-question-check")
     assert out["sent"] is True and out["pressed"] == 0 and box.enters() == 0, out
+
+
+def test_no_reminder_is_spent_while_the_gate_holds_the_capitano_for_the_switch(sender):
+    """JHT-T362: on the core image the Capitano waits for the switch to the full tools. A reminder sent then found no session
+    («sent: false») and counted against the three: none is sent, none is counted, and it goes once the switch is made."""
+    box = sender
+    declared_after_the_click(box)
+    (box.home / "state").mkdir(parents=True, exist_ok=True)
+    (box.home / "state" / "tools.json").write_text(json.dumps(
+        {"schema": 1, "state": "ready", "tier": "core", "reason": "", "since": "2026-11-15T09:00:00Z", "updated": "2026-11-15T09:01:00Z"}),
+        encoding="utf-8")
+    box.env["JHT_IMAGE_TIER"] = "core"
+    out = run(box, "plan-question-check")
+    assert out["action"] == "waiting" and "tools_pending" in out["reason"], out
+    assert box.calls() == [] and not nudge_file(box).exists()
+    box.env["JHT_IMAGE_TIER"] = "full"
+    out = run(box, "plan-question-check")
+    assert out["action"] == "start" and out["count"] == 1, out

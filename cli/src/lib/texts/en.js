@@ -223,6 +223,7 @@ export default {
   'team.captain_scales': 'CAPITANO will scale the other agents according to the Bridge thresholds.',
   'team.captain_waits': 'The rest of the team starts by itself when the onboarding with the Assistente is done. Answer its questions with: jht team chat assistente.',
   'team.captain_tools': 'The Capitano and the Sentinella start by themselves in a few minutes, when the tools of the full image are ready. The onboarding is done: there is nothing to do.',
+  "team.captain_tools_failed": "The Capitano and the Sentinella are waiting for the tools of the full image, whose download failed. Run: jht tools pull (the team starts by itself when they are here).",
   'container.team_stopped': 'The team is stopped (you stopped it): the container is up, the agents are not. To start them again: jht team start',
   'team.partial': 'The team is NOT fully on: {n} did not start (the ✗ lines above say why). Fix the cause and run again: jht team start',
   'empty.nothing_yet': 'Nothing here yet: the team has not run on this computer. Start it with: jht team start',

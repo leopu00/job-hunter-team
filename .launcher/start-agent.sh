@@ -877,6 +877,8 @@ if { [ "$ROLE" = "capitano" ] || [ "$ROLE" = "sentinella" ]; } && ! tmux has-ses
   if [ "$_captain_rc" -eq 1 ]; then
     # the reason picks the words: an onboarding that is over and waits for the tools of the full image is not an open one
     case "$_captain_answer" in
+      *'"tools_failed"'*)
+        echo "$(echo "$ROLE" | tr a-z A-Z) not started: the onboarding is done, but the download of the tools of the full image failed (the person runs jht tools pull; it starts by itself when they are here)." >&2 ;;
       *'"tools_pending"'*)
         echo "$(echo "$ROLE" | tr a-z A-Z) not started yet: the onboarding is done and the tools of the full image are on their way (it starts by itself when they are ready)." >&2 ;;
       *)
@@ -887,13 +889,13 @@ if { [ "$ROLE" = "capitano" ] || [ "$ROLE" = "sentinella" ]; } && ! tmux has-ses
 fi
 # --- fine cancello del Capitano
 # --- cancello dello Scorer
-# Lo Scorer da' i punteggi contro il profilo: parte a profilo completo (captain_gate.py scorer: onboarding-done.flag, o 30 min
-# dopo ready.flag), non a ready.flag col Capitano. Prima spende per niente e la sua prima chiamata fa partire il budget.
+# Lo Scorer da' i punteggi contro il profilo: parte a profilo valido (captain_gate.py scorer: ready.flag e VALID_PROFILE,
+# onboarding-done.flag, o 30 min dopo ready.flag), non coi soli tre campi di ready.flag: prima spenderebbe per niente.
 if [ "$ROLE" = "scorer" ] && ! tmux has-session -t "=$SESSION" 2>/dev/null; then
   _scorer_rc=0
   python3 /app/shared/skills/captain_gate.py scorer >/dev/null 2>&1 || _scorer_rc=$?
   if [ "$_scorer_rc" -eq 1 ]; then
-    echo "SCORER not started: the profile is not complete yet (the Assistente is still asking; it can start when the onboarding is over, or 30 minutes after ready.flag; JHT_SCORER_BEFORE_PROFILE=1 starts it anyway)." >&2
+    echo "SCORER not started: the profile does not pass the validator yet (it starts when it does, when the onboarding is over, or 30 minutes after ready.flag; JHT_SCORER_BEFORE_PROFILE=1 starts it anyway)." >&2
     exit 75
   fi
 fi

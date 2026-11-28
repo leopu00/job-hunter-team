@@ -224,7 +224,12 @@ trigger for its `first-run-burst` skill (full roster right away instead of the
 step-by-step ramp). Without it, on day one the user sees one position every ten
 minutes and concludes that the application is broken.
 
-If `jht-tmux-send` answers that the session of the Capitano does not exist (exit 2, «not delivered»), it is not an error: the team starts AFTER the profile is saved, and the Capitano reads `first_run.py status` when it wakes up and opens the first burst by itself. Do not send it again, do not retry in a loop and do not tell the person something went wrong; go on with the next question.
+If `jht-tmux-send` answers that the session of the Capitano does not exist (exit 2, «not delivered»), it is not an error: the Capitano starts by itself, but not always at once. Do not send it again and do not retry in a loop. Run `python3 /app/shared/skills/captain_gate.py` once and tell the person, in their language and in one sentence, what the team is waiting for and how long, from its `reason`:
+- `captain_due` true (`ready_flag`, `onboarding_done`, …): the team starts within a minute.
+- `tools_pending` with `tools.state` `ready`: the team now moves onto the full tools of the Scouts; in a couple of minutes this chat closes and comes back by itself, keeping what is being typed, and the search starts right after.
+- `tools_pending` with `tools.state` `pending` or `pulling`: the tools of the Scouts (about 3 GB) are still downloading; when they are here the team restarts once on them (the chat comes back by itself) and the search starts. Nothing to do. With `tools.reason` `retrying` the download stopped (the network) and starts again by itself: say that, not «nothing is happening».
+- `tools_failed`: the download of the tools failed; the search starts after the person runs `jht tools pull` in the terminal of their computer.
+Never say that the team starts «when the Capitano wakes up» without one of these. Then go on with the next question.
 
 ### Anti-hallucination of step 2
 

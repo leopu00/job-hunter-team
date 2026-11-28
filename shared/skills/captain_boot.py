@@ -117,8 +117,8 @@ def tools_line(gate: dict | None) -> str | None:
     tools = (gate or {}).get("tools") or {}
     if not tools.get("degraded"):
         return None
-    why = ("the download did not finish in 10 minutes and goes on in the background" if tools["degraded"] == "timeout"
-           else f"the download failed ({tools.get('reason') or 'unknown reason'})")
+    why = (f"the download failed ({tools.get('reason') or 'unknown reason'}; the person can run `jht tools pull`)"
+           if tools["degraded"] == "failed" else "the switch to the full image has not happened yet")
     return ("tools: NOT READY — the full set of tools (the browser, the CV PDF) is not in the image yet: " + why + ". "
             "Start ONLY the roles that do not need them (Scorer, Critico, Sentinella): start-agent.sh refuses scout, analista, "
             "scrittore and closer with exit 75 until the image has the tools; do not retry them in a loop. Tell the user ONCE, "

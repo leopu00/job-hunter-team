@@ -254,6 +254,13 @@ def test_waiting_for_the_tools_of_the_full_image_is_not_called_an_open_onboardin
         assert "tools of the full image" in out and "onboarding with the Assistente is not done" not in out, out
 
 
+def test_a_failed_download_of_the_tools_holds_both_and_says_the_command(tmp_path: Path):
+    """JHT-T362: a failed pull holds the Capitano before the first run; the refusal says what the person does."""
+    answer = '{"captain_due": false, "reason": "tools_failed", "phase": "awaiting_profile"}'
+    code, out = _start_agent_gate_after_update(tmp_path, role="capitano", alive=set(), answer=answer)
+    assert code == 75 and "jht tools pull" in out and "onboarding with the Assistente is not done" not in out, out
+
+
 def test_an_open_onboarding_still_holds_both_and_says_so(tmp_path: Path):
     code, out = _start_agent_gate_after_update(tmp_path, role="sentinella", alive=set(), answer=ONBOARDING_OPEN)
     assert code == 75 and "onboarding with the Assistente is not done" in out, out
@@ -279,11 +286,20 @@ def test_a_closed_onboarding_after_an_update_is_never_onboarding_open(tmp_path: 
 # ── the Scorer waits for the whole profile (giro Windows 16/11: 19 calls during the onboarding, the budget started early) ─
 
 
+# An invented profile that the validator passes whole (the questionnaire that follows is optional), and one with only the three
+# fields of ready.flag.
+VALID_PROFILE = ("name: Alex Example\ntarget_role: Data analyst\nlocation: Lisbon\nseniority_target: mid\nexperience_years: 4\n"
+                 "languages:\n  - language: English\n    level: C1\nskills:\n  primary: [SQL]\n")
+MINIMUM_PROFILE = "target_role: Data analyst\nlocation: Lisbon\nlanguages:\n  - language: English\n    level: C1\n"
+
+
 def _ask_scorer(tmp_path: Path, *, state: str | None = None, ready_age: float | None = None, done: bool = False,
-                **env_extra: str) -> tuple[int, dict]:
+                profile: str | None = None, **env_extra: str) -> tuple[int, dict]:
     home = tmp_path / "jht"
     (home / "state").mkdir(parents=True, exist_ok=True)
     (home / "profile").mkdir(parents=True, exist_ok=True)
+    if profile is not None:
+        (home / "profile" / "candidate_profile.yml").write_text(profile, encoding="utf-8")
     if state is not None:
         (home / "state" / "first-run.json").write_text(state, encoding="utf-8")
     if ready_age is not None:
@@ -304,6 +320,16 @@ def test_the_scorer_waits_while_the_assistente_still_asks(tmp_path: Path):
     """ready.flag starts the Capitano (three fields of the profile), not the Scorer: in burst, a minute after the flag."""
     code, out = _ask_scorer(tmp_path, state=_state("burst"), ready_age=60)
     assert (code, out["scorer_due"], out["reason"]) == (1, False, "profile_open")
+
+
+def test_a_valid_profile_with_ready_flag_makes_the_scorer_due_while_the_questionnaire_goes_on(tmp_path: Path):
+    """JHT-T362: fifty positions and no score, the Scorer held by the optional questionnaire until the budget ran out."""
+    code, out = _ask_scorer(tmp_path / "valid", state=_state("burst"), ready_age=60, profile=VALID_PROFILE)
+    assert (code, out["reason"]) == (0, "profile_valid")
+    code, out = _ask_scorer(tmp_path / "minimum", state=_state("burst"), ready_age=60, profile=MINIMUM_PROFILE)
+    assert (code, out["reason"]) == (1, "profile_open"), "the three fields of ready.flag are not a profile to score against"
+    code, out = _ask_scorer(tmp_path / "noflag", state=_state("awaiting_profile"), profile=VALID_PROFILE)
+    assert out["reason"] != "profile_valid", "without ready.flag the Assistente has not confirmed it"
 
 
 def test_the_end_of_the_onboarding_makes_the_scorer_due(tmp_path: Path):

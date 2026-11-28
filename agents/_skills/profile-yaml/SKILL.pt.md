@@ -219,7 +219,12 @@ mensagem e o gatilho da sua skill `first-run-burst` (equipa completa de imediato
 em vez da subida gradual). Sem ela, no primeiro dia o utilizador ve uma posicao
 a cada dez minutos e conclui que a aplicacao esta avariada.
 
-Se `jht-tmux-send` responder que a sessão do Capitano não existe (saída 2, «não entregue»), não é um erro: a equipa arranca DEPOIS de o perfil ser guardado, e o Capitano lê `first_run.py status` quando acorda e abre sozinho a primeira ronda. Não o reenvie, não repita em ciclo e não diga à pessoa que algo correu mal; siga para a pergunta seguinte.
+Se `jht-tmux-send` responder que a sessão do Capitano não existe (saída 2, «não entregue»), não é um erro: o Capitano arranca sozinho, mas nem sempre logo. Não o reenvies nem repitas em ciclo. Executa uma vez `python3 /app/shared/skills/captain_gate.py` e diz à pessoa, na língua dela e numa frase, o que a equipa está à espera e por quanto tempo, segundo o seu `reason`:
+- `captain_due` true (`ready_flag`, `onboarding_done`, …): a equipa arranca dentro de um minuto.
+- `tools_pending` com `tools.state` `ready`: a equipa passa agora para as ferramentas completas dos Scout; dentro de alguns minutos este chat fecha-se e volta sozinho, mantendo o que está a ser escrito, e logo a seguir arranca a pesquisa.
+- `tools_pending` com `tools.state` `pending` ou `pulling`: as ferramentas dos Scout (cerca de 3 GB) ainda estão a ser descarregadas; quando chegarem, a equipa reinicia uma vez com elas (o chat volta sozinho) e arranca a pesquisa. Não há nada a fazer. Com `tools.reason` `retrying` o download foi interrompido (a rede) e recomeça sozinho: diz isso, não «não está a acontecer nada».
+- `tools_failed`: o download das ferramentas falhou; a pesquisa arranca depois de a pessoa executar `jht tools pull` no terminal do seu computador.
+Nunca digas que a equipa arranca «quando o Capitano acordar» sem um destes casos. Depois continua com a pergunta seguinte.
 
 ### Anti-alucinacao do passo 2
 
