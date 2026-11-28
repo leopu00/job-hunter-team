@@ -110,10 +110,13 @@ test('all final setup messages in every language offer a PATH reload before chat
   for (const lang of ['en', 'it', 'de', 'es', 'fr', 'hu', 'pt']) {
     const texts = JSON.parse(readFileSync(new URL(`../../shared/locales/${lang}.json`, import.meta.url), 'utf8'));
     for (const key of ['wizard.outro_done', 'wizard.outro_done_running', 'wizard.outro_no_credit']) {
-      assert.match(texts[key], /jht team chat assistente/);
       const windows = setupOutro(texts[key], 'win32');
       assert.ok(windows.includes(WINDOWS_CHAT_COMMAND), `${lang} ${key}`);
-      assert.equal(windows.replace(WINDOWS_CHAT_COMMAND, CHAT_COMMAND), texts[key]);
+      if (texts[key].includes(CHAT_COMMAND)) {
+        assert.equal(windows.replace(WINDOWS_CHAT_COMMAND, CHAT_COMMAND), texts[key]);
+      } else {
+        assert.equal(windows, `${texts[key]}\n  ${WINDOWS_CHAT_COMMAND}`);
+      }
       assert.equal(setupOutro(texts[key], 'linux'), texts[key]);
       assert.equal(setupOutro(texts[key], 'darwin'), texts[key]);
     }
