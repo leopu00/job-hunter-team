@@ -1893,3 +1893,63 @@ def test_the_captain_and_the_person_read_the_same_currency(tmp_path):
     pi_calls(tmp_path / "b", [(NOON - 600, 10.0, 100)])
     bridge2.tick()
     assert "against a ceiling of 10 USD." in dict(bridge2.sent)["CAPITANO"] and "EUR" not in dict(bridge2.sent)["CAPITANO"]
+
+
+def test_a_resume_follows_the_chain_scorer_first_and_no_scout_with_the_first_pass_full():
+    """JHT-T362 point 14: after a pause the resume woke five Scouts with the first pass already full (50/50) and three Analysts,
+    while fifty positions waited for a score: a third of the budget for no new position and no score. With the queues known the
+    Scorer comes first, the Analista next, the Scouts last, and a Scout of a full first pass is not woken at all."""
+    team = ["SCOUT-2", "SCOUT-3", "ANALISTA-1", "SCORER-1", "DOTTORE"]
+    chain = {"scorer": 30, "analista": 0, "scouts_done": True}
+    order = sorted(team, key=lambda x: cap._wake_rank(x, chain))
+    assert order[:2] == ["SCORER-1", "ANALISTA-1"] and order.index("SCOUT-2") > order.index("ANALISTA-1")
+    assert [x for x in order if not cap._skip_on_resume(x, chain)] == ["SCORER-1", "ANALISTA-1", "DOTTORE"]
+    both = {"scorer": 4, "analista": 7, "scouts_done": False}
+    assert sorted(team, key=lambda x: cap._wake_rank(x, both))[:3] == ["SCORER-1", "ANALISTA-1", "SCOUT-2"]
+    assert not cap._skip_on_resume("SCOUT-2", both)
+    only_new = {"scorer": 0, "analista": 5, "scouts_done": False}
+    assert sorted(team, key=lambda x: cap._wake_rank(x, only_new))[0] == "ANALISTA-1"
+    # the queues not known (a database that cannot be read): the order of before, the Scouts first
+    assert sorted(team, key=lambda x: cap._wake_rank(x, {"scorer": None, "analista": None, "scouts_done": False}))[0] == "SCOUT-2"
+    assert sorted(team, key=cap._wake_rank)[0] == "SCOUT-2"
+
+
+def test_the_resume_of_the_team_skips_the_scouts_of_a_full_first_pass(monkeypatch, tmp_path):
+    monkeypatch.setattr(cap, "_chain", lambda home=None: {"scorer": 12, "analista": 0, "scouts_done": True})
+    sent = []
+
+    class Api:
+        CAPITANO_SESSION, SENTINELLA_SESSION = "CAPITANO", "SENTINELLA"
+
+        def _path(self, name):
+            return tmp_path
+
+        def list_tmux_sessions(self):
+            return []
+
+        def jht_tmux_send(self, session, text):
+            sent.append(session)
+            return True
+
+    api = Api()
+    woken = cap._wake_the_team(api, ["SCOUT-1", "SCOUT-2", "SCORER-1", "ANALISTA-1"], "x", stage=cap.Stage(10.0, {}))
+    assert "SCOUT-1" not in woken and "SCOUT-2" not in woken
+    assert woken[:1] == ["SCORER-1"], woken
+
+
+def test_before_the_first_scout_the_period_has_not_started_but_the_ceilings_still_hold():
+    """The period of a budget of a duration starts with the first call of a Scout (JHT-T362): an Analista or a Scorer that works
+    before has no line of the period. The dollars of the budget and the ceiling a day still stop the team then."""
+    config = {"active_provider": "openai", "team": {"budget": {"usd": 5, "duration_minutes": 30, "saved_at": "2026-11-15T10:00:00+00:00"}},
+              "no_quota_cap": {"usd": 2}}
+    budget = cap.team_budget.read(config)
+    assert budget["starts"] is None, "no Scout yet: the period has not started"
+    now = budget["counts_from"] + 600
+    base = {"cost": 0.0, "hour_tokens": 0, "calls": 10, "credit": None, "budget_cost": 0.0, "first_worker": None, "recent_cost": 0.0,
+            "before_start": 0.0, "restart_cost": 0.0, "restart_recent": 0.0, "since_resume": None, "reserve_open": 0.0}
+    under = cap.decide(config, dict(base, cost=1.0, budget_cost=1.0), True, now, budget)
+    assert under["action"] != "halt", under
+    day = cap.decide(config, dict(base, cost=2.1, budget_cost=2.1), True, now, budget)
+    assert day["action"] == "halt", "the ceiling a day holds before the period starts: %s" % day
+    dollars = cap.decide({**config, "no_quota_cap": {}}, dict(base, cost=5.1, budget_cost=5.1), True, now, budget)
+    assert dollars["action"] == "halt" and dollars["why"] == "budget", dollars
