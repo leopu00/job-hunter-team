@@ -1,7 +1,7 @@
 ---
 name: onboarding-flow
 description: Conversational protocol the Assistente follows to onboard the user — first message, iterative one-question-per-turn pacing, blocking checklist (the floor that unlocks the dashboard) vs rich checklist (what makes Writers actually useful), settore-agnostic question style (NEVER assume IT), and the mandatory checkpoint sequence when the user uploads files. Tightly paired with `profile-yaml` (every answer = one Write+validate) and `profile-summaries` (narrative MDs after key milestones). Open this skill at the start of an onboarding session and on every user turn that brings new info.
-allowed-tools: Bash(mkdir -p *), Bash(cp *), Bash(python3 /app/shared/skills/plan_registry.py get), Bash(python3 /app/shared/skills/plan_registry.py set *), Bash(python3 /app/shared/skills/first_run.py ask-plan *), Bash(python3 /app/shared/skills/onboarding_questionnaire.py *), Bash(python3 /app/shared/skills/profile_apply.py *)
+allowed-tools: Bash(mkdir -p *), Bash(cp *), Bash(python3 /app/shared/skills/plan_registry.py get), Bash(python3 /app/shared/skills/plan_registry.py set *), Bash(python3 /app/shared/skills/first_run.py ask-plan *), Bash(python3 /app/shared/skills/onboarding_questionnaire.py *), Bash(python3 /app/shared/skills/profile_apply.py *), Bash(python3 /app/shared/skills/profile_gaps.py)
 ---
 
 # onboarding-flow — how the Assistente moves the conversation
@@ -44,7 +44,7 @@ team · 🟡 RECOMMENDED does not block but helps a lot · 🟢 OPTIONAL = the m
 
 ## 🔴 Blocking checklist — REQUIRED (sblocca il team)
 
-The team starts **as soon as three of these fields are there: target role, city/area and at least one language** (and the plan is declared): it does not wait for the others. When the three are there, set `ready.flag` and tell the Capitano (see `profile-yaml`), tell the user in one line («the team is starting; the next questions make the search more precise») and **keep asking**: the other five fields and the questionnaire cards come while the team is already working. The eight fields below are the **complete profile** (what the app shows as complete) and the minimum to **search and score** positions well:
+The team starts **as soon as three of these fields are there: target role, city/area and at least one language** (and the plan is declared): it does not wait for the others. When the three are there, set `ready.flag` and tell the Capitano (see `profile-yaml`), tell the user in one line («the team is starting; the next questions make the search more precise») and **keep asking**: the other five fields and the questionnaire cards come while the team is already working. The eight fields below are the **complete profile** (what the app shows as complete) and the minimum to **search and score** positions well: **Before** you set it: § «Before the team starts — what is missing and what it means».
 
 | Field                | YAML path                    | Neutral question example                          |
 |----------------------|------------------------------|---------------------------------------------------|
@@ -87,6 +87,54 @@ Keep asking until the user tells you to stop — more data = a more tailored CV 
 - `preferences.work_mode`, `relocation`, `preferences.salary_annual_eur`
 - Progetti, pubblicazioni, open-source, volontariato, certificati, `sector_details`
 
+## 📍 Where the person lives and how far they travel — and «anywhere»
+
+`location` is where they SEARCH; where they LIVE is another field, and the Scorer measures the distance from there (JHT-T351):
+
+| Field | YAML path | Neutral question |
+|---|---|---|
+| Residence | `residence` = `{place: "Town, Country", lat: null, lon: null}` | "Where do you live? Town and country are enough." |
+| Radius for onsite and hybrid jobs | `commute_max_km` (a number of km) | "For a job in the office or hybrid, how far are you willing to travel? In km, or in time and I convert it." |
+
+- Write `place` as «Town, Country»; leave `lat`/`lon` at `null` (never coordinates from memory). A time («45 minutes by car») you turn into km and say the figure you wrote.
+- Ask the radius only when the work is not only remote (`preferences.work_mode`).
+- «Anywhere» / «Ovunque» as the place of the search is a choice, not an answer to file away: ask ONE question of detail — the whole world, or some countries? onsite abroad too, or remote only? would they move? — then write what they say (a list of countries, `preferences.relocation`), or keep «anywhere» if that is what they mean (see the next section).
+
+## 🧭 Before the team starts — what is missing and what it means
+
+Every answer of `profile_apply.py` carries `gaps`: what the profile still lacks for the search the person asked for. Before `ready.flag` (and again before `onboarding-done.flag` if new gaps appeared), say them in ONE message in the person's words, each with what it means, and ask: add the data, or go on as it is?
+
+| Gap | What it means for the search |
+|---|---|
+| `place_anywhere` | results from everywhere, onsite jobs far away too, and less pertinent ones |
+| `residence` | no distance check: an onsite job far from home is not lowered |
+| `commute` | no limit on the way to the office |
+| `salary` | offers that declare no pay are not lowered, and the pay cannot be compared |
+| `skills` | fewer than 3 main skills: the match is generic |
+| `cv` | skills and experience come from the chat only |
+
+- The minimum is the one of THAT request: a person who wants «any role in data, anywhere in the world» can have it. Tell them that far and less pertinent results will come too, and if they confirm, go on.
+- A gap they keep on purpose goes in `accept` (`"accept": ["place_anywhere"]`): it is never raised again, and nothing blocks the team. A gap they fill disappears by itself.
+- Never a percentage of completion, never «I can't start without…» after a choice made knowingly.
+
+## 📄 Two documents: the CV and a complementary one
+
+The fastest way in is two files: the **updated CV** (1-2 pages) and a **complementary document** with what a CV does not say. When the person has no complementary document yet, propose these chapters, short, in their words:
+
+1. What I am looking for (role, sector, level)
+2. Where I live and how far I travel (onsite, hybrid, remote; would I move?)
+3. Pay (the least I accept, gross per year)
+4. What I do not want (companies, sectors, contracts)
+5. Why I am changing, and what matters to me
+
+How they hand you the files depends on where the team runs (Assistente prompt, § «Where you run»). Read both (checkpoint sequence below), write what you extracted, then ask ONLY what is still missing or in `gaps`, then the team starts. A document is never a reason to ask its contents again.
+
+## 🔁 Never the same question twice
+
+- Before asking anything: is it already in the profile, in a file you read, or in `asked`? Then do not ask it. Skip every field you extracted.
+- Each question you ask goes in `asked` of the same `profile_apply.py` call (`"asked": ["residence"]`; the topic is the field, or a short name like `relocation`). A topic in `asked` is asked again only ONCE, to go deeper on a vague answer, and you say so («to be precise:…»).
+- Read `asked`, `accepted` and `gaps` again at any time with `python3 /app/shared/skills/profile_gaps.py`.
+
 ## Work-authorization — due diligence (NON saltarla)
 
 Without knowing **where the user can legally work**, the Scout collects and the Scorer scores offers the candidate cannot accept: a shortlist inflated with phantom volume. Real case (beta): an EU candidate with 59% of the shortlist in London — but **after Brexit an EU citizen without a UK visa cannot work there without sponsorship**, so most of those offers were out of reach. The Assistant had never asked.
@@ -103,7 +151,7 @@ Without knowing **where the user can legally work**, the Scout collects and the 
 **Come registrarlo** (esempi `preferences.work_authorization`):
 ```yaml
 candidate:
-  citizenship: ["Hungarian (EU)"]
+  citizenship: ["Portuguese (EU)"]
 preferences:
   work_authorization:
     eu: "yes (citizen, free movement)"

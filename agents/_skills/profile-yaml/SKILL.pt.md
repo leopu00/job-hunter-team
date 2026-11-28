@@ -189,6 +189,8 @@ Portanto, frequentemente o botao ja esta desbloqueado pelo fallback quando o per
 
 **Cria-o assim que o perfil tiver função-alvo, cidade/zona e pelo menos um idioma** — não esperas pelos oito campos: a equipa arranca e as perguntas continuam (o resto do perfil completa-se enquanto trabalha).
 
+**Antes do flag:** disseste à pessoa os `gaps` que o profile_apply.py responde e o que implicam, e ela escolheu: deu os dados, ou confirmou seguir assim (`accept`). Skill onboarding-flow, § «Antes de a equipa arrancar». Não é uma barreira: uma escolha consciente nunca é bloqueada.
+
 ```bash
 # 1. Crie o flag com timestamp UTC
 date -u +"%Y-%m-%dT%H:%M:%SZ" > "$JHT_HOME/profile/ready.flag"

@@ -33,6 +33,11 @@ the chat; `open` / `answered` / `done` / `waiting_text` as that tool says; `ok: 
 posted: say nothing of it and go on in words), or `{"asked": false, "plan_declared": false}` when the plan is not declared
 yet (then the plan is asked first, with the card of `first_run.py ask-plan`, skill onboarding-flow).
 
+Two keys keep the notes of the onboarding (profile_gaps.py, JHT-T351): `"asked": ["residence", "salary"]` the topics you
+asked in this turn (a topic is asked once), `"accept": ["place_anywhere"]` the gaps the person chose to keep after you told
+them what they mean. The answer then carries `gaps` (what the profile still lacks for the search asked for and you have not
+had accepted: place_anywhere, residence, commute, salary, skills, cv), `accepted` and `asked`.
+
 `missing` is what a complete profile still lacks (normal while it is being built); `invalid` is a field that IS there
 and is wrong, to fix with the next call. Exit 0 = applied; 1 = nothing was applied (the reason is in `error`).
 Closing the onboarding (ready.flag, the message to the Capitano, the plan card) stays a decision of the flow: this
@@ -192,6 +197,15 @@ def next_card() -> dict:
         return {"ok": False, "error": "next_card_failed", "why": str(exc)[:200]}
 
 
+def _gaps_module():
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("jht_profile_gaps", SKILLS / "profile_gaps.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 def apply(request: dict) -> tuple[int, dict]:
     import yaml  # the container has it; the app's own files are written with it too
 
@@ -207,7 +221,9 @@ def apply(request: dict) -> tuple[int, dict]:
         if not isinstance(doc, dict):
             raise ValueError("the profile on disk is not an object")
         touched = merge(doc, request)
-        # a bad summary or message is refused BEFORE anything is written
+        # a bad summary, message or note is refused BEFORE anything is written
+        gaps = _gaps_module()
+        gaps.check_notes(request.get("asked"), request.get("accept"))
         check_summaries(request.get("summaries") or {})
         kind = check_say(request)
         rendered = yaml.safe_dump(doc, sort_keys=False, allow_unicode=True, default_flow_style=False, width=1000)
@@ -228,10 +244,12 @@ def apply(request: dict) -> tuple[int, dict]:
             else:
                 _atomic_write(profile, before)
         return 1, {"ok": False, "error": str(exc)}
+    if request.get("asked") or request.get("accept"):
+        gaps.write_notes(request.get("asked"), request.get("accept"), _home())
     said = say(str(request["say"]), kind) if request.get("say") is not None else False
     launch_ready = profile.is_file() and not report["launch_missing"]
     answer = {"ok": True, "written": written, **report, "launch_ready": launch_ready,
-              "ready_flag": (profile_dir / "ready.flag").is_file(), "said": said}
+              "ready_flag": (profile_dir / "ready.flag").is_file(), "said": said, **gaps.report(doc, _home())}
     if request.get("next_card") is True:
         answer["next_card"] = next_card()  # after the chat line: the card comes below the words
     return 0, answer

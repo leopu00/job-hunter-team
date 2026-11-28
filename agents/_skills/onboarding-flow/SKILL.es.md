@@ -1,7 +1,7 @@
 ---
 name: onboarding-flow
 description: Protocolo conversacional que el Assistente sigue para dar de alta al usuario — primer mensaje, pacing iterativo de una-pregunta-por-turno, checklist bloqueante (el piso que desbloquea el dashboard) vs checklist rica (lo que hace que los Writers sean realmente útiles), estilo de preguntas agnóstico de sector (NUNCA asumir IT), y la secuencia obligatoria de checkpoints cuando el usuario sube archivos. Estrechamente emparejada con `profile-yaml` (cada respuesta = un Write+validate) y `profile-summaries` (MDs narrativos después de hitos clave). Abrir esta skill al inicio de una sesión de onboarding y en cada turno del usuario que trae nueva info.
-allowed-tools: Bash(mkdir -p *), Bash(cp *), Bash(python3 /app/shared/skills/plan_registry.py get), Bash(python3 /app/shared/skills/plan_registry.py set *), Bash(python3 /app/shared/skills/first_run.py ask-plan *), Bash(python3 /app/shared/skills/onboarding_questionnaire.py *), Bash(python3 /app/shared/skills/profile_apply.py *)
+allowed-tools: Bash(mkdir -p *), Bash(cp *), Bash(python3 /app/shared/skills/plan_registry.py get), Bash(python3 /app/shared/skills/plan_registry.py set *), Bash(python3 /app/shared/skills/first_run.py ask-plan *), Bash(python3 /app/shared/skills/onboarding_questionnaire.py *), Bash(python3 /app/shared/skills/profile_apply.py *), Bash(python3 /app/shared/skills/profile_gaps.py)
 ---
 <!-- @translation: es, ai-translated 2026-06-06 -->
 
@@ -45,7 +45,7 @@ equipo · 🟡 RECOMMENDED no bloquea pero mejora mucho · 🟢 OPTIONAL = máxi
 
 ## 🔴 Checklist bloqueante — REQUIRED (desbloquea el equipo)
 
-El equipo arranca **en cuanto hay tres de estos campos: rol objetivo, ciudad/zona y al menos un idioma** (y el plan está declarado): no espera a los demás. Cuando los tres están, establece `ready.flag` y avisa al Capitano (ver `profile-yaml`), díselo al usuario en una línea («el equipo arranca; las próximas preguntas hacen la búsqueda más precisa») y **sigue preguntando**: los otros cinco campos y las tarjetas del cuestionario llegan mientras el equipo ya trabaja. Los ocho campos de abajo son el **perfil completo** (el que la app muestra como completo) y el mínimo para **buscar y puntuar** bien las ofertas:
+El equipo arranca **en cuanto hay tres de estos campos: rol objetivo, ciudad/zona y al menos un idioma** (y el plan está declarado): no espera a los demás. Cuando los tres están, establece `ready.flag` y avisa al Capitano (ver `profile-yaml`), díselo al usuario en una línea («el equipo arranca; las próximas preguntas hacen la búsqueda más precisa») y **sigue preguntando**: los otros cinco campos y las tarjetas del cuestionario llegan mientras el equipo ya trabaja. Los ocho campos de abajo son el **perfil completo** (el que la app muestra como completo) y el mínimo para **buscar y puntuar** bien las ofertas: **Antes** de ponerlo: § «Antes de que el equipo arranque — qué falta y qué supone».
 
 | Campo                | Ruta YAML                    | Ejemplo de pregunta neutral                       |
 |----------------------|------------------------------|---------------------------------------------------|
@@ -85,6 +85,54 @@ Sigue preguntando hasta que el usuario diga que pare — más datos = CV y búsq
 - `preferences.work_mode`, `relocation`, `preferences.salary_annual_eur`
 - Proyectos, publicaciones, open-source, voluntariado, certificados, `sector_details`
 
+## 📍 Dónde vive la persona y cuánto se desplaza — y «en cualquier lugar»
+
+`location` es dónde BUSCA; dónde VIVE es otro campo, y el Scorer mide la distancia desde ahí (JHT-T351):
+
+| Campo | Ruta YAML | Pregunta neutra |
+|---|---|---|
+| Residencia | `residence` = `{place: "Ciudad, País", lat: null, lon: null}` | "¿Dónde vives? Bastan ciudad y país." |
+| Radio para trabajos presenciales e híbridos | `commute_max_km` (un número de km) | "Para un trabajo presencial o híbrido, ¿hasta dónde estás dispuesto a desplazarte? En km, o en tiempo y lo convierto yo." |
+
+- Escribe `place` como «Ciudad, País»; deja `lat`/`lon` en `null` (nunca coordenadas de memoria). Un tiempo («45 minutos en coche») lo conviertes en km y dices la cifra que has escrito.
+- El radio pregúntalo solo cuando el trabajo no es solo en remoto (`preferences.work_mode`).
+- «En cualquier lugar» como lugar de búsqueda es una elección, no una respuesta para archivar: haz UNA pregunta de detalle — ¿todo el mundo o algunos países? ¿también presencial en el extranjero o solo remoto? ¿te mudarías? — y escribe lo que diga (una lista de países, `preferences.relocation`), o mantén «en cualquier lugar» si es lo que quiere (ver la sección siguiente).
+
+## 🧭 Antes de que el equipo arranque — qué falta y qué supone
+
+Cada respuesta de `profile_apply.py` trae `gaps`: lo que al perfil aún le falta para la búsqueda que la persona ha pedido. Antes de `ready.flag` (y otra vez antes de `onboarding-done.flag` si han aparecido nuevos), dilos en UN mensaje con las palabras de la persona, cada uno con lo que supone, y pregunta: ¿añadimos los datos o seguimos así?
+
+| Gap | Qué supone para la búsqueda |
+|---|---|
+| `place_anywhere` | resultados de todas partes, también presenciales lejanos, y menos pertinentes |
+| `residence` | sin control de distancia: un trabajo presencial lejos de casa no se rebaja |
+| `commute` | sin límite al trayecto a la oficina |
+| `salary` | las ofertas sin sueldo no se rebajan, y el sueldo no se puede comparar |
+| `skills` | menos de 3 competencias principales: el encaje es genérico |
+| `cv` | competencias y experiencia salen solo del chat |
+
+- El mínimo es el de ESA petición: quien quiere «cualquier puesto de datos, en todo el mundo» puede tenerlo. Dile que llegarán también resultados lejanos y poco pertinentes, y si confirma, sigue.
+- Un gap que mantiene a propósito va en `accept` (`"accept": ["place_anywhere"]`): no lo repites más y nada bloquea al equipo. Un gap que rellena desaparece solo.
+- Nunca un porcentaje de completitud, nunca «sin … no puedo arrancar» tras una elección consciente.
+
+## 📄 Dos documentos: el CV y uno complementario
+
+El camino más rápido son dos archivos: el **CV actualizado** (1-2 páginas) y un **documento complementario** con lo que un CV no dice. Si la persona aún no lo tiene, propón estos capítulos, breves, con sus palabras:
+
+1. Qué busco (puesto, sector, nivel)
+2. Dónde vivo y cuánto me desplazo (presencial, híbrido, remoto; ¿me mudaría?)
+3. Salario (el mínimo que acepto, bruto anual)
+4. Qué no quiero (empresas, sectores, contratos)
+5. Por qué cambio y qué me importa
+
+Cómo te pasa los archivos depende de dónde funciona el equipo (prompt del Assistente, § «Dónde funcionas»). Léelos los dos (secuencia de checkpoints abajo), escribe lo extraído, luego pregunta SOLO lo que aún falta o está en `gaps`, y el equipo arranca. Un documento nunca es motivo para volver a pedir su contenido.
+
+## 🔁 Nunca la misma pregunta dos veces
+
+- Antes de preguntar algo: ¿ya está en el perfil, en un archivo que has leído o en `asked`? Entonces no lo preguntes. Sáltate cada campo extraído.
+- Cada pregunta que haces va en `asked` de la misma llamada a `profile_apply.py` (`"asked": ["residence"]`; el tema es el campo, o un nombre corto como `relocation`). Un tema en `asked` se vuelve a preguntar UNA sola vez, para precisar una respuesta vaga, y lo dices («para ser precisos:…»).
+- `asked`, `accepted` y `gaps` los relees cuando quieras con `python3 /app/shared/skills/profile_gaps.py`.
+
 ## Autorización de trabajo — due diligence (NO saltarla)
 
 Sin saber **dónde puede trabajar legalmente el usuario**, el Scout recoge y el Scorer puntúa ofertas que el candidato no puede aceptar: shortlist inflada de volumen-fantasma. Caso real (beta): candidato UE con shortlist al 59% en Londres — pero **post-Brexit un ciudadano UE sin visado UK no puede trabajar ahí sin sponsorship**, entonces gran parte de esas ofertas eran inaccesibles. El Assistente nunca lo había preguntado.
@@ -101,7 +149,7 @@ Sin saber **dónde puede trabajar legalmente el usuario**, el Scout recoge y el 
 **Cómo registrarlo** (ejemplos `preferences.work_authorization`):
 ```yaml
 candidate:
-  citizenship: ["Hungarian (EU)"]
+  citizenship: ["Portuguese (EU)"]
 preferences:
   work_authorization:
     eu: "yes (citizen, free movement)"

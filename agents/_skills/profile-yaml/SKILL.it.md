@@ -195,6 +195,8 @@ Quindi spesso il bottone è già sbloccato dal fallback quando il profilo è com
 
 **Crealo appena il profilo ha ruolo target, città/zona e almeno una lingua** — non aspetti gli otto campi: la squadra parte e le domande continuano (il resto del profilo si completa mentre lavora).
 
+**Prima del flag:** hai detto alla persona i `gaps` che risponde profile_apply.py e cosa comportano, e lei ha scelto: ha dato i dati, oppure ha confermato di procedere così (`accept`). Skill onboarding-flow, § «Prima che la squadra parta». Non è un cancello: una scelta consapevole non si blocca mai.
+
 ```bash
 # 1. Crea il flag con timestamp UTC
 date -u +"%Y-%m-%dT%H:%M:%SZ" > "$JHT_HOME/profile/ready.flag"

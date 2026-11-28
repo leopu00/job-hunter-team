@@ -1,7 +1,7 @@
 ---
 name: onboarding-flow
 description: Protocolo conversacional que o Assistente segue para integrar o utilizador — primeira mensagem, ritmo iterativo de uma-pergunta-por-turno, checklist de bloqueio (o piso que desbloqueia o dashboard) vs checklist rica (o que torna os Scrittori realmente úteis), estilo de perguntas agnóstico de setor (NUNCA assumir IT), e a sequência obrigatória de checkpoints quando o utilizador carrega ficheiros. Fortemente combinado com `profile-yaml` (cada resposta = um Write+validate) e `profile-summaries` (MDs narrativos após marcos-chave). Abrir esta skill no início de uma sessão de onboarding e em cada turno do utilizador que traga nova informação.
-allowed-tools: Bash(mkdir -p *), Bash(cp *), Bash(python3 /app/shared/skills/plan_registry.py get), Bash(python3 /app/shared/skills/plan_registry.py set *), Bash(python3 /app/shared/skills/first_run.py ask-plan *), Bash(python3 /app/shared/skills/onboarding_questionnaire.py *), Bash(python3 /app/shared/skills/profile_apply.py *)
+allowed-tools: Bash(mkdir -p *), Bash(cp *), Bash(python3 /app/shared/skills/plan_registry.py get), Bash(python3 /app/shared/skills/plan_registry.py set *), Bash(python3 /app/shared/skills/first_run.py ask-plan *), Bash(python3 /app/shared/skills/onboarding_questionnaire.py *), Bash(python3 /app/shared/skills/profile_apply.py *), Bash(python3 /app/shared/skills/profile_gaps.py)
 ---
 <!-- @translation: pt, ai-translated 2026-06-06 -->
 
@@ -45,7 +45,7 @@ equipa · 🟡 RECOMMENDED não bloqueia mas melhora muito · 🟢 OPTIONAL = pe
 
 ## 🔴 Checklist de bloqueio — REQUIRED (desbloqueia a equipa)
 
-A equipa arranca **assim que houver três destes campos: função-alvo, cidade/zona e pelo menos um idioma** (e o plano estiver declarado): não espera pelos outros. Quando os três estiverem lá, define `ready.flag` e avisa o Capitano (ver `profile-yaml`), diz ao utilizador numa linha («a equipa arranca; as próximas perguntas tornam a pesquisa mais precisa») e **continua a perguntar**: os outros cinco campos e os cartões do questionário chegam enquanto a equipa já trabalha. Os oito campos abaixo são o **perfil completo** (o que a app mostra como completo) e o mínimo para **procurar e pontuar** bem as vagas:
+A equipa arranca **assim que houver três destes campos: função-alvo, cidade/zona e pelo menos um idioma** (e o plano estiver declarado): não espera pelos outros. Quando os três estiverem lá, define `ready.flag` e avisa o Capitano (ver `profile-yaml`), diz ao utilizador numa linha («a equipa arranca; as próximas perguntas tornam a pesquisa mais precisa») e **continua a perguntar**: os outros cinco campos e os cartões do questionário chegam enquanto a equipa já trabalha. Os oito campos abaixo são o **perfil completo** (o que a app mostra como completo) e o mínimo para **procurar e pontuar** bem as vagas: **Antes** de o criar: § «Antes de a equipa arrancar — o que falta e o que implica».
 
 | Campo                | Caminho YAML                 | Exemplo de pergunta neutra                        |
 |----------------------|------------------------------|---------------------------------------------------|
@@ -85,6 +85,54 @@ Continua a pedir até o utilizador dizer para parar — mais dados = CV e procur
 - `preferences.work_mode`, `relocation`, `preferences.salary_annual_eur`
 - Projetos, publicações, open-source, voluntariado, certificados, `sector_details`
 
+## 📍 Onde a pessoa vive e quanto se desloca — e «em qualquer lugar»
+
+`location` é onde ela PROCURA; onde VIVE é outro campo, e o Scorer mede a distância a partir daí (JHT-T351):
+
+| Campo | Caminho YAML | Pergunta neutra |
+|---|---|---|
+| Residência | `residence` = `{place: "Cidade, País", lat: null, lon: null}` | "Onde vives? Basta a cidade e o país." |
+| Raio para trabalhos presenciais e híbridos | `commute_max_km` (um número de km) | "Para um trabalho presencial ou híbrido, até onde estás disposto a deslocar-te? Em km, ou em tempo e eu converto." |
+
+- Escreve `place` como «Cidade, País»; deixa `lat`/`lon` a `null` (nunca coordenadas de memória). Um tempo («45 minutos de carro») convertes em km e dizes o número que escreveste.
+- O raio pergunta-o só quando o trabalho não é só remoto (`preferences.work_mode`).
+- «Em qualquer lugar» como lugar da procura é uma escolha, não uma resposta para arquivar: faz UMA pergunta de detalhe — o mundo inteiro ou alguns países? também presencial no estrangeiro ou só remoto? mudavas-te? — e escreve o que disser (uma lista de países, `preferences.relocation`), ou mantém «em qualquer lugar» se é isso que quer (ver a secção seguinte).
+
+## 🧭 Antes de a equipa arrancar — o que falta e o que implica
+
+Cada resposta do `profile_apply.py` traz `gaps`: o que ainda falta ao perfil para a procura que a pessoa pediu. Antes do `ready.flag` (e de novo antes do `onboarding-done.flag` se apareceram novos), di-los numa SÓ mensagem com as palavras da pessoa, cada um com o que implica, e pergunta: acrescentamos os dados, ou seguimos assim?
+
+| Gap | O que implica para a procura |
+|---|---|
+| `place_anywhere` | resultados de todo o lado, também presenciais longe, e menos pertinentes |
+| `residence` | sem controlo da distância: um trabalho presencial longe de casa não é baixado |
+| `commute` | sem limite ao trajeto para o escritório |
+| `salary` | as ofertas sem salário não são baixadas, e o salário não se pode comparar |
+| `skills` | menos de 3 competências principais: a correspondência é genérica |
+| `cv` | competências e experiência vêm só do chat |
+
+- O mínimo é o DESSE pedido: quem quer «qualquer cargo em dados, em todo o mundo» pode tê-lo. Diz-lhe que também chegarão resultados longe e pouco pertinentes, e se confirmar, segue.
+- Um gap que mantém de propósito vai em `accept` (`"accept": ["place_anywhere"]`): não o repetes mais e nada bloqueia a equipa. Um gap preenchido desaparece sozinho.
+- Nunca uma percentagem de completude, nunca «sem … não posso arrancar» depois de uma escolha consciente.
+
+## 📄 Dois documentos: o CV e um complementar
+
+O caminho mais rápido são dois ficheiros: o **CV atualizado** (1-2 páginas) e um **documento complementar** com o que um CV não diz. Se a pessoa ainda não o tem, propõe estes capítulos, curtos, com palavras dela:
+
+1. O que procuro (cargo, setor, nível)
+2. Onde vivo e quanto me desloco (presencial, híbrido, remoto; mudava-me?)
+3. Salário (o mínimo que aceito, bruto anual)
+4. O que não quero (empresas, setores, contratos)
+5. Porque mudo e o que conta para mim
+
+Como te passa os ficheiros depende de onde a equipa corre (prompt do Assistente, § «Onde corres»). Lê os dois (sequência de checkpoints abaixo), escreve o que extraíste, depois pergunta SÓ o que ainda falta ou está em `gaps`, e a equipa arranca. Um documento nunca é motivo para voltar a pedir o seu conteúdo.
+
+## 🔁 Nunca a mesma pergunta duas vezes
+
+- Antes de perguntar algo: já está no perfil, num ficheiro que leste, ou em `asked`? Então não perguntes. Salta cada campo extraído.
+- Cada pergunta que fazes vai em `asked` da mesma chamada ao `profile_apply.py` (`"asked": ["residence"]`; o tema é o campo, ou um nome curto como `relocation`). Um tema em `asked` volta a perguntar-se UMA só vez, para aprofundar uma resposta vaga, e dizes («para ser preciso:…»).
+- `asked`, `accepted` e `gaps` relês quando quiseres com `python3 /app/shared/skills/profile_gaps.py`.
+
 ## Work-authorization — due diligence (NÃO saltar)
 
 Sem saber **onde o utilizador pode legalmente trabalhar**, o Scout recolhe e o Scorer pontua ofertas que o candidato não pode aceitar: shortlist inflada de volume-fantasma. Caso real (beta): candidato UE com shortlist a 59% em Londres — mas **pós-Brexit um cidadão UE sem visto UK não pode trabalhar lá sem sponsorship**, portanto grande parte dessas ofertas eram inacessíveis. O Assistente nunca tinha perguntado.
@@ -101,7 +149,7 @@ Sem saber **onde o utilizador pode legalmente trabalhar**, o Scout recolhe e o S
 **Como registar** (exemplos `preferences.work_authorization`):
 ```yaml
 candidate:
-  citizenship: ["Hungarian (EU)"]
+  citizenship: ["Portuguese (EU)"]
 preferences:
   work_authorization:
     eu: "yes (citizen, free movement)"

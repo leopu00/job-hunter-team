@@ -1,7 +1,7 @@
 ---
 name: onboarding-flow
 description: Társalgási protokoll, amelyet az Assistente követ a felhasználó bevezető folyamatában — első üzenet, iteratív egy-kérdés-per-kör ütemezés, blokkoló ellenőrzőlista (a küszöb, ami feloldja a dashboardot) vs gazdag ellenőrzőlista (amitől a Writer-ek valóban hasznosak lesznek), szektoragnosztikus kérdésstílus (SOHA ne feltételezd, hogy IT), és a kötelező ellenőrzőpont-szekvencia, amikor a felhasználó fájlokat tölt fel. Szorosan összepárosítva a `profile-yaml`-lal (minden válasz = egy Write+validate) és a `profile-summaries`-szal (narratív MD-k kulcsfontosságú mérföldkövek után). Nyisd meg ezt a skillt egy onboarding munkamenet elején és minden olyan felhasználói körnél, ami új információt hoz.
-allowed-tools: Bash(mkdir -p *), Bash(cp *), Bash(python3 /app/shared/skills/plan_registry.py get), Bash(python3 /app/shared/skills/plan_registry.py set *), Bash(python3 /app/shared/skills/first_run.py ask-plan *), Bash(python3 /app/shared/skills/onboarding_questionnaire.py *), Bash(python3 /app/shared/skills/profile_apply.py *)
+allowed-tools: Bash(mkdir -p *), Bash(cp *), Bash(python3 /app/shared/skills/plan_registry.py get), Bash(python3 /app/shared/skills/plan_registry.py set *), Bash(python3 /app/shared/skills/first_run.py ask-plan *), Bash(python3 /app/shared/skills/onboarding_questionnaire.py *), Bash(python3 /app/shared/skills/profile_apply.py *), Bash(python3 /app/shared/skills/profile_gaps.py)
 ---
 <!-- @translation: hu, ai-translated 2026-06-06 -->
 
@@ -45,7 +45,7 @@ csapatot · 🟡 RECOMMENDED nem blokkol, de sokat javít · 🟢 OPTIONAL = max
 
 ## 🔴 Blokkoló ellenőrzőlista — REQUIRED (feloldja a csapatot)
 
-A csapat **azonnal elindul, amint ebből három mező megvan: célpozíció, város/terület és legalább egy nyelv** (és a csomag deklarálva van): nem vár a többire. Ha a három megvan, állítsd be a `ready.flag`-et és értesítsd a Capitanót (lásd `profile-yaml`), mondd el a felhasználónak egy sorban („a csapat elindul; a következő kérdések pontosabbá teszik a keresést”), és **kérdezz tovább**: a másik öt mező és a kérdőív kártyái akkor érkeznek, amikor a csapat már dolgozik. Az alábbi nyolc mező a **teljes profil** (amit az app teljesnek mutat), és ez a minimum a pozíciók jó **kereséséhez és pontozásához**:
+A csapat **azonnal elindul, amint ebből három mező megvan: célpozíció, város/terület és legalább egy nyelv** (és a csomag deklarálva van): nem vár a többire. Ha a három megvan, állítsd be a `ready.flag`-et és értesítsd a Capitanót (lásd `profile-yaml`), mondd el a felhasználónak egy sorban („a csapat elindul; a következő kérdések pontosabbá teszik a keresést”), és **kérdezz tovább**: a másik öt mező és a kérdőív kártyái akkor érkeznek, amikor a csapat már dolgozik. Az alábbi nyolc mező a **teljes profil** (amit az app teljesnek mutat), és ez a minimum a pozíciók jó **kereséséhez és pontozásához**: **Előtte**: § «Mielőtt a csapat elindul — mi hiányzik és mit jelent».
 
 | Mező                 | YAML útvonal                 | Semleges kérdéspélda                              |
 |----------------------|------------------------------|---------------------------------------------------|
@@ -85,6 +85,54 @@ Folytasd a kérdezést, amíg a felhasználó nem mondja, hogy álljál meg — 
 - `preferences.work_mode`, `relocation`, `preferences.salary_annual_eur`
 - Projektek, publikációk, open-source, önkéntes munka, tanúsítványok, `sector_details`
 
+## 📍 Hol él a személy és mennyit utazik — és «bárhol»
+
+A `location` az, ahol KERES; ahol ÉL, az egy másik mező, és a Scorer onnan méri a távolságot (JHT-T351):
+
+| Mező | YAML útvonal | Semleges kérdés |
+|---|---|---|
+| Lakóhely | `residence` = `{place: "Város, Ország", lat: null, lon: null}` | "Hol élsz? A város és az ország elég." |
+| Sugár helyszíni és hibrid munkákhoz | `commute_max_km` (km-ben egy szám) | "Helyszíni vagy hibrid munkáért meddig utaznál? Km-ben, vagy időben, és átszámolom." |
+
+- A `place` legyen «Város, Ország»; a `lat`/`lon` maradjon `null` (soha emlékezetből vett koordináta). Egy időt («45 perc autóval») km-re váltasz, és megmondod a beírt számot.
+- A sugarat csak akkor kérdezd, ha a munka nem csak távmunka (`preferences.work_mode`).
+- A «bárhol» mint a keresés helye választás, nem archiválandó válasz: tegyél fel EGY pontosító kérdést — az egész világ vagy néhány ország? külföldön helyszínen is, vagy csak távmunka? költöznél? — és írd be, amit mond (országlista, `preferences.relocation`), vagy maradjon «bárhol», ha ezt akarja (lásd a következő részt).
+
+## 🧭 Mielőtt a csapat elindul — mi hiányzik és mit jelent
+
+A `profile_apply.py` minden válaszában ott a `gaps`: ami a profilból még hiányzik a kért kereséshez. A `ready.flag` előtt (és újra az `onboarding-done.flag` előtt, ha újak jelentek meg) EGY üzenetben, a személy szavaival mondd el őket, mindegyiket azzal, hogy mit jelent, és kérdezd meg: kiegészítjük az adatokat, vagy így megyünk tovább?
+
+| Hiány | Mit jelent a keresésre |
+|---|---|
+| `place_anywhere` | találatok mindenhonnan, távoli helyszíni munkák is, és kevésbé illők |
+| `residence` | nincs távolság-ellenőrzés: egy otthontól távoli helyszíni munka nem kerül lejjebb |
+| `commute` | nincs korlát az irodáig tartó útra |
+| `salary` | a fizetést nem közlő ajánlatok nem kerülnek lejjebb, és a fizetés nem hasonlítható össze |
+| `skills` | 3-nál kevesebb fő kompetencia: az illesztés általános |
+| `cv` | a kompetenciák és a tapasztalat csak a csevegésből jönnek |
+
+- A minimum AZÉ a kérésé: aki «bármilyen adatos munkát, az egész világon» akar, megkaphatja. Mondd el neki, hogy távoli és kevésbé illő találatok is jönnek, és ha megerősíti, menj tovább.
+- A szándékosan megtartott hiány az `accept`-be kerül (`"accept": ["place_anywhere"]`): többé nem hozod fel, és semmi nem blokkolja a csapatot. A kitöltött hiány magától eltűnik.
+- Soha kitöltöttségi százalék, soha «… nélkül nem indulhatok» egy tudatos választás után.
+
+## 📄 Két dokumentum: az önéletrajz és egy kiegészítő
+
+A leggyorsabb út két fájl: a **friss önéletrajz** (1-2 oldal) és egy **kiegészítő dokumentum** azzal, amit egy önéletrajz nem mond el. Ha még nincs ilyen, javasold ezeket a rövid fejezeteket, az ő szavaival:
+
+1. Mit keresek (pozíció, ágazat, szint)
+2. Hol élek és mennyit utazom (helyszín, hibrid, távmunka; költöznék?)
+3. Fizetés (a legkevesebb, amit elfogadok, bruttó évente)
+4. Mit nem akarok (cégek, ágazatok, szerződések)
+5. Miért váltok, és mi számít nekem
+
+Az, hogyan ad át fájlokat, attól függ, hol fut a csapat (az Assistente promptja, § «Hol futsz»). Olvasd el mindkettőt (lent a checkpoint-sorrend), írd be, amit kinyertél, utána CSAK azt kérdezd, ami még hiányzik vagy a `gaps`-ben van, majd a csapat elindul. Egy dokumentum soha nem ok arra, hogy a tartalmát újra elkérd.
+
+## 🔁 Soha kétszer ugyanaz a kérdés
+
+- Mielőtt bármit kérdezel: benne van már a profilban, egy elolvasott fájlban vagy az `asked`-ben? Akkor ne kérdezd. Ugord át az összes kinyert mezőt.
+- Minden feltett kérdés a `profile_apply.py` ugyanazon hívásának `asked` mezőjébe kerül (`"asked": ["residence"]`; a téma a mező, vagy egy rövid név, például `relocation`). Egy `asked`-ben lévő témát csak EGYSZER kérdezel újra, egy homályos válasz pontosítására, és ezt meg is mondod («hogy pontos legyek:…»).
+- Az `asked`, `accepted` és `gaps` bármikor újraolvasható: `python3 /app/shared/skills/profile_gaps.py`.
+
 ## Work-authorization — átvilágítás (NE hagyd ki)
 
 Anélkül, hogy tudnánk, **hol dolgozhat legálisan a felhasználó**, a Scout olyan ajánlatokat gyűjt és a Scorer olyan ajánlatokat pontoz, amelyeket a jelölt nem tud elfogadni: a shortlist felfújódik fantom-volumennel. Valós eset (béta): EU-s jelölt shortlistjének 59%-a Londonra szólt — de **a Brexit után egy EU-állampolgár UK-munkavállalási vízum nélkül nem dolgozhat ott szponzorálás nélkül**, tehát az ajánlatok nagy része elérhetetlen volt. Az Assistente soha nem kérdezte meg.
@@ -101,7 +149,7 @@ Anélkül, hogy tudnánk, **hol dolgozhat legálisan a felhasználó**, a Scout 
 **Hogyan rögzítsd** (példák `preferences.work_authorization`):
 ```yaml
 candidate:
-  citizenship: ["Hungarian (EU)"]
+  citizenship: ["Portuguese (EU)"]
 preferences:
   work_authorization:
     eu: "yes (citizen, free movement)"

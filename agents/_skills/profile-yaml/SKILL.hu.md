@@ -189,6 +189,8 @@ Tehat gyakran a gomb mar feloldott a fallback altal, amikor a profil teljes — 
 
 **Hozd létre, amint a profilban megvan a célpozíció, a város/terület és legalább egy nyelv** — nem vársz a nyolc mezőre: a csapat elindul, a kérdések folytatódnak (a profil többi része munka közben egészül ki).
 
+**A flag előtt:** elmondtad a személynek a `gaps`-t, amit a profile_apply.py válaszol, és hogy mit jelentenek, ő pedig választott: megadta az adatokat, vagy megerősítette, hogy így megy tovább (`accept`). onboarding-flow skill, § «Mielőtt a csapat elindul». Nem kapu: egy tudatos választást soha nem blokkolsz.
+
 ```bash
 # 1. Hozd letre a flag-et UTC idobelyeggel
 date -u +"%Y-%m-%dT%H:%M:%SZ" > "$JHT_HOME/profile/ready.flag"

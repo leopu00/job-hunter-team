@@ -189,6 +189,8 @@ Daher ist der Button oft bereits durch den Fallback freigeschaltet, wenn das Pro
 
 **Erstelle es, sobald das Profil Zielrolle, Stadt/Gebiet und mindestens eine Sprache hat** — du wartest nicht auf die acht Felder: das Team startet und die Fragen gehen weiter (der Rest des Profils wird vervollständigt, während es arbeitet).
 
+**Vor dem Flag:** Du hast der Person die `gaps` genannt, die profile_apply.py antwortet, und was sie bedeuten, und sie hat gewählt: Sie hat die Daten gegeben oder bestätigt, so weiterzumachen (`accept`). Skill onboarding-flow, § «Bevor das Team startet». Kein Riegel: eine bewusste Wahl wird nie blockiert.
+
 ```bash
 # 1. Erstellen Sie das Flag mit UTC-Zeitstempel
 date -u +"%Y-%m-%dT%H:%M:%SZ" > "$JHT_HOME/profile/ready.flag"

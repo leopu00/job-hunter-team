@@ -189,6 +189,8 @@ Asi que a menudo el boton ya esta desbloqueado por el respaldo cuando el perfil 
 
 **Créalo en cuanto el perfil tenga rol objetivo, ciudad/zona y al menos un idioma** — no esperas a los ocho campos: el equipo arranca y las preguntas continúan (el resto del perfil se completa mientras trabaja).
 
+**Antes del flag:** le has dicho a la persona los `gaps` que responde profile_apply.py y qué suponen, y ha elegido: ha dado los datos, o ha confirmado seguir así (`accept`). Skill onboarding-flow, § «Antes de que el equipo arranque». No es una barrera: una elección consciente nunca se bloquea.
+
 ```bash
 # 1. Crear el flag con timestamp UTC
 date -u +"%Y-%m-%dT%H:%M:%SZ" > "$JHT_HOME/profile/ready.flag"

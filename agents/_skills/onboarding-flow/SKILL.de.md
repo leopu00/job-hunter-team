@@ -1,7 +1,7 @@
 ---
 name: onboarding-flow
 description: Konversationsprotokoll, dem der Assistente beim Onboarding des Nutzers folgt — erste Nachricht, iteratives Eine-Frage-pro-Runde-Pacing, blockierende Checkliste (das Minimum, das das Dashboard freischaltet) vs reichhaltige Checkliste (was die Writer tatsächlich nützlich macht), branchenneutraler Fragestil (NIEMALS IT annehmen), und die verpflichtende Checkpoint-Sequenz wenn der Nutzer Dateien hochlädt. Eng gepaart mit `profile-yaml` (jede Antwort = ein Write+Validate) und `profile-summaries` (narrative MDs nach Schlüsselmeilensteinen). Diesen Skill am Anfang einer Onboarding-Sitzung und bei jeder Nutzer-Runde öffnen, die neue Info bringt.
-allowed-tools: Bash(mkdir -p *), Bash(cp *), Bash(python3 /app/shared/skills/plan_registry.py get), Bash(python3 /app/shared/skills/plan_registry.py set *), Bash(python3 /app/shared/skills/first_run.py ask-plan *), Bash(python3 /app/shared/skills/onboarding_questionnaire.py *), Bash(python3 /app/shared/skills/profile_apply.py *)
+allowed-tools: Bash(mkdir -p *), Bash(cp *), Bash(python3 /app/shared/skills/plan_registry.py get), Bash(python3 /app/shared/skills/plan_registry.py set *), Bash(python3 /app/shared/skills/first_run.py ask-plan *), Bash(python3 /app/shared/skills/onboarding_questionnaire.py *), Bash(python3 /app/shared/skills/profile_apply.py *), Bash(python3 /app/shared/skills/profile_gaps.py)
 ---
 <!-- @translation: de, ai-translated 2026-06-06 -->
 
@@ -45,7 +45,7 @@ Team frei · 🟡 RECOMMENDED blockiert nicht, verbessert aber stark · 🟢 OPT
 
 ## 🔴 Blockierende Checkliste — REQUIRED (schaltet das Team frei)
 
-Das Team startet, **sobald drei dieser Felder da sind: Zielrolle, Stadt/Gebiet und mindestens eine Sprache** (und der Plan erklärt ist): es wartet nicht auf die anderen. Sind die drei da, setze `ready.flag` und benachrichtige den Capitano (siehe `profile-yaml`), sag es dem Nutzer in einer Zeile („das Team legt los; die nächsten Fragen machen die Suche genauer“) und **frag weiter**: die anderen fünf Felder und die Karten des Fragebogens kommen, während das Team schon arbeitet. Die acht Felder unten sind das **vollständige Profil** (das, was die App als vollständig zeigt) und das Minimum, um Stellen gut zu **suchen und zu bewerten**:
+Das Team startet, **sobald drei dieser Felder da sind: Zielrolle, Stadt/Gebiet und mindestens eine Sprache** (und der Plan erklärt ist): es wartet nicht auf die anderen. Sind die drei da, setze `ready.flag` und benachrichtige den Capitano (siehe `profile-yaml`), sag es dem Nutzer in einer Zeile („das Team legt los; die nächsten Fragen machen die Suche genauer“) und **frag weiter**: die anderen fünf Felder und die Karten des Fragebogens kommen, während das Team schon arbeitet. Die acht Felder unten sind das **vollständige Profil** (das, was die App als vollständig zeigt) und das Minimum, um Stellen gut zu **suchen und zu bewerten**: **Vorher**: § «Bevor das Team startet — was fehlt und was es bedeutet».
 
 | Feld                 | YAML-Pfad                    | Neutrales Fragebeispiel                           |
 |----------------------|------------------------------|---------------------------------------------------|
@@ -85,6 +85,54 @@ Frage weiter, bis der Nutzer sagt, du sollst aufhören — mehr Daten = CV und S
 - `preferences.work_mode`, `relocation`, `preferences.salary_annual_eur`
 - Projekte, Publikationen, Open-Source, Ehrenamt, Zertifikate, `sector_details`
 
+## 📍 Wo die Person wohnt und wie weit sie fährt — und «überall»
+
+`location` ist, wo sie SUCHT; wo sie WOHNT, ist ein anderes Feld, und der Scorer misst die Entfernung von dort (JHT-T351):
+
+| Feld | YAML-Pfad | Neutrale Frage |
+|---|---|---|
+| Wohnort | `residence` = `{place: "Stadt, Land", lat: null, lon: null}` | "Wo wohnst du? Stadt und Land reichen." |
+| Radius für Stellen vor Ort und hybrid | `commute_max_km` (eine Zahl in km) | "Für eine Stelle im Büro oder hybrid: wie weit würdest du fahren? In km, oder als Zeit und ich rechne es um." |
+
+- Schreib `place` als «Stadt, Land»; lass `lat`/`lon` auf `null` (nie Koordinaten aus dem Gedächtnis). Eine Zeit («45 Minuten mit dem Auto») rechnest du in km um und sagst die Zahl, die du geschrieben hast.
+- Den Radius fragst du nur, wenn die Arbeit nicht nur remote ist (`preferences.work_mode`).
+- «Überall» als Ort der Suche ist eine Wahl, keine Antwort zum Ablegen: stell EINE Detailfrage — die ganze Welt oder einige Länder? auch vor Ort im Ausland oder nur remote? würdest du umziehen? — und schreib, was sie sagt (eine Liste von Ländern, `preferences.relocation`), oder behalte «überall», wenn sie das meint (siehe nächster Abschnitt).
+
+## 🧭 Bevor das Team startet — was fehlt und was es bedeutet
+
+Jede Antwort von `profile_apply.py` enthält `gaps`: was dem Profil für die gewünschte Suche noch fehlt. Vor `ready.flag` (und noch einmal vor `onboarding-done.flag`, wenn neue dazugekommen sind) nennst du sie in EINER Nachricht mit den Worten der Person, jede mit ihrer Bedeutung, und fragst: ergänzen wir die Daten, oder machen wir so weiter?
+
+| Lücke | Was sie für die Suche bedeutet |
+|---|---|
+| `place_anywhere` | Ergebnisse von überall, auch weit entfernte Stellen vor Ort, und weniger passende |
+| `residence` | keine Entfernungsprüfung: eine Stelle vor Ort weit weg wird nicht abgewertet |
+| `commute` | keine Grenze für den Weg ins Büro |
+| `salary` | Angebote ohne Gehaltsangabe werden nicht abgewertet, und das Gehalt lässt sich nicht vergleichen |
+| `skills` | weniger als 3 Hauptkompetenzen: der Abgleich ist allgemein |
+| `cv` | Kompetenzen und Erfahrung kommen nur aus dem Chat |
+
+- Das Minimum ist das DIESER Anfrage: Wer «irgendeine Rolle im Datenbereich, weltweit» will, kann das haben. Sag ihr, dass auch entfernte und wenig passende Ergebnisse kommen, und wenn sie bestätigt, mach weiter.
+- Eine Lücke, die sie bewusst behält, kommt in `accept` (`"accept": ["place_anywhere"]`): du sprichst sie nie wieder an, und nichts blockiert das Team. Eine gefüllte Lücke verschwindet von selbst.
+- Nie ein Prozentsatz der Vollständigkeit, nie «ohne … kann ich nicht starten» nach einer bewussten Wahl.
+
+## 📄 Zwei Dokumente: der Lebenslauf und ein ergänzendes
+
+Der schnellste Weg sind zwei Dateien: der **aktuelle Lebenslauf** (1-2 Seiten) und ein **ergänzendes Dokument** mit dem, was ein Lebenslauf nicht sagt. Hat die Person noch keines, schlag diese Kapitel vor, kurz, in ihren Worten:
+
+1. Was ich suche (Rolle, Branche, Niveau)
+2. Wo ich wohne und wie weit ich fahre (vor Ort, hybrid, remote; würde ich umziehen?)
+3. Gehalt (das Minimum, brutto pro Jahr)
+4. Was ich nicht will (Firmen, Branchen, Verträge)
+5. Warum ich wechsle und was mir wichtig ist
+
+Wie sie dir die Dateien gibt, hängt davon ab, wo das Team läuft (Prompt des Assistente, § «Wo du läufst»). Lies beide (Checkpoint-Ablauf unten), schreib, was du extrahiert hast, frag dann NUR, was noch fehlt oder in `gaps` steht, dann startet das Team. Ein Dokument ist nie ein Grund, seinen Inhalt noch einmal zu erfragen.
+
+## 🔁 Nie zweimal dieselbe Frage
+
+- Bevor du etwas fragst: steht es schon im Profil, in einer gelesenen Datei oder in `asked`? Dann frag nicht. Überspring jedes extrahierte Feld.
+- Jede gestellte Frage kommt in `asked` desselben Aufrufs von `profile_apply.py` (`"asked": ["residence"]`; das Thema ist das Feld oder ein kurzer Name wie `relocation`). Ein Thema in `asked` fragst du nur EINMAL wieder, um eine vage Antwort zu vertiefen, und sagst es («um genau zu sein:…»).
+- `asked`, `accepted` und `gaps` liest du jederzeit mit `python3 /app/shared/skills/profile_gaps.py`.
+
 ## Arbeitserlaubnis — Due Diligence (NICHT überspringen)
 
 Ohne zu wissen **wo der Nutzer legal arbeiten kann**, sammelt der Scout und bewertet der Scorer Angebote, die der Kandidat nicht annehmen kann: aufgeblähte Shortlist mit Phantom-Volumen. Realer Fall (Beta): EU-Kandidat mit Shortlist zu 59% London — aber **nach dem Brexit kann ein EU-Bürger ohne UK-Visum dort nicht ohne Sponsorship arbeiten**, daher war ein Großteil dieser Angebote unzugänglich. Der Assistente hatte nie danach gefragt.
@@ -101,7 +149,7 @@ Ohne zu wissen **wo der Nutzer legal arbeiten kann**, sammelt der Scout und bewe
 **Wie erfassen** (Beispiele `preferences.work_authorization`):
 ```yaml
 candidate:
-  citizenship: ["Hungarian (EU)"]
+  citizenship: ["Portuguese (EU)"]
 preferences:
   work_authorization:
     eu: "yes (citizen, free movement)"

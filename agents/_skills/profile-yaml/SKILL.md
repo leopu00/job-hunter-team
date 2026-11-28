@@ -194,6 +194,8 @@ So the button is often already unlocked by the fallback when the profile is comp
 
 **Create it as soon as the profile has a target role, a city or area and at least one language** — you do not wait for the eight fields: the team starts and the questions go on (the rest of the profile is completed while it works).
 
+**Before the flag:** you told the person the `gaps` that profile_apply.py answers and what they mean, and they chose: they gave the data, or they confirmed going on as it is (`accept`). Skill onboarding-flow, § «Before the team starts». Not a gate: a choice made knowingly is never blocked.
+
 ```bash
 # 1. Create the flag with a UTC timestamp
 date -u +"%Y-%m-%dT%H:%M:%SZ" > "$JHT_HOME/profile/ready.flag"
