@@ -93,7 +93,7 @@ export async function promptWorkingHours(prompter, currentWorkingHours) {
 
 export async function assembleAndSaveConfig(prompter, params) {
   const { providerChoice, authMethod, apiKey, subscriptionConfig, model,
-          baseProviders, workingHours, budget, dailyUsd, harness } = params;
+          baseProviders, workingHours, budget, dailyUsd, dailyPace = false, harness } = params;
 
   const providerConfig = { name: providerChoice, auth_method: authMethod };
   if (authMethod === 'api_key' && apiKey) {
@@ -135,7 +135,8 @@ export async function assembleAndSaveConfig(prompter, params) {
   }
 
   // The ceiling per day of the «custom» budget (JHT-T345): no_quota_cap.usd, the daily ceiling the brake of pi already applies.
-  if (dailyUsd) config.no_quota_cap = { usd: dailyUsd };
+  // pace: the ceiling spread over the working time of the day (JHT-T345b), read by the brake only when there is no budget of a period
+  if (dailyUsd) config.no_quota_cap = dailyPace ? { usd: dailyUsd, pace: true } : { usd: dailyUsd };
 
   // Written without a word: «saved» is said at the end of the setup, not before the steps that can still fail.
   writeConfigFile(config);

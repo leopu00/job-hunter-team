@@ -39,8 +39,9 @@ export const BUDGET_DAYS = Object.freeze([1, 3, 7, 14, 30]);
  *   onboardingUsd        what the onboarding of the first day costs;
  *   totalProposal        what «an amount in all, for a period» proposes;
  *   subscriptionAsksDollars  with a subscription the plan paces the team: no question in dollars unless this is true;
- *   hoursDefault         the working hours already chosen when they are asked.
- * The pace of the ceiling per day (spreading it over the day) is not here yet: a work of its own.
+ *   hoursDefault         the working hours already chosen when they are asked;
+ *   dailyPace            the ceiling a day is spread over the working time of the day (no_quota_cap.pace): the team pauses a while
+ *                        when it goes faster, instead of spending it all at once and waiting for the next day.
  */
 export const BUDGET_SETUP = Object.freeze({
   recommendedDailyUsd: Object.freeze({ openai: 10, claude: 10 }),
@@ -51,6 +52,7 @@ export const BUDGET_SETUP = Object.freeze({
   totalProposal: Object.freeze({ usd: '20', period: '7d' }),
   subscriptionAsksDollars: false,
   hoursDefault: 'always',
+  dailyPace: true,
 });
 const PROVIDER_LABELS = Object.freeze({ openai: 'OpenAI', claude: 'Anthropic' });
 const canonicalProvider = (provider) => {
@@ -240,10 +242,11 @@ function workedHoursPerDay(window) {
  * The one line said before the configuration is saved, in words a person reads once: «The team can spend $10 in 3 days,
  * 10 hours a day (8:00-18:00 Europe/Rome), then it stops by itself.» `kind` = trial | night | days | none (what was chosen).
  */
-export function budgetSummary(t, tf, { budget, workingHours, kind, dailyUsd = null, lang = 'en' }) {
+export function budgetSummary(t, tf, { budget, workingHours, kind, dailyUsd = null, lang = 'en', dailyPace = false }) {
   if (kind === 'subscription') return tf('wizard.budget.summary_subscription', whenText(t, tf, workingHours, lang));
   if (!budget && dailyUsd) {
-    return tf('wizard.budget.summary_daily', tf('wizard.budget.money', String(dailyUsd)), whenText(t, tf, workingHours, lang));
+    const line = tf('wizard.budget.summary_daily', tf('wizard.budget.money', String(dailyUsd)), whenText(t, tf, workingHours, lang));
+    return dailyPace ? `${line} ${t('wizard.budget.daily_pace_note')}` : line;
   }
   const daily = dailyUsd ? ` ${tf('wizard.budget.daily_note', tf('wizard.budget.money', String(dailyUsd)))}` : '';
   return periodSummary(t, tf, { budget, workingHours, kind }) + (budget ? daily : '');

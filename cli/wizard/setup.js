@@ -30,7 +30,7 @@ import {
   showSummary,
 } from './setup-steps.js';
 import { formatSecretForConfig } from './secret-ref.js';
-import { promptBudget, askPace, budgetSummary, budgetPaceNote, stampedAt } from './setup-budget.js';
+import { promptBudget, askPace, budgetSummary, budgetPaceNote, stampedAt, BUDGET_SETUP } from './setup-budget.js';
 import { checkPrerequisites, runHealthCheck } from './setup-checks.js';
 import { t, tf, currentLang } from './i18n.js';
 import { askLanguage } from './setup-language.js';
@@ -410,14 +410,15 @@ async function runSetupSteps(prompter, state, { diskRefusal = diskLowRefusal } =
   const budget = await askPace(prompter, { t, budget: asked.budget });
   const paceNote = budgetPaceNote(t, { budget });
   // one line of what was chosen, the note of the pace when there is one, and how to change it later (JHT-T345b)
-  const summary = budgetSummary(t, tf, { budget, workingHours, kind: budgetKind, dailyUsd, lang: currentLang() });
+  const dailyPace = BUDGET_SETUP.dailyPace === true;
+  const summary = budgetSummary(t, tf, { budget, workingHours, kind: budgetKind, dailyUsd, lang: currentLang(), dailyPace: dailyPace && !budget });
   await prompter.note([summary, paceNote, t('wizard.budget.change_later')].filter(Boolean).join('\n\n'), t('wizard.budget.title'));
 
   // --- Salva e riepilogo ---
   await assembleAndSaveConfig(prompter, {
     providerChoice, authMethod, apiKey: apiKeySecret, subscriptionConfig, model,
     // a budget confirmed in the setup always opens a new period (new saved_at: the dollars and state/budget-start.json start again)
-    baseProviders: baseConfig.providers || {}, workingHours, budget: stampedAt(budget), dailyUsd, harness,
+    baseProviders: baseConfig.providers || {}, workingHours, budget: stampedAt(budget), dailyUsd, dailyPace, harness,
   });
 
   // ────────────────────────────────────────────────────────────────────────

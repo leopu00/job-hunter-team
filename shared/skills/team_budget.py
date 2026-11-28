@@ -179,6 +179,28 @@ def no_quota_cap_usd(config):
     return {"usd": round(eur * rate, 6), "declared": eur, "currency": "EUR", "rate": rate}
 
 
+def daily_paced(config, now):
+    """The ceiling a day spread over the day (`no_quota_cap.pace` true, JHT-T345b), as a budget of ONE day that starts again at local
+    midnight: {"usd", "counts_from", "starts", "ends", "duration": None, "saved_at": None, "pace": True, "daily": True}, or None.
+
+    The brake applies to it only the pace (the share of the worked time of the day gone by, plus the lead): the stop at the ceiling
+    stays the one of no_quota_cap, which lifts by itself the next day, and the end of the day is no «period over». Only when there
+    is no team.budget: a budget of a period wins and its own pace is the one asked for."""
+    if read(config) is not None:
+        return None
+    cap = config.get("no_quota_cap") if isinstance(config, dict) else None
+    if not isinstance(cap, dict) or cap.get("pace") is not True:
+        return None
+    daily = no_quota_cap_usd(config)
+    if daily is None:
+        return None
+    midnight = datetime.fromtimestamp(now).replace(hour=0, minute=0, second=0, microsecond=0)
+    starts = midnight.timestamp()
+    ends = (midnight + timedelta(days=1)).timestamp()
+    return {"usd": daily["usd"], "counts_from": starts, "starts": starts, "ends": ends, "duration": None, "saved_at": None,
+            "pace": True, "daily": True}
+
+
 def margin(usd):
     """What the brake leaves unspent: a call in flight when the brake looks still finishes and is paid."""
     return max(MARGIN_SHARE * usd, MARGIN_USD)

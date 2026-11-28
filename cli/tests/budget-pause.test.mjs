@@ -189,3 +189,9 @@ test('a pause of a budget the config no longer has is not said: the setup chose 
   writeFileSync(join(broken, 'jht.config.json'), '{ not json');
   assert.equal(budgetPause({ home: broken }).why, 'budget');
 });
+
+test('the pause of the pace of the ceiling a day is said, though the config has no budget of a period (JHT-T345b)', () => {
+  const root = home(cap({ why: 'pace', spent: 8, ceiling: 7.5, budget_usd: 10, resumes_at: '2026-11-15T23:10:00+01:00' }));
+  writeFileSync(join(root, 'jht.config.json'), JSON.stringify({ version: 1, no_quota_cap: { usd: 10, pace: true } }));
+  assert.equal(budgetPause({ home: root }).why, 'pace');
+});

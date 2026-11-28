@@ -364,11 +364,11 @@ test('the budget in the wizard: Enter keeps $10 a day, saved as the ceiling per 
   assert.deepEqual(ask.options, ['daily', 'daily_other', 'total', 'custom', 'none']);
   assert.equal(events.some((e) => e.kind === 'select' && e.message === 'When should the team work?'), false, 'the old hours question is not asked');
   const config = JSON.parse(configText);
-  assert.deepEqual(config.no_quota_cap, { usd: 10 });
+  assert.deepEqual(config.no_quota_cap, { usd: 10, pace: true }, 'the ceiling a day is spread over the day');
   assert.equal(config.team?.budget, undefined, 'a ceiling per day is no budget of a period');
   assert.equal(config.team?.working_hours, undefined, 'at any hour');
   assert.ok(events.some((e) => e.kind === 'note' && /^You pay your Anthropic account per use\. With \$10 a day/.test(e.message)));
-  assert.ok(events.some((e) => e.kind === 'note' && e.message === 'The team can spend at most $10 a day, at any hour; every day it starts again.\n\nYou can change it whenever you want with jht budget (for example: jht budget set --daily-usd 15).'));
+  assert.ok(events.some((e) => e.kind === 'note' && e.message === 'The team can spend at most $10 a day, at any hour; every day it starts again. It spreads it over the day: when it goes faster it waits a while by itself.\n\nYou can change it whenever you want with jht budget (for example: jht budget set --daily-usd 15).'));
   assert.equal(events.at(-1).ok, true);
 });
 

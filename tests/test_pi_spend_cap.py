@@ -1893,3 +1893,43 @@ def test_the_captain_and_the_person_read_the_same_currency(tmp_path):
     pi_calls(tmp_path / "b", [(NOON - 600, 10.0, 100)])
     bridge2.tick()
     assert "against a ceiling of 10 USD." in dict(bridge2.sent)["CAPITANO"] and "EUR" not in dict(bridge2.sent)["CAPITANO"]
+
+
+# ── JHT-T345b: the ceiling a day spread over the day (no_quota_cap.pace) ──
+
+DAILY_PACED = {"no_quota_cap": {"usd": 10, "pace": True}}
+
+
+def test_the_ceiling_a_day_with_its_pace_is_a_budget_of_one_day_that_starts_at_midnight():
+    paced = team_budget.daily_paced(DAILY_PACED, NOON)
+    midnight = datetime(2026, 11, 9, tzinfo=timezone.utc).timestamp()
+    assert paced == {"usd": 10.0, "counts_from": midnight, "starts": midnight, "ends": midnight + 86400, "duration": None,
+                     "saved_at": None, "pace": True, "daily": True}
+    assert team_budget.daily_paced({"no_quota_cap": {"usd": 10}}, NOON) is None, "no pace asked: the plain ceiling"
+    assert team_budget.daily_paced({"no_quota_cap": {"pace": True}}, NOON) is None, "no ceiling"
+    with_budget = dict(DAILY_PACED, **budget(5, NOON - HOUR, NOON + HOUR))
+    assert team_budget.daily_paced(with_budget, NOON) is None, "a budget of a period wins"
+
+
+def test_the_ceiling_a_day_spread_over_the_day_pauses_a_team_that_runs_ahead_and_says_when_it_resumes(tmp_path):
+    """10 $ over 24 hours: 0.42 $ an hour, 2.50 $ ahead (a quarter). At 12:00 it may have spent 7.50."""
+    pi_calls(tmp_path, [(NOON - HOUR, 6.0, 100)])
+    bridge = Bridge(tmp_path, DAILY_PACED)
+    state: dict = {}
+    bridge.tick(state=state)
+    assert bridge.esc == 0, "6 of 7.50 allowed by noon"
+    pi_calls(tmp_path, [(NOON - HOUR, 8.0, 100)])
+    bridge.tick(state=state)
+    assert bridge.esc == 1
+    record = flag_record(bridge)
+    assert record["why"] == "pace" and record["resumes_at"] is not None
+    assert "⏸️" in bridge.users[0][0]
+
+
+def test_the_ceiling_a_day_spread_over_the_day_is_no_period_that_ends_at_midnight(tmp_path):
+    late = datetime(2026, 11, 9, 23, 58, tzinfo=timezone.utc).timestamp()
+    pi_calls(tmp_path, [(late - HOUR, 1.0, 100)])
+    bridge = Bridge(tmp_path, DAILY_PACED)
+    bridge.clock["now"] = late
+    bridge.tick()
+    assert bridge.esc == 0 and not bridge.flag.exists(), "23:58 with 1 $ of 10: nothing to stop, and no «period over»"
