@@ -19,13 +19,14 @@ const ERRORS = {
   run_manual_snapshot: () => say('run.error.run_manual_snapshot'),
   run_corrupt: () => say('run.error.run_corrupt'),
   run_unlisted: () => say('run.error.run_unlisted'),
+  run_link_refused: () => say('run.error.run_link_refused'),
   run_stop_failed: () => say('run.error.run_stop_failed'),
 };
 
 function fail(error) {
   const code = Object.hasOwn(ERRORS, error?.message) ? error.message : 'run_failed';
   console.error(code === 'run_failed' ? say('run.error.run_failed', { detail: error?.message ?? '' }) : ERRORS[code]());
-  if ((code === 'run_corrupt' || code === 'run_unlisted') && Array.isArray(error.files)) for (const f of error.files.slice(0, 10)) console.error(`  ${f}`);
+  if ((code === 'run_corrupt' || code === 'run_unlisted' || code === 'run_link_refused') && Array.isArray(error.files)) for (const f of error.files.slice(0, 10)) console.error(`  ${f}`);
   process.exitCode = 1;
 }
 

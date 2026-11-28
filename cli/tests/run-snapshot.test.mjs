@@ -302,5 +302,35 @@ test('the help of snapshot says what is left out and what is inside, in the seve
   const { default: en } = await import('../src/lib/texts/en.js');
   assert.doesNotMatch(en['run.help.snapshot'], /no keys or tokens/);
   assert.match(en['run.help.snapshot'], /it recognises/);
-  assert.match(en['run.restore.kept'], /keys included/);
+  assert.match(en['run.restore.kept'], /keys and tokens in clear/);
+  assert.match(en['run.restore.kept'], /synced or shared folder/);
+  assert.ok(en['run.error.run_link_refused']);
+});
+
+test('a link is put back only from the copy a restore keeps, and only inside its own part of the home', () => {
+  const raw = { raw: true };
+  assert.equal(lib.linkAllowed(raw, 'home/state/current-budget.json', 'budget-start.json'), true);
+  assert.equal(lib.linkAllowed(raw, 'home/state/a/b.json', '../c.json'), true);
+  assert.equal(lib.linkAllowed({ raw: false }, 'home/state/current-budget.json', 'budget-start.json'), false, 'a normal snapshot never holds a link');
+  assert.equal(lib.linkAllowed({}, 'home/state/current-budget.json', 'budget-start.json'), false);
+  for (const target of ['/etc/passwd', '../logs/x.log', '../../jht.config.json', '../../../.ssh/id_ed25519', '..', '']) {
+    assert.equal(lib.linkAllowed(raw, 'home/state/current-budget.json', target), false, target);
+  }
+  assert.equal(lib.linkAllowed(raw, 'home/jht.config.json', 'profile/x'), false, 'a file entry holds no link');
+  assert.equal(lib.linkAllowed(raw, 'other/x', 'y'), false);
+});
+
+test('a restore refuses a copy with a link pointing out of its folder, before touching anything', async () => {
+  const w = world();
+  symlinkSync('../../jht.config.json', join(w.home, 'state', 'trap.json'));
+  const { kept } = await lib.restoreSnapshot({ name: (await snap(w, 'run-a')).manifest.name, fresh: true, ...w.deps });
+  assert.equal(readlinkSync(join(kept, 'home', 'state', 'trap.json')), '../../jht.config.json', 'the copy keeps what was there');
+  const stops = w.counts.stop;
+  await assert.rejects(lib.restoreSnapshot({ name: kept.split(/[\\/]/).pop(), ...w.deps }), (error) => {
+    assert.equal(error.message, 'run_link_refused');
+    assert.deepEqual(error.files, ['home/state/trap.json']);
+    return true;
+  });
+  assert.equal(w.counts.stop, stops, 'refused before stopping the team');
+  assert.ok(!existsSync(join(w.home, 'state', 'trap.json')));
 });

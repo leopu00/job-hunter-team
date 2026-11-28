@@ -22,7 +22,7 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { homedir } from 'node:os';
-import { dirname, join, relative, sep } from 'node:path';
+import { dirname, isAbsolute, join, posix, relative, sep } from 'node:path';
 import { SECRET_KEY, mergeLiveSecrets, redactSecrets } from './backup-secrets.js';
 
 export const SNAPSHOT_SCHEMA = 'jht.run.snapshot/1';
@@ -159,6 +159,7 @@ export function launchProfileOf(home) {
  * Copy back, for the restore: only what the manifest lists (`listed`: path in the snapshot → its line of the manifest), each file
  * checked again against its sha256 as it is written, each link only as the manifest recorded it. The restore refuses a snapshot with
  * anything else in it before touching the home (`unlistedFiles`); this is the same rule where the bytes are written.
+ * An integrity check, not an authentication: whoever can add a file to the archive can rewrite the manifest too, and then it passes.
  */
 function copyBack(src, dst, { snapshotDir, listed, skip = new Set() }) {
   const info = lstatSync(src);
@@ -173,6 +174,7 @@ function copyBack(src, dst, { snapshotDir, listed, skip = new Set() }) {
   mkdirSync(dirname(dst), { recursive: true, mode: 0o700 });
   if (info.isSymbolicLink()) {
     if (typeof line.link !== 'string' || readlinkSync(src) !== line.link) throw Object.assign(new Error('run_corrupt'), { files: [rel] });
+    if (!linkAllowed(listed.manifest, rel, line.link)) throw Object.assign(new Error('run_link_refused'), { files: [rel] });
     symlinkSync(line.link, dst);
     return;
   }
@@ -392,6 +394,28 @@ export function verifySnapshot(dir, manifest) {
   return bad;
 }
 
+/**
+ * A link a restore may put back: only in the copy a restore keeps (`raw`: a normal snapshot never holds one), with a relative target
+ * that, read from the link's own folder, stays inside the part of the home it belongs to (state/, logs/…). A link the team never
+ * makes, pointing out of the home, is a trap a later write would follow: refused.
+ */
+export function linkAllowed(manifest, path, target) {
+  if (manifest?.raw !== true || typeof target !== 'string' || !target || isAbsolute(target) || target.includes('\\')) return false;
+  const [part, ...rest] = String(path).split('/');
+  const entries = part === 'home' ? HOME_ENTRIES : part === 'user' ? USER_ENTRIES : [];
+  const inside = rest.join('/');
+  const entry = entries.find((e) => inside.startsWith(`${e.path.split(sep).join('/')}/`));
+  if (!entry) return false;
+  const root = entry.path.split(sep).join('/');
+  const resolved = posix.normalize(posix.join(posix.dirname(inside), target));
+  return resolved.startsWith(`${root}/`);
+}
+
+/** The links of a snapshot's manifest a restore refuses to put back (see `linkAllowed`). */
+export function refusedLinks(manifest) {
+  return (manifest.files ?? []).filter((f) => typeof f.link === 'string' && !linkAllowed(manifest, f.path, f.link)).map((f) => f.path);
+}
+
 /** The files and links of the parts of a snapshot (home/, user/) that its manifest does not list. */
 export function unlistedFiles(dir, manifest) {
   const listed = new Set((manifest.files ?? []).map((f) => String(f.path)));
@@ -425,10 +449,14 @@ export async function restoreSnapshot({
   if (manifest.schema !== SNAPSHOT_SCHEMA) throw new Error('run_manual_snapshot');
   const bad = verifySnapshot(dir, manifest);
   if (bad.length) throw Object.assign(new Error('run_corrupt'), { files: bad });
-  // a restore writes only what the manifest lists: a file added to the archive afterwards (a hook in an agent's folder) is refused
+  // a restore writes only what the manifest lists: a file added to the archive afterwards (a hook in an agent's folder) is refused,
+  // unless the manifest is rewritten too (an integrity check, not an authentication)
   const unlisted = unlistedFiles(dir, manifest);
   if (unlisted.length) throw Object.assign(new Error('run_unlisted'), { files: unlisted });
+  const outside = refusedLinks(manifest);
+  if (outside.length) throw Object.assign(new Error('run_link_refused'), { files: outside });
   const listed = new Map((manifest.files ?? []).map((f) => [String(f.path), f]));
+  listed.manifest = manifest;
   if ((await stopTeam()) === false) throw new Error('run_stop_failed');
   let kept = null;
   const hasData = [...HOME_ENTRIES.map((e) => join(home, e.path)), ...USER_ENTRIES.map((e) => join(userDir, e.path))].some(existsSync);
