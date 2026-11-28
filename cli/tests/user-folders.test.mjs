@@ -2,7 +2,7 @@
 // container the paths stay the internal ones. The Assistente never names a folder that is not on the disk.
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync, rmSync, symlinkSync, lstatSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
@@ -79,7 +79,7 @@ test('inside the container the name the wrapper mounted wins, and a rewrite of t
   assert.equal(seen.allegati.name, 'mellekletek');
   assert.equal(seen.cv.name, 'cv', 'an unsafe mounted name is ignored');
   lib.writeUserFolders({ env: {}, home, catalog });
-  assert.deepEqual(JSON.parse(readFileSync(join(home, 'user-folders.json'), 'utf8')).mounted, { allegati: 'mellekletek', cv: '../x' });
+  assert.deepEqual(JSON.parse(readFileSync(join(home, 'user-folders.json'), 'utf8')).mounted, { allegati: 'mellekletek' });
 });
 
 test('setup saves the names for each chosen language without changing other catalog entries', async () => {
@@ -104,4 +104,18 @@ test('unsafe or colliding names never become commands or folder mappings', () =>
     assert.equal(lib.userFolders({ env: {}, home, catalog, language: 'en' }).allegati, 'attachments', bad);
     if (!['cv', 'CV', 'reviews'].includes(bad)) assert.equal(lib.openCommand(bad, 'macos'), null);
   }
+});
+
+test('a planted link cannot redirect the manifest write or its read', { skip: process.platform === 'win32' }, () => {
+  const home = temporary(join(tmpdir(), 'jht-uf-links-'));
+  const target = join(home, 'keep.json');
+  const original = JSON.stringify({ mounted: { allegati: 'outside' } });
+  writeFileSync(target, original);
+  symlinkSync(target, join(home, 'user-folders.json'));
+  symlinkSync(target, join(home, `.user-folders.${process.pid}.tmp`));
+  assert.deepEqual(lib.mountedFolders(home), {});
+  lib.writeUserFolders({ env: { JHT_LANG: 'en' }, home, catalog });
+  assert.equal(readFileSync(target, 'utf8'), original);
+  assert.equal(lstatSync(join(home, 'user-folders.json')).isSymbolicLink(), false);
+  assert.equal(JSON.parse(readFileSync(join(home, 'user-folders.json'), 'utf8')).folders.allegati, 'attachments');
 });

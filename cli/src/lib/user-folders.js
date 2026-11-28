@@ -10,7 +10,9 @@
  * before the names were translated, until the wrapper renames it). Whoever names a folder to the person uses that, so it never
  * names a folder that does not exist.
  */
-import { existsSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
+import { existsSync, renameSync, writeFileSync, unlinkSync, openSync, closeSync, fsyncSync } from 'node:fs';
+import { randomUUID } from 'node:crypto';
+import { readRegularFileText } from './secure-config-io.js';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { JHT_HOME, JHT_USER_DIR } from '../jht-paths.js';
@@ -25,7 +27,7 @@ export function safeFolderName(name) {
 }
 
 function readJson(path) {
-  try { return JSON.parse(readFileSync(path, 'utf8')); } catch { return null; }
+  try { return JSON.parse(readRegularFileText(path, { maxBytes: 512 * 1024 })); } catch { return null; }
 }
 
 export function catalogPath() {
@@ -106,11 +108,25 @@ export function whereFolders(hostOs, { hostType = 'local', env = process.env, ho
  */
 export function writeUserFolders({ env = process.env, home = JHT_HOME, catalog } = {}) {
   const language = resolveLanguage(env, home);
-  const mounted = readJson(join(home, 'user-folders.json'))?.mounted;
-  const body = JSON.stringify({ language, folders: userFolders({ env, home, catalog, language }), ...(mounted ? { mounted } : {}) }, null, 2) + '\n';
+  const mounted = mountedFolders(home);
+  const body = JSON.stringify({ language, folders: userFolders({ env, home, catalog, language }),
+    ...(Object.keys(mounted).length ? { mounted } : {}) }, null, 2) + '\n';
   const path = join(home, 'user-folders.json');
-  const tmp = join(home, `.user-folders.${process.pid}.tmp`);
-  writeFileSync(tmp, body, { mode: 0o644 });
-  renameSync(tmp, path);
+  const tmp = join(home, `.user-folders.${randomUUID()}.tmp`);
+  let fd;
+  let created = false;
+  try {
+    fd = openSync(tmp, 'wx', 0o644);
+    created = true;
+    writeFileSync(fd, body);
+    fsyncSync(fd);
+    closeSync(fd);
+    fd = undefined;
+    renameSync(tmp, path);
+    created = false;
+  } finally {
+    if (fd !== undefined) closeSync(fd);
+    if (created) { try { unlinkSync(tmp); } catch { /* the temporary name was already removed */ } }
+  }
   return path;
 }

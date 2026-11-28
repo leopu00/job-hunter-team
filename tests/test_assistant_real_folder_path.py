@@ -7,6 +7,7 @@ Run:
     pytest tests/test_assistant_real_folder_path.py -v
 """
 import json
+import os
 import re
 from pathlib import Path
 
@@ -93,6 +94,7 @@ def _load_welcome(monkeypatch, tmp_path, state, folders_on_disk):
     ({"mounted": {"allegati": "CON"}}, ["allegati"], "allegati"),
     ({"mounted": "broken", "folders": []}, ["allegati"], "allegati"),
     ([], ["allegati"], "allegati"),
+    ({"mounted": {"allegati": "outside"}, "extra": "x" * 20000}, ["allegati"], "allegati"),
 ])
 def test_the_welcome_names_the_folder_that_is_really_there(monkeypatch, tmp_path, state, on_disk, expected):
     mod = _load_welcome(monkeypatch, tmp_path, state, on_disk)
@@ -100,3 +102,16 @@ def test_the_welcome_names_the_folder_that_is_really_there(monkeypatch, tmp_path
     catalog = json.loads((ROOT / "shared" / "locales" / "hu.json").read_text(encoding="utf-8"))
     text = mod.render_welcome(catalog["welcome.assistente"], lambda key: catalog.get(key))
     assert f"Job Hunter Team/{expected}`" in text and "{attachments}" not in text
+
+
+@pytest.mark.skipif(os.name == "nt", reason="the production reader runs in the Linux container")
+def test_a_manifest_link_or_pipe_is_not_read(monkeypatch, tmp_path):
+    mod = _load_welcome(monkeypatch, tmp_path, None, ["allegati"])
+    other = tmp_path / "other.json"
+    other.write_text(json.dumps({"mounted": {"allegati": "outside"}}))
+    cache = tmp_path / "home" / "user-folders.json"
+    cache.symlink_to(other)
+    assert mod.attachments_folder() == "allegati"
+    cache.unlink()
+    os.mkfifo(cache)
+    assert mod.attachments_folder() == "allegati"

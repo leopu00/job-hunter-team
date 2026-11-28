@@ -38,8 +38,7 @@ fn safe_folder_name(name: &str) -> bool {
 /// Names are resolved by the CLI from the shared catalog. Prefer the wrapper's
 /// actual mount; before migration keep the old folder when it is still there.
 pub(crate) fn folder_name(home: &std::path::Path, user_dir: &std::path::Path) -> String {
-    let state: serde_json::Value = std::fs::read(home.join("user-folders.json"))
-        .ok().and_then(|bytes| serde_json::from_slice(&bytes).ok()).unwrap_or_default();
+    let state = folder_state(&home.join("user-folders.json")).unwrap_or_default();
     let valid = |key: &str| state.get(key).and_then(|v| v.get(FOLDER))
         .and_then(|v| v.as_str()).filter(|name| safe_folder_name(name));
     if let Some(mounted) = valid("mounted") { return mounted.to_owned(); }
@@ -49,6 +48,35 @@ pub(crate) fn folder_name(home: &std::path::Path, user_dir: &std::path::Path) ->
         }
     }
     FOLDER.to_owned()
+}
+
+/// The shared manifest is data, never a link, pipe, device or unbounded input.
+fn folder_state(path: &std::path::Path) -> Option<serde_json::Value> {
+    use std::io::Read;
+    const MAX_STATE: u64 = 16 * 1024;
+    let mut options = std::fs::OpenOptions::new();
+    options.read(true);
+    #[cfg(unix)] {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK);
+    }
+    #[cfg(windows)] {
+        use std::os::windows::fs::OpenOptionsExt;
+        options.custom_flags(windows_sys::Win32::Storage::FileSystem::FILE_FLAG_OPEN_REPARSE_POINT);
+    }
+    let file = options.open(path).ok()?;
+    let metadata = file.metadata().ok()?;
+    if !metadata.is_file() || metadata.len() > MAX_STATE { return None; }
+    #[cfg(windows)] {
+        use std::os::windows::fs::MetadataExt;
+        if metadata.file_attributes() & windows_sys::Win32::Storage::FileSystem::FILE_ATTRIBUTE_REPARSE_POINT != 0 {
+            return None;
+        }
+    }
+    let mut bytes = Vec::new();
+    file.take(MAX_STATE + 1).read_to_end(&mut bytes).ok()?;
+    if bytes.len() as u64 > MAX_STATE { return None; }
+    serde_json::from_slice(&bytes).ok()
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -736,6 +764,30 @@ mod tests {
         remove_named(&s.user(), "attachments", &saved.file);
         assert!(!s.user().join("attachments").join(&saved.file).exists());
         assert_eq!(store_named(&s.user(), "../outside", &source, 8, &mut |_| {}).unwrap_err(), "attachments_folder_unsafe");
+    }
+
+    #[test]
+    fn a_large_manifest_is_not_read_as_folder_configuration() {
+        let s = Scratch::new();
+        fs::write(s.0.join("user-folders.json"), serde_json::json!({
+            "mounted": {(FOLDER): "attachments"}, "extra": "x".repeat(20000)
+        }).to_string()).unwrap();
+        assert_eq!(folder_name(&s.0, &s.user()), FOLDER);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_manifest_link_or_pipe_is_ignored_without_reading_it() {
+        let s = Scratch::new();
+        let target = s.put("other.json", br#"{"mounted":{"allegati":"outside"}}"#);
+        let path = s.0.join("user-folders.json");
+        symlink(&target, &path).unwrap();
+        assert_eq!(folder_name(&s.0, &s.user()), FOLDER);
+        fs::remove_file(&path).unwrap();
+        let path_c = std::ffi::CString::new(path.to_str().unwrap()).unwrap();
+        // SAFETY: this creates a pipe only inside the owned temporary test directory.
+        assert_eq!(unsafe { libc::mkfifo(path_c.as_ptr(), 0o600) }, 0);
+        assert_eq!(folder_name(&s.0, &s.user()), FOLDER);
     }
 
     /// A folder of its own for one test, removed at the end (that folder only).

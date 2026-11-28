@@ -43,6 +43,7 @@ import importlib.util
 import json
 import os
 import re
+import stat
 import subprocess
 import sys
 import time
@@ -180,15 +181,30 @@ def host_kind() -> str:
 _FOLDER_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
 
 
+def _folder_state() -> dict:
+    path = jht_home() / "user-folders.json"
+    try:
+        before = path.lstat()
+        if not stat.S_ISREG(before.st_mode) or before.st_size > 16 * 1024:
+            return {}
+        fd = os.open(path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0))
+        try:
+            opened = os.fstat(fd)
+            if not stat.S_ISREG(opened.st_mode) or (before.st_ino, before.st_dev) != (opened.st_ino, opened.st_dev):
+                return {}
+            data = os.read(fd, 16 * 1024 + 1)
+        finally:
+            os.close(fd)
+        state = json.loads(data) if len(data) <= 16 * 1024 else {}
+        return state if isinstance(state, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
 def attachments_folder() -> str:
     """The name the attachments folder really has on the person's computer (JHT-T360): the one the wrapper mounted, else the
     name of their language when that folder is there, else `allegati`. Never a folder that is not on the disk."""
-    try:
-        state = json.loads((jht_home() / "user-folders.json").read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        state = {}
-    if not isinstance(state, dict):
-        state = {}
+    state = _folder_state()
     def name_from(key):
         names = state.get(key)
         name = names.get("allegati") if isinstance(names, dict) else None
