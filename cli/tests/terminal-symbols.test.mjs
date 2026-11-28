@@ -24,6 +24,7 @@ test('ASCII decoration keeps accented translations and ANSI controls', () => {
   assert.equal(asciiSymbols('◆ ◇ │ ─ ◼'), '> - | - [x]');
   assert.equal(asciiSymbols('✏️⏱️🌙📅♾️'), '');
   assert.equal(asciiSymbols('⠋'), '*');
+  assert.equal(asciiSymbols('—–◐◑◒◓'), '--****');
 });
 
 function sink(isTTY = true) {
@@ -61,6 +62,7 @@ test('real clack rendering through a fake console: prompts, notes, spinner, succ
   const script = `
     import { PassThrough } from 'node:stream';
     import { installTerminalSymbols } from './src/lib/terminal-symbols.js';
+    Object.defineProperty(process, 'platform', { value: process.env.TEST_CONSOLE_PLATFORM });
     const input = new PassThrough(); input.isTTY = true; input.setRawMode = () => {};
     Object.defineProperty(process, 'stdin', { value: input });
     Object.defineProperty(process.stdout, 'isTTY', { value: true });
@@ -78,9 +80,9 @@ test('real clack rendering through a fake console: prompts, notes, spinner, succ
     await new Promise(resolve => setTimeout(resolve, 100)); spin.stop('Ready');
     await p.success('✓ Saved'); await p.outro('Done'); cancel('Cancelled');
   `;
-  for (const mode of ['0', '1']) {
+  for (const platform of ['win32', 'darwin']) for (const mode of ['0', '1']) {
     const result = spawnSync(process.execPath, ['--input-type=module', '-e', script], {
-      cwd: new URL('../', import.meta.url), env: { ...process.env, JHT_UNICODE: mode },
+      cwd: new URL('../', import.meta.url), env: { ...process.env, TEST_CONSOLE_PLATFORM: platform, JHT_UNICODE: mode },
       encoding: 'utf8', timeout: 10000,
     });
     assert.equal(result.status, 0, result.stderr);

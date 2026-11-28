@@ -13,7 +13,8 @@ const SYMBOLS = {
   '◆': '>', '◇': '-', '■': 'x', '▲': '!', '●': '>', '○': ' ',
   '□': '[ ]', '◻': '[ ]', '◼': '[x]', '▪': '*', '•': '*',
   '✓': '[x]', '✔': '[x]', '✗': '[!]', '✘': '[!]', '✏': '',
-  '♾': '', '∞': 'unlimited', '→': '->', '←': '<-', '…': '...',
+  '♾': '', '∞': 'unlimited', '→': '->', '←': '<-', '…': '...', '—': '-', '–': '-',
+  '◐': '*', '◑': '*', '◒': '*', '◓': '*',
   '─': '-', '━': '-', '│': '|', '┃': '|', '┌': '+', '┐': '+',
   '└': '+', '┘': '+', '├': '+', '┤': '+', '┬': '+', '┴': '+',
   '┼': '+', '╭': '+', '╮': '+', '╰': '+', '╯': '+',
@@ -21,7 +22,7 @@ const SYMBOLS = {
 
 /** Preserve translated letters and ANSI controls; replace decoration only. */
 export function asciiSymbols(value) {
-  return String(value).replace(/[◆◇■▲●○□◻◼▪•✓✔✗✘✏♾∞→←…─━│┃┌┐└┘├┤┬┴┼╭╮╰╯]/gu,
+  return String(value).replace(/[◆◇■▲●○□◻◼▪•✓✔✗✘✏♾∞→←…—–◐◑◒◓─━│┃┌┐└┘├┤┬┴┼╭╮╰╯]/gu,
     (symbol) => SYMBOLS[symbol])
     .replace(/[\u2800-\u28ff]/gu, '*')
     .replace(/\p{Extended_Pictographic}(?:\u200d\p{Extended_Pictographic})*/gu, '')
