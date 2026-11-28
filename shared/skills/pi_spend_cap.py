@@ -436,12 +436,39 @@ def first_stage_cost(home, now, sessions):
     return round(fixed + (min(others) if others else 0.0), 6)
 
 
-def _wake_rank(session):
-    """Who comes first: the Scouts (nothing enters without them), then the Scorer and the Analysts, the other workers, the Dottore,
-    the Mantenitore, the rest; by number inside a group."""
+def _chain(home=None):
+    """What the queues of the team say, for the order of a resume (JHT-T362 point 14): {"scorer": n, "analista": n, "scouts_done": bool}.
+    Positions `checked` wait for the Scorer, `new` for the Analista; `scouts_done` when the first pass of the burst has its cap
+    (FIRST_PASS_CAP_REACHED: a Scout woken then refuses every insert and only spends). Never raises: what cannot be read is None."""
+    out = {"scorer": None, "analista": None, "scouts_done": False}
+    try:
+        import queue_demand
+        out["scorer"] = queue_demand.queue_count("scorer")
+        out["analista"] = queue_demand.queue_count("analista")
+    except Exception:  # noqa: BLE001
+        pass
+    try:
+        import first_run
+        cap = first_run.sourcing_cap()
+        out["scouts_done"] = bool(cap and cap.get("reached"))
+    except Exception:  # noqa: BLE001
+        pass
+    return out
+
+
+def _wake_rank(session, chain=None):
+    """Who comes first. With the queues known, the chain: the Scorer when positions wait for a score, the Analista when they wait
+    for an analysis, then the Scouts (nothing new enters without them); a resume that woke the Scouts first spent a third of a
+    budget with the first pass already full and fifty positions without a score (JHT-T362 point 14). Without the queues: the
+    Scouts, then the Scorer and the Analysts, as before. Then the other workers, the Dottore, the Mantenitore, the rest; by number
+    inside a group."""
     match = re.match(r"^([A-Z]+)(?:-S?(\d+))?$", session or "")
     kind, number = (match.group(1), int(match.group(2) or 0)) if match else (session or "", 0)
     order = {"SCOUT": 0, "SCORER": 1, "ANALISTA": 2}
+    if chain and (chain.get("scorer") or chain.get("analista")):
+        order = {"SCORER": 0 if chain.get("scorer") else 1, "ANALISTA": 0 if chain.get("analista") else 2, "SCOUT": 2}
+        if chain.get("scorer") and chain.get("analista"):
+            order["ANALISTA"] = 1
     if kind in order:
         group = order[kind]
     elif _WORKER_SESSION.match(session or ""):
@@ -449,6 +476,11 @@ def _wake_rank(session):
     else:
         group = {"DOTTORE": 4, "MANTENITORE": 5}.get(kind, 6)
     return (group, number, session or "")
+
+
+def _skip_on_resume(session, chain):
+    """A Scout with the first pass already full is not woken by a resume: every insert is refused and its turns only spend."""
+    return bool(chain and chain.get("scouts_done")) and (session or "").startswith("SCOUT")
 
 
 def _stage_room(config, budget, spent, now):
@@ -978,11 +1010,15 @@ def _wake_the_team(api, sessions, why, seen=(), stage=None, queue_at=None):
         extra = [s for s in list(seen or ()) + live if s not in known and _WORKER_SESSION.match(s or "")]
         woken = []
         order = known + list(dict.fromkeys(extra))
+        chain = _chain(home) if stage is not None else None
         if stage is not None:
-            order = sorted(order, key=_wake_rank)   # the Scouts first: the ones the line holds are the last of the list
+            # the chain first (the Scorer on positions that wait for a score): the ones the line holds are the last of the list
+            order = sorted(order, key=lambda x: _wake_rank(x, chain))
         chosen = []
         for session in order:
             if session in (api.CAPITANO_SESSION, api.SENTINELLA_SESSION) or session in alone or session in NEVER_WAKE:
+                continue
+            if _skip_on_resume(session, chain):
                 continue
             if session in WAKE_ONLY_IF_NEEDED and not (session == "ASSISTENTE" and _assistant_owes_an_answer(home)):
                 continue
@@ -1138,7 +1174,8 @@ def _wake_pending(api, run, ctx):
             set_pending(home, [], ctx["now"])
             return []
         stage = Stage(_stage_room(ctx["config"], ctx["budget"], ctx["spent"], ctx["now"]), session_costs(home, ctx["now"], alive))
-        chosen = [x for x in sorted(alive, key=_wake_rank) if stage.take(x)]
+        chain = _chain(home_of(api))
+        chosen = [x for x in sorted(alive, key=lambda x: _wake_rank(x, chain)) if not _skip_on_resume(x, chain) and stage.take(x)]
         set_pending(home, stage.pending, ctx["now"])   # before the sends: the names it wakes are out of the queue the gate reads
         woken = []
         for session in chosen:
@@ -1173,7 +1210,8 @@ def stage_fit(home, now, sessions):
     try:
         spent = spend(home, now, budget["counts_from"], budget["starts"])
         stage = Stage(_stage_room(config, budget, spent, now), session_costs(home, now, names))
-        taken = [x for x in sorted(names, key=_wake_rank) if stage.take(x)]
+        chain = _chain(home)
+        taken = [x for x in sorted(names, key=lambda x: _wake_rank(x, chain)) if not _skip_on_resume(x, chain) and stage.take(x)]
         return {"taken": taken, "waiting": list(stage.pending), "estimate": stage.estimate, "costs": dict(stage.woken)}
     except Exception:  # noqa: BLE001 - a line that cannot be read holds the restore, never the hard cap
         return {"taken": [], "waiting": names, "estimate": 0.0, "costs": {}}
