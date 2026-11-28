@@ -41,6 +41,7 @@ HOST = (
     "tests/test_windows_pristine_profile.py",
     "tests/test_windows_onboarding_snapshot_reason.py",
     "tests/test_windows_stdin_without_bom.py",
+    "tests/test_windows_install_ps1_confirms_the_language.py",
 )
 
 # Under both shells, cut in slices, no skip allowed.

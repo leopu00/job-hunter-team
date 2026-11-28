@@ -950,6 +950,7 @@
   "installer.windows.delete_data_as_well": "Ha az adatokat is törölni akarod (beállítás, adatbázis, önéletrajzok, eredmények):",
   "installer.windows.pairing_token_present_skipping": "Van párosítási token: kihagyom az interaktív varázslót. A konténer az első indításkor befejezi a párosítást.",
   "installer.windows.launching_setup_wizard": "A beállító varázsló indítása...",
+  "installer.windows.language_confirm": "Nyelv: %s. Rendben? Nyomj Entert az igenhez, vagy válassz 1-7 közül:",
   "installer.windows.wizard_exited_error_re": "A varázsló hibával állt le. Futtasd újra így: jht setup",
   "installer.windows.earlier_job_hunter_team": "a Docker Desktopon még fut a Job Hunter Team egy korábbi verziója (konténer: %s). A 0.4 óta a csapat egy Podman-gépen fut: ha mellé telepítenéd, két csapat dolgozna ugyanazokon az adatokon. Semmi sem változott.",
   "installer.windows.earlier_job_hunter_team_2": "a Docker Desktopon még telepítve van a Job Hunter Team egy korábbi verziója (konténer: %s, leállítva; a Docker Desktoppal újraindul). A 0.4 óta a csapat egy Podman-gépen fut: ha mellé telepítenéd, két csapat dolgozna ugyanazokon az adatokon. Semmi sem változott.",

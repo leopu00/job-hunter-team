@@ -969,6 +969,7 @@
   "installer.windows.delete_data_as_well": "To delete the data as well (config, db, CVs, output):",
   "installer.windows.pairing_token_present_skipping": "Pairing token present: skipping the interactive wizard. The container will complete the pairing on first boot.",
   "installer.windows.launching_setup_wizard": "Launching the setup wizard...",
+  "installer.windows.language_confirm": "Language: %s. Is that right? Press Enter for yes, or choose 1-7:",
   "installer.windows.wizard_exited_error_re": "The wizard exited with an error. Re-run it with: jht setup",
   "installer.windows.earlier_job_hunter_team": "an earlier Job Hunter Team is still running on Docker Desktop (container %s). Since 0.4 the team runs in a Podman machine: installed next to it, two teams would work on the same data. Nothing was changed.",
   "installer.windows.earlier_job_hunter_team_2": "an earlier Job Hunter Team is still installed on Docker Desktop (container %s, stopped; it starts again with Docker Desktop). Since 0.4 the team runs in a Podman machine: installed next to it, two teams would work on the same data. Nothing was changed.",

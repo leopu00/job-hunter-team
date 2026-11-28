@@ -969,6 +969,7 @@
   "installer.windows.delete_data_as_well": "Per cancellare anche i dati (configurazione, db, CV, risultati):",
   "installer.windows.pairing_token_present_skipping": "Token di abbinamento presente: salto il wizard interattivo. Il container completera' l'abbinamento al primo avvio.",
   "installer.windows.launching_setup_wizard": "Avvio la configurazione guidata...",
+  "installer.windows.language_confirm": "Lingua: %s. Va bene? Premi Invio per sì, oppure scegli 1-7:",
   "installer.windows.wizard_exited_error_re": "La configurazione guidata e' uscita con un errore. Rilanciala con: jht setup",
   "installer.windows.earlier_job_hunter_team": "su Docker Desktop gira ancora una versione precedente di Job Hunter Team (container %s). Dalla 0.4 il team gira in una macchina Podman: installata accanto, ci sarebbero due team sugli stessi dati. Non e' stato cambiato niente.",
   "installer.windows.earlier_job_hunter_team_2": "su Docker Desktop c'e' ancora una versione precedente di Job Hunter Team (container %s, fermo; ripartirebbe con Docker Desktop). Dalla 0.4 il team gira in una macchina Podman: installata accanto, ci sarebbero due team sugli stessi dati. Non e' stato cambiato niente.",
