@@ -145,6 +145,9 @@ def test_the_setup_branch_pipes_the_key_to_docker_and_never_puts_it_in_an_argume
 {TEXTS}
 {_function("Convert-SetupKeyFileArgs")}
 {_function("Invoke-NativeWithStdin")}
+{_function("Get-JhtTerminalEnv")}
+$env:JHT_UNICODE = '0'
+$JhtTerminalEnv = @(Get-JhtTerminalEnv)
 $Rest = [string[]]@('--non-interactive', '--provider', 'claude', '--harness', 'pi', '--api-key-file', '{path}')
 $Container = 'jht'
 $NodeEntry = '/app/cli/bin/jht.js'
@@ -180,7 +183,7 @@ switch ($Sub) {{
     assert "STDIN=" + KEY in text
     args = next(line for line in text.splitlines() if line.startswith("ARGS="))
     assert KEY not in args and str(path) not in args
-    assert args == "ARGS=exec -i -e JHT_HOST_TYPE=local jht node /app/cli/bin/jht.js setup --non-interactive --provider claude --harness pi --api-key-stdin"
+    assert args == "ARGS=exec -i -e JHT_TERMINAL_PLATFORM=win32 -e JHT_UNICODE=0 -e JHT_HOST_TYPE=local jht node /app/cli/bin/jht.js setup --non-interactive --provider claude --harness pi --api-key-stdin"
     assert KEY not in done.stdout + done.stderr
     # the person is told the file on the computer can go, once the setup has the key
     assert "you can delete the file on this computer" in done.stdout and str(path) in done.stdout
