@@ -12,6 +12,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { fillRoles } from '../../shared/i18n/role-names.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -73,6 +74,8 @@ function loadCatalog(lang) {
       merged = { ...merged, ...overlay };
     } catch { /* malformed JSON, stick to en */ }
   }
+  // {role:<id>}: the role's name in the language of the texts (shared/i18n/role-names.json, JHT-T358)
+  for (const [key, value] of Object.entries(merged)) merged[key] = fillRoles(value, lang);
   _cache = merged;
   _cacheLang = lang;
   return merged;

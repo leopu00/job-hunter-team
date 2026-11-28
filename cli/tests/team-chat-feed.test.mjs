@@ -70,7 +70,7 @@ test('what a terminal obeys never gets to the screen from an agent\'s words', ()
 test('who speaks is shown: the agent, the person, the system', () => {
   assert.match(formatChatMessage({ id: 'a', role: 'user', text: 'ciao', at: 0 }, 'assistente'), /^you/);
   assert.match(formatChatMessage({ id: 'b', role: 'system', text: 'x', at: 0 }, 'assistente'), /^system/);
-  assert.match(formatChatMessage(welcome, 'assistente'), /^assistente \d\d:\d\d:\d\d/);
+  assert.match(formatChatMessage(welcome, 'assistente'), /^Assistant \d\d:\d\d:\d\d/);
 });
 
 test('read for real: the welcome in the chat file of the Assistente comes through agent_chat.py on a host', () => {

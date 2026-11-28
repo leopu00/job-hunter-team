@@ -109,10 +109,10 @@ test('an agent that is not blocked keeps the old words', async () => {
 // Giro Windows of the build6: `jht team chat assistente` of an Italian person opened under «Chat with ASSISTENTE … /exit to exit».
 test('the head of the chat is in the language of the person', async () => {
   const it = plain((await runChat([[300, '/exit']], {}, '{}', 'it')).out);
-  assert.match(it, /Chat con JHT-ASSISTENTE \(tmux dell'host\)/, it);
+  assert.match(it, /Chat con Assistente \(tmux dell'host\)/, it);
   assert.match(it, /\/exit per uscire · \/read per i messaggi nuovi · \/cards per le domande aperte/);
   assert.doesNotMatch(it, /Chat with|to exit/);
   const en = plain((await runChat([[300, '/exit']], {}, '{}', 'en')).out);
-  assert.match(en, /Chat with JHT-ASSISTENTE \(tmux host\)/, en);
+  assert.match(en, /Chat with Assistant \(tmux host\)/, en);
   assert.match(en, /\/exit to exit · \/read for new messages/);
 }, { timeout: 60_000 });

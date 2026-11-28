@@ -26,6 +26,15 @@ plog = _load("scout_pass_log_empty_alert_test", SKILLS / "scout_pass_log.py")
 
 NOW = 1_800_000_000.0
 LOCALES = REPO / "shared" / "locales"
+
+
+def _role_filled(catalog: dict, lang: str) -> dict:
+    """The catalog as the readers show it: {role:<id>} with the role's name in `lang` (shared/i18n/role-names.json)."""
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("role_names_t", REPO / "shared" / "skills" / "role_names.py")
+    names = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(names)
+    return {key: names.fill(value, lang) for key, value in catalog.items()}
 LANGS = ("en", "it", "de", "fr", "es", "pt", "hu")
 
 
@@ -168,9 +177,9 @@ def test_a_pass_with_something_in_it_is_logged_in_silence(home, capsys, monkeypa
 
 
 def test_the_sentence_is_in_every_language_and_the_user_message_names_no_source():
-    english = json.loads((LOCALES / "en.json").read_text(encoding="utf-8"))["scout_empty_notice.streak"]
+    english = _role_filled(json.loads((LOCALES / "en.json").read_text(encoding="utf-8")), "en")["scout_empty_notice.streak"]
     for lang in LANGS:
-        text = json.loads((LOCALES / f"{lang}.json").read_text(encoding="utf-8")).get("scout_empty_notice.streak")
+        text = _role_filled(json.loads((LOCALES / f"{lang}.json").read_text(encoding="utf-8")), lang).get("scout_empty_notice.streak")
         assert isinstance(text, str) and text.strip() and "{" not in text, lang
         assert lang == "en" or text != english, lang
 
@@ -178,7 +187,7 @@ def test_the_sentence_is_in_every_language_and_the_user_message_names_no_source(
 def test_the_sentence_promises_only_what_is_done_the_doctor_reads_the_file_and_the_scout_gets_the_line():
     """The Captain is not told by this tool: no language may say he was."""
     for lang, captain in zip(LANGS, ("Captain", "Capitano", "Kapitän", "Capitaine", "Capitán", "Capitão", "Kapitány")):
-        text = json.loads((LOCALES / f"{lang}.json").read_text(encoding="utf-8"))["scout_empty_notice.streak"]
+        text = _role_filled(json.loads((LOCALES / f"{lang}.json").read_text(encoding="utf-8")), lang)["scout_empty_notice.streak"]
         assert captain not in text, lang
 
 

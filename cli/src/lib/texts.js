@@ -21,6 +21,7 @@ import es from './texts/es.js';
 import fr from './texts/fr.js';
 import hu from './texts/hu.js';
 import pt from './texts/pt.js';
+import { fillRoles } from '../../../shared/i18n/role-names.js';
 
 const CATALOGS = { en, it, de, es, fr, hu, pt };
 /** The languages that have only some of the texts: the screens they cover, whole; English for the rest. */
@@ -61,7 +62,8 @@ export function textLanguage(env = process.env, home = JHT_HOME) {
 /** A text by its key, with `{name}` replaced from `vars`. A key no catalog has is returned as it is (and a test fails on it). */
 export function say(key, vars = {}, language = textLanguage()) {
   const catalog = CATALOGS[language] ?? en;
-  const template = catalog[key] ?? en[key] ?? key;
+  // {role:<id>}: the role's name in the language of the text (shared/i18n/role-names.json, JHT-T358)
+  const template = fillRoles(catalog[key] ?? en[key] ?? key, catalog[key] !== undefined ? language : 'en');
   return template.replace(/\{(\w+)\}/g, (whole, name) => (name in vars ? String(vars[name]) : whole));
 }
 

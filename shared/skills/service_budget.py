@@ -121,7 +121,9 @@ def notice_text(result: dict) -> str:
     """What the person reads, in their language (shared/i18n.py: i18n-prefs.json, then JHT_LANG, host.env, English)."""
     import i18n
 
-    return i18n.tf(NOTICE_KEY, result["role"].capitalize(), "%s USD" % _money(result["spent"]), "%s USD" % _money(result["budget"]),
+    import role_names
+
+    return i18n.tf(NOTICE_KEY, role_names.name(result["role"], i18n.current_lang()), "%s USD" % _money(result["spent"]), "%s USD" % _money(result["budget"]),
                    "%d%%" % round(result["share"] * 100))
 
 

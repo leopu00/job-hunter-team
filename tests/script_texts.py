@@ -35,7 +35,11 @@ def _flat(tree: dict, prefix: str = "") -> dict[str, str]:
 
 
 def catalog(lang: str) -> dict[str, str]:
-    return _flat(json.loads((LOCALES / f"{lang}.json").read_text(encoding="utf-8")))
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("role_names_texts", ROOT / "shared" / "skills" / "role_names.py")
+    names = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(names)
+    return {key: names.fill(value, lang) for key, value in _flat(json.loads((LOCALES / f"{lang}.json").read_text(encoding="utf-8"))).items()}
 
 
 def shell_quote(text: str) -> str:

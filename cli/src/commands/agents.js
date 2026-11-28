@@ -1,5 +1,6 @@
 import { errorBlock } from '../lib/ui.js';
-import { say, show } from '../lib/texts.js';
+import { say, show, textLanguage } from '../lib/texts.js';
+import { agentTitle } from '../../../shared/i18n/role-names.js';
 import { onboardingSpendText, quotaWallText, ramGuardText, spendNow, teamPause, teamPauseText } from '../lib/budget-pause.js';
 import { hostWhere } from '../lib/host-where.js';
 import { toolsSwitch } from '../lib/tools-switch.js';
@@ -42,7 +43,8 @@ export function handleAgents(options = {}, read = readObservation, { pauseOf = t
     }
     if (options.verbose && !options.json) {
       console.log(say('agents.sessions_in_tmux'));
-      for (const row of snapshot.agents.filter((r) => r.running)) console.log(`  ${row.session}`);
+      // the name in the person's language, then the session it runs in (the id stays for the commands)
+      for (const row of snapshot.agents.filter((r) => r.running)) console.log(`  ${agentTitle(row.session, textLanguage())}  (${row.session})`);
     }
     if (!snapshot.ok) process.exitCode = 1;
   } catch (error) {

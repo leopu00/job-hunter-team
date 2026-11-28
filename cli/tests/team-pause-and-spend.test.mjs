@@ -38,7 +38,7 @@ test('the spending brake comes first, whatever the standby says', () => {
 test('the stop the Capitano committed to is said as such', () => {
   const root = home({ brake: { reason: 'pi_spend_cap', pi_spend_cap: { why: 'stop_at', spent: 2.41, ceiling: 2.4 } } });
   assert.equal(show(teamPauseText({ home: root, now: NOW })),
-    'The team is paused: it spent $2.41, the stop the Capitano committed to ($2.40). To go on, tell the Capitano.');
+    'The team is paused: it spent $2.41, the stop the Captain committed to ($2.40). To go on, tell the Captain.');
 });
 
 test('a standby flag that is expired, broken or without an exit holds nothing', () => {

@@ -1,0 +1,18 @@
+{
+  "_doc": "The names of the team's roles as the person reads them, in the seven languages: one file for the CLI, the wizard, the Python texts, the prompts' [ROLE-NAMES] line, the app and the site. The ids (sessions like CAPITANO or SCOUT-2, the folders agents/<role>, the database, the files) never change: only the name shown does. A text writes {role:<id>} and the reader puts the name of the person's language there. Readers: shared/skills/role_names.py, shared/i18n/role-names.js.",
+  "languages": ["en", "it", "de", "es", "fr", "pt", "hu"],
+  "roles": {
+    "capitano":    {"en": "Captain",    "it": "Capitano",    "de": "Kapitän",   "es": "Capitán",    "fr": "Capitaine",  "pt": "Capitão",    "hu": "Kapitány"},
+    "assistente":  {"en": "Assistant",  "it": "Assistente",  "de": "Assistent", "es": "Asistente",  "fr": "Assistant",  "pt": "Assistente", "hu": "Asszisztens"},
+    "mentor":      {"en": "Mentor",     "it": "Mentor",      "de": "Mentor",    "es": "Mentor",     "fr": "Mentor",     "pt": "Mentor",     "hu": "Mentor"},
+    "scout":       {"en": "Scout",      "it": "Scout",       "de": "Scout",     "es": "Scout",      "fr": "Scout",      "pt": "Scout",      "hu": "Felderítő"},
+    "analista":    {"en": "Analyst",    "it": "Analista",    "de": "Analyst",   "es": "Analista",   "fr": "Analyste",   "pt": "Analista",   "hu": "Elemző"},
+    "scorer":      {"en": "Scorer",     "it": "Scorer",      "de": "Scorer",    "es": "Scorer",     "fr": "Scorer",     "pt": "Scorer",     "hu": "Pontozó"},
+    "scrittore":   {"en": "Writer",     "it": "Scrittore",   "de": "Schreiber", "es": "Redactor",   "fr": "Rédacteur",  "pt": "Redator",    "hu": "Író"},
+    "critico":     {"en": "Critic",     "it": "Critico",     "de": "Kritiker",  "es": "Crítico",    "fr": "Critique",   "pt": "Crítico",    "hu": "Kritikus"},
+    "sentinella":  {"en": "Sentinel",   "it": "Sentinella",  "de": "Wächter",   "es": "Centinela",  "fr": "Sentinelle", "pt": "Sentinela",  "hu": "Őrszem"},
+    "dottore":     {"en": "Doctor",     "it": "Dottore",     "de": "Doktor",    "es": "Doctor",     "fr": "Docteur",    "pt": "Doutor",     "hu": "Doktor"},
+    "mantenitore": {"en": "Maintainer", "it": "Mantenitore", "de": "Wartung",   "es": "Técnico",    "fr": "Technicien", "pt": "Técnico",    "hu": "Karbantartó"},
+    "closer":      {"en": "Closer",     "it": "Closer",      "de": "Abschluss", "es": "Cierre",     "fr": "Clôture",    "pt": "Fecho",      "hu": "Lezáró"}
+  }
+}

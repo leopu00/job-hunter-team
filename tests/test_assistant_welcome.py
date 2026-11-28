@@ -31,8 +31,17 @@ COMMAND = "python3 /app/shared/skills/assistant_welcome.py deliver"
 pytestmark = pytest.mark.skipif(sys.platform == "win32", reason="the launcher and the container are Linux")
 
 
+def _role_filled(catalog: dict, lang: str) -> dict:
+    """The catalog as the readers show it: {role:<id>} with the role's name in `lang` (shared/i18n/role-names.json)."""
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("role_names_t", Path(__file__).resolve().parents[1] / "shared" / "skills" / "role_names.py")
+    names = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(names)
+    return {key: names.fill(value, lang) for key, value in catalog.items()}
+
+
 def _catalog(lang: str) -> dict:
-    return json.loads((ROOT / "shared" / "locales" / f"{lang}.json").read_text(encoding="utf-8"))
+    return _role_filled(json.loads((ROOT / "shared" / "locales" / f"{lang}.json").read_text(encoding="utf-8")), lang)
 
 
 EN = _catalog("en")

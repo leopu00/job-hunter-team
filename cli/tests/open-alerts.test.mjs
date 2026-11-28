@@ -41,9 +41,9 @@ test('an alert nobody read is said, newest first, one per source; read, old, oth
   const alerts = await openAlerts({ dbPath: join(root, 'jobs.db') });
   assert.deepEqual(alerts.map((a) => [a.agent, a.body]), [['capitano', CEILING], ['sentinella', 'The box no longer reaches the website.']]);
   assert.deepEqual(await openAlertLines({ dbPath: join(root, 'jobs.db') }), [
-    `Capitano says: ${CEILING}`,
-    'Sentinella says: The box no longer reaches the website.',
-    'Also in the chat with the Assistente (jht team chat assistente).',
+    `Captain says: ${CEILING}`,
+    'Sentinel says: The box no longer reaches the website.',
+    'Also in the chat with the Assistant (jht team chat assistente).',
   ]);
 });
 
@@ -60,7 +60,7 @@ test('jht team status says the open alert of the Capitano, and does not mark it 
   const root = home([{ body: CEILING, source: 'no-quota-mode-x' }]);
   const r = spawnSync(process.execPath, [JHT, 'team', 'status'], { encoding: 'utf8', timeout: 60_000,
     env: { ...process.env, JHT_HOME: root, JHT_LANG: 'en', NO_COLOR: '1' } });
-  assert.match(r.stdout + r.stderr, /Capitano says: No spending ceiling is set for this key/);
+  assert.match(r.stdout + r.stderr, /Captain says: No spending ceiling is set for this key/);
   const db = new DatabaseSync(join(root, 'jobs.db'));
   assert.equal(db.prepare('SELECT acknowledged_at FROM pending_user_messages').get().acknowledged_at, null);
   db.close();

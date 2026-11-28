@@ -180,7 +180,9 @@ def test_the_text_is_in_the_language_of_the_person_and_carries_the_numbers(home:
     finally:
         i18n._resolve_lang_for.cache_clear()
     assert "service_budget" not in text, "the key came back: the catalog of this language lacks the text"
-    assert "Dottore" in text and "0.5 USD" in text and "3 USD" in text and "15%" in text
+    # the role in the person's language (shared/i18n/role-names.json, JHT-T358), never the Italian id
+    import role_names
+    assert role_names.name("dottore", lang) in text and "0.5 USD" in text and "3 USD" in text and "15%" in text
     english = json.loads((ROOT / "shared" / "locales" / "en.json").read_text(encoding="utf-8"))["service_budget.skipped"]
     if lang != "en":
         assert text != english.replace("%s", "x")

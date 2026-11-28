@@ -23,6 +23,7 @@ from typing import Optional
 
 
 _LOCALES_DIR = Path(__file__).resolve().parent / "locales"
+_ROLE_NAMES = Path(__file__).resolve().parent / "i18n" / "role-names.json"
 _VALID_LANGS = {"en", "it", "hu", "es", "de", "fr", "pt"}
 
 
@@ -117,7 +118,23 @@ def _load_catalog(lang: str) -> dict:
             merged = {**merged, **overlay}
         except (json.JSONDecodeError, OSError):
             pass
-    return merged
+    return _with_role_names(merged, lang)
+
+
+def _with_role_names(catalog: dict, lang: str) -> dict:
+    """Every {role:<id>} of the texts replaced with the role's name in `lang` (shared/i18n/role-names.json, JHT-T358)."""
+    try:
+        roles = json.loads(_ROLE_NAMES.read_text(encoding="utf-8"))["roles"]
+    except (OSError, ValueError, KeyError):
+        roles = {}
+    import re
+
+    def name(found):
+        names = roles.get(found.group(1)) or {}
+        return names.get(lang) or names.get("en") or found.group(1).capitalize()
+
+    return {key: re.sub(r"\{role:([a-z]+)\}", name, value) if isinstance(value, str) and "{role:" in value else value
+            for key, value in catalog.items()}
 
 
 def t(key: str) -> str:

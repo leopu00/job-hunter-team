@@ -4,6 +4,7 @@
  * delivered on the web (Messages) or on Telegram; whoever follows the team from the terminal saw none of them. `jht team
  * status` and `jht team start` say them. Read-only: what is said here is not marked as read (the web still shows it).
  */
+import { agentTitle } from '../../../shared/i18n/role-names.js';
 import { existsSync, statSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { JHT_DB_PATH } from '../jht-paths.js';
@@ -62,13 +63,13 @@ export async function openAlerts({ dbPath = JHT_DB_PATH, windowDays = ALERT_WIND
   }
 }
 
-/** The name of the agent as the person knows it (capitano → Capitano). */
-export const agentLabel = (agent) => (agent ? agent.charAt(0).toUpperCase() + agent.slice(1) : '?');
+/** The name of the agent as the person knows it, in their language (capitano → Captain, Kapitány: shared/i18n/role-names.json). */
+export const agentLabel = (agent, language) => (agent ? agentTitle(agent, language) : '?');
 
 /** The lines `jht team status` and `jht team start` print for the open alerts (none when there are none). */
 export async function openAlertLines(options = {}) {
-  const { say } = await import('./texts.js');
+  const { say, textLanguage } = await import('./texts.js');
   const alerts = await openAlerts(options);
   if (!alerts.length) return [];
-  return [...alerts.map((a) => say('alerts.open', { agent: agentLabel(a.agent), body: a.body })), say('alerts.where')];
+  return [...alerts.map((a) => say('alerts.open', { agent: agentLabel(a.agent, textLanguage()), body: a.body })), say('alerts.where')];
 }

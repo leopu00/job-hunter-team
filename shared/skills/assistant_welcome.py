@@ -74,6 +74,13 @@ def _tool(env_name: str, name: str) -> Path:
     return HERE.parent.parent / "agents" / "_tools" / name
 
 
+def _role_names():
+    spec = importlib.util.spec_from_file_location("jht_role_names", HERE / "role_names.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 def _catalog():
     spec = importlib.util.spec_from_file_location("jht_i18n", HERE.parent / "i18n.py")
     module = importlib.util.module_from_spec(spec)
@@ -105,6 +112,7 @@ def _greetings() -> set[str]:
     for path in sorted((HERE.parent / "locales").glob("*.json")):
         try:
             text = json.loads(path.read_text(encoding="utf-8")).get("welcome.assistente")
+            text = _role_names().fill(text, path.stem)
         except (OSError, ValueError, AttributeError):
             continue
         if isinstance(text, str) and text.strip():

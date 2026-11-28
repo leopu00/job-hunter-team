@@ -25,6 +25,7 @@ import { blockedNoticeFor } from '../../lib/chat-blocked-notice.js';
 import { creditNotice } from '../../lib/provider-credit.js';
 import { localTimeZone } from '../../lib/local-tz.js';
 import { say, textLanguage } from '../../lib/texts.js';
+import { agentTitle } from '../../../../shared/i18n/role-names.js';
 import { toolsSwitch } from '../../lib/tools-switch.js';
 
 // Escape per passare il messaggio dentro single-quote bash:
@@ -301,8 +302,9 @@ export function chatClock(seconds, zone = localTimeZone()) {
   }
 }
 
-export function formatChatMessage(message, agent, zone = undefined) {
-  const who = message.role === 'user' ? 'you' : message.role === 'system' ? 'system' : agent;
+export function formatChatMessage(message, agent, zone = undefined, language = textLanguage()) {
+  // the agent by its name in the person's language (shared/i18n/role-names.json, JHT-T358), never the id
+  const who = message.role === 'user' ? 'you' : message.role === 'system' ? 'system' : agentTitle(agent, language);
   const at = Number(message.at) > 0 ? chatClock(message.at, zone) : '';
   const written = String(message.text ?? '').replace(CONTROLS, '').trim();
   // only what the agent wrote carries a mood tag: a person's own «[caldo]» stays
@@ -602,7 +604,7 @@ export async function chatAction(agentArg, options = {}) {
   const typedLines = createLineQueue(rl);
   console.log('');
   const language = textLanguage();
-  console.log(c.bold(say('chat.header.title', { session }, language))
+  console.log(c.bold(say('chat.header.title', { session: agentTitle(session, language) }, language))
     + c.dim(`  (${usingContainer() ? say('chat.header.container', {}, language) : say('chat.header.host', {}, language)})`));
   console.log(c.dim(`  ${say('chat.header.commands', {}, language)}`));
   console.log('');

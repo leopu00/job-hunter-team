@@ -36,7 +36,16 @@ PLACEHOLDER = re.compile(r"%[sd]")
 
 
 def _catalog(lang: str) -> dict[str, str]:
-    return json.loads((LOCALES / f"{lang}.json").read_text(encoding="utf-8"))
+    return _role_filled(json.loads((LOCALES / f"{lang}.json").read_text(encoding="utf-8")), lang)
+
+def _role_filled(catalog: dict, lang: str) -> dict:
+    """The catalog as the readers show it: {role:<id>} with the role's name in `lang` (shared/i18n/role-names.json)."""
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("role_names_t", Path(__file__).resolve().parents[1] / "shared" / "skills" / "role_names.py")
+    names = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(names)
+    return {key: names.fill(value, lang) for key, value in catalog.items()}
+
 
 
 ENGLISH = {k: v for k, v in _catalog("en").items() if ONBOARDING.match(k)}

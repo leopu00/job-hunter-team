@@ -71,7 +71,7 @@ test('most of the budget went to the onboarding: said when what was spent before
     return root;
   };
   assert.equal(show(onboardingSpendText({ home: setup(1.71) }), 'en'),
-    '$1.71 of your $2.00 budget went to the onboarding and the Capitano before the Scouts started searching: with a budget this small the team has little left to search with. Raise it with: jht setup');
+    '$1.71 of your $2.00 budget went to the onboarding and the Captain before the Scouts started searching: with a budget this small the team has little left to search with. Raise it with: jht setup');
   assert.match(show(onboardingSpendText({ home: setup(1.71) }), 'it'), /^1\.71 \$ del tuo budget di 2\.00 \$ sono andati nell'onboarding/);
   assert.equal(onboardingSpendText({ home: setup(0.9) }), null, 'under half: nothing to say');
   assert.equal(onboardingSpendText({ home: setup(1.71, '2026-11-15T09:00:00.000Z') }), null, 'the file of another budget is old');

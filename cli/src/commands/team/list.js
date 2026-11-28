@@ -3,7 +3,8 @@ import { openAlertLines } from '../../lib/open-alerts.js';
 import { spendNowText } from '../../lib/budget-pause.js';
 // Comandi team list e team status
 import { marks, table, terminalWidth, title, wrapText } from '../../lib/ui.js';
-import { say, show } from '../../lib/texts.js';
+import { say, show, textLanguage } from '../../lib/texts.js';
+import { roleName } from '../../../../shared/i18n/role-names.js';
 import {
   AGENTS, DEFAULT_TEAM, c,
   getActiveSessions, usingContainer, isAgentSession,
@@ -22,7 +23,7 @@ export function listAction() {
       const prefix = inContainer ? agent.prefix : `JHT-${agent.prefix}`;
       const active = sessions.some((s) => isAgentSession(s, agent));
       return [
-        `${active ? c.green(m.ok) : c.dim(m.info)} ${agent.role}`,
+        `${active ? c.green(m.ok) : c.dim(m.info)} ${roleName(agent.role, textLanguage())}`,
         agent.multi ? `${prefix}-N` : prefix,
         agent.multi ? say('team.several') : say('team.one'),
         agent.effort,
@@ -31,7 +32,7 @@ export function listAction() {
     }),
   ));
   console.log('');
-  for (const part of wrapText(say('team.default_team', { list: DEFAULT_TEAM.join(', ') }), terminalWidth() - 4)) console.log(`  ${c.dim(part)}`);
+  for (const part of wrapText(say('team.default_team', { list: DEFAULT_TEAM.map((one) => { const [role, n] = String(one).split(':'); return n ? `${roleName(role, textLanguage())} ×${n}` : roleName(role, textLanguage()); }).join(', ') }), terminalWidth() - 4)) console.log(`  ${c.dim(part)}`);
   console.log('');
 }
 

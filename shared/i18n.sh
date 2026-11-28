@@ -15,6 +15,19 @@
 
 # Resolve catalog dir relative to this script (so it works regardless of CWD).
 _I18N_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/locales"
+# The names of the roles in the seven languages (JHT-T358): a text writes {role:<id>}, the reader puts the name there.
+_I18N_ROLES="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/i18n/role-names.json"
+
+# One key of one catalog, with {role:<id>} filled in `lang`. Args: catalog file, key, lang.
+_i18n_get() {
+  if [ -f "$_I18N_ROLES" ]; then
+    jq -r --arg k "$2" --arg lang "$3" --slurpfile names "$_I18N_ROLES" \
+      '(.[$k] // empty) | if type == "string" then gsub("\\{role:(?<r>[a-z]+)\\}"; ($names[0].roles[.r][$lang] // $names[0].roles[.r].en // .r)) else . end' \
+      "$1" 2>/dev/null
+  else
+    jq -r --arg k "$2" '.[$k] // empty' "$1" 2>/dev/null
+  fi
+}
 
 # Resolve language with cascade lookup (prefs → env → host.env → default en).
 _i18n_resolve_lang() {
@@ -46,7 +59,7 @@ t() {
   local value
 
   if [ -f "$catalog" ]; then
-    value="$(jq -r --arg k "$key" '.[$k] // empty' "$catalog" 2>/dev/null)"
+    value="$(_i18n_get "$catalog" "$key" "$lang")"
     if [ -n "$value" ] && [ "$value" != "null" ]; then
       printf '%s' "$value"
       return
@@ -55,7 +68,7 @@ t() {
 
   # Fallback to en if key missing in target lang
   if [ -f "$fallback" ]; then
-    value="$(jq -r --arg k "$key" '.[$k] // empty' "$fallback" 2>/dev/null)"
+    value="$(_i18n_get "$fallback" "$key" en)"
     if [ -n "$value" ] && [ "$value" != "null" ]; then
       printf '%s' "$value"
       return

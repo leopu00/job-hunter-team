@@ -38,7 +38,7 @@ test('the time of a chat message is said in the person zone, not in the containe
   const at = Date.UTC(2026, 10, 16, 14, 7, 5) / 1000; // 14:07:05 UTC = 15:07:05 in Berlin (CET)
   assert.equal(chatClock(at, 'Europe/Berlin'), '15:07:05');
   assert.equal(chatClock(at, 'UTC'), '14:07:05');
-  assert.match(plain(formatChatMessage({ id: 'm', role: 'agent', text: 'Ciao', at }, 'assistente', 'Europe/Berlin')), /^assistente 15:07:05\n/);
+  assert.match(plain(formatChatMessage({ id: 'm', role: 'agent', text: 'Ciao', at }, 'assistente', 'Europe/Berlin')), /^Assistant 15:07:05\n/);
   assert.match(chatClock(at, 'Not/AZone'), /^\d\d:\d\d:\d\d$/, 'a zone that is not one still gives a time');
 });
 
