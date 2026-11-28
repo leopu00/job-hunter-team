@@ -4,15 +4,13 @@
  * JHT Setup Wizard — Entry point
  */
 
+import '../src/lib/terminal-init.js';
 import { cancel } from '@clack/prompts';
 import pc from 'picocolors';
 import { createClackPrompter } from './clack-prompter.js';
 import { WizardCancelledError } from './prompts.js';
 import { runSetupWizard, setupExitCode } from './setup.js';
 import { t } from './i18n.js';
-import { installTerminalSymbols } from '../src/lib/terminal-symbols.js';
-
-installTerminalSymbols();
 
 /**
  * Ripristina il terminale al suo stato normale.

@@ -4,6 +4,7 @@
  * Wrapper su @clack/prompts + picocolors per UI terminale.
  */
 
+import '../src/lib/terminal-init.js';
 import {
   cancel,
   confirm,

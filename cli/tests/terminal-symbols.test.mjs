@@ -17,6 +17,8 @@ test('unknown Windows consoles default to ASCII, recognized terminals keep Unico
   assert.equal(usesUnicode({}, 'darwin'), true);
   assert.equal(usesUnicode({}, 'linux'), true);
   assert.equal(usesUnicode({ TERM: 'linux' }, 'linux'), false);
+  assert.equal(usesUnicode({ JHT_TERMINAL_PLATFORM: 'win32' }), false);
+  assert.equal(usesUnicode({ JHT_TERMINAL_PLATFORM: 'win32', JHT_UNICODE: '1' }), true);
 });
 
 test('ASCII decoration keeps accented translations and ANSI controls', () => {
@@ -61,12 +63,16 @@ test('TTY writes preserve callbacks, backpressure, buffers and install only once
 test('real clack rendering through a fake console: prompts, notes, spinner, success and cancellation', () => {
   const script = `
     import { PassThrough } from 'node:stream';
+    import { syncBuiltinESMExports } from 'node:module';
     import { installTerminalSymbols } from './src/lib/terminal-symbols.js';
     Object.defineProperty(process, 'platform', { value: process.env.TEST_CONSOLE_PLATFORM });
     const input = new PassThrough(); input.isTTY = true; input.setRawMode = () => {};
     Object.defineProperty(process, 'stdin', { value: input });
+    syncBuiltinESMExports();
     Object.defineProperty(process.stdout, 'isTTY', { value: true });
     Object.defineProperty(process.stdout, 'columns', { value: 80 });
+    Object.defineProperty(process.stdout, 'rows', { value: 24 });
+    await import('./src/lib/terminal-init.js');
     installTerminalSymbols({ argv: [] });
     const { createClackPrompter } = await import('./wizard/clack-prompter.js');
     const { cancel } = await import('@clack/prompts');
@@ -95,6 +101,7 @@ test('real clack rendering through a fake console: prompts, notes, spinner, succ
     } else {
       assert.match(output, /📅/u);
       assert.match(output, /✓ Saved/u);
+      assert.match(output, /│/u, 'forced Unicode also reaches clack framing');
     }
   }
 });
@@ -111,4 +118,13 @@ test('all final setup messages in every language offer a PATH reload before chat
       assert.equal(setupOutro(texts[key], 'darwin'), texts[key]);
     }
   }
+});
+
+test('the host metadata wins over the Linux container platform for the setup outro', () => {
+  const result = spawnSync(process.execPath, ['--input-type=module', '-e', `
+    import { setupOutro } from './wizard/setup-outro.js';
+    console.log(setupOutro('Answer: jht team chat assistente'));
+  `], { cwd: new URL('../', import.meta.url), env: { ...process.env, JHT_TERMINAL_PLATFORM: 'win32' }, encoding: 'utf8' });
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.stdout.trim(), `Answer: ${WINDOWS_CHAT_COMMAND}`);
 });

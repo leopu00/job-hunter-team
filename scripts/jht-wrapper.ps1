@@ -2073,7 +2073,7 @@ function Invoke-JhtTeamChatOnConsole {
   param([string[]]$HostFlags)
   $script:JhtTeamChatErrFile = $null
   if (($ExecFlags -join ' ') -cne '-it') { return $null }
-  $words = @(@('exec') + $ExecFlags + $HostFlags + @($Container, 'node', $NodeEntry, $Sub) + @($Rest))
+  $words = @(@('exec') + $ExecFlags + $JhtTerminalEnv + $HostFlags + @($Container, 'node', $NodeEntry, $Sub) + @($Rest))
   if (@($words | Where-Object { [string]$_ -cnotmatch '^[A-Za-z0-9_./:=@+-]+$' }).Count -gt 0) { return $null }
   $client = Get-Command docker -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
   if (-not $client) { return $null }
@@ -5634,7 +5634,7 @@ function Write-LocalHelp {
 function Invoke-HelpWithoutDocker {
   param([Parameter(ValueFromRemainingArguments)] $HelpArgs)
   if ((Test-DockerReachable) -and (Test-ContainerUp)) {
-    & { $ErrorActionPreference = 'Continue'; & docker exec -e "JHT_HOST_TYPE=$env:JHT_HOST_TYPE" $Container node $NodeEntry @HelpArgs }
+    & { $ErrorActionPreference = 'Continue'; & docker exec @JhtTerminalEnv -e "JHT_HOST_TYPE=$env:JHT_HOST_TYPE" $Container node $NodeEntry @HelpArgs }
     exit $LASTEXITCODE
   }
   Write-LocalHelp
@@ -5924,7 +5924,7 @@ process.stdout.write(`${configured?1:0} ${(piApi?keyThere:config.harness==="pi"&
     $captainRunning = if ($LASTEXITCODE -eq 0) { 1 } else { 0 }
     $null = & { $ErrorActionPreference = 'Continue'; & docker exec $containerId test -f /jht_home/profile/ready.flag 2>$null }
     $profileReady = if ($LASTEXITCODE -eq 0) { 1 } else {
-      $null = & { $ErrorActionPreference = 'Continue'; & docker exec $containerId node $NodeEntry profile validate --strict --json 2>$null }
+      $null = & { $ErrorActionPreference = 'Continue'; & docker exec @JhtTerminalEnv $containerId node $NodeEntry profile validate --strict --json 2>$null }
       if ($LASTEXITCODE -eq 0) { 1 } else { 0 }
     }
     $finalLines = @(& { $ErrorActionPreference = 'Continue'; & docker inspect $containerId --format '{{.State.Running}}' 2>$null })
@@ -6011,7 +6011,7 @@ function Invoke-AgentControl {
     [Console]::Out.WriteLine('{"ok":false,"error":"agent_control_no_team"}')
     return
   }
-  & docker exec -i -e "JHT_HOST_TYPE=$env:JHT_HOST_TYPE" $containerId node $NodeEntry agent-control @ControlArgs
+  & docker exec -i @JhtTerminalEnv -e "JHT_HOST_TYPE=$env:JHT_HOST_TYPE" $containerId node $NodeEntry agent-control @ControlArgs
   $script:AgentControlExitCode = $LASTEXITCODE
 }
 
@@ -6906,7 +6906,7 @@ function Remove-BrokerResetData {
 function Invoke-ResetCommand {
   param([string[]]$ResetArgs)
   Ensure-Up
-  & { $ErrorActionPreference = 'Continue'; & docker exec @ExecFlags `
+  & { $ErrorActionPreference = 'Continue'; & docker exec @ExecFlags @JhtTerminalEnv `
     -e "JHT_HOST_TYPE=$env:JHT_HOST_TYPE" `
     -e 'JHT_HOST_RESET_PROTOCOL=1' `
     $Container node $NodeEntry reset @ResetArgs }
@@ -7680,7 +7680,7 @@ function Get-UpgradeImage {
 }
 
 function Get-UpgradeVersion {
-  $lines = @(& { $ErrorActionPreference = 'Continue'; & docker exec $Container node $NodeEntry --version 2>$null })
+  $lines = @(& { $ErrorActionPreference = 'Continue'; & docker exec @JhtTerminalEnv $Container node $NodeEntry --version 2>$null })
   if ($LASTEXITCODE -ne 0 -or -not $lines.Count) { return '' }
   return ([string]$lines[0]).Trim()
 }
@@ -7993,6 +7993,16 @@ function Convert-SetupKeyFileArgs {
   return $plan
 }
 
+# Only presentation metadata crosses the host/container boundary: the Node CLI runs on Linux.
+# Unknown Windows consoles use ASCII; a recognized terminal or JHT_UNICODE=1 keeps Unicode.
+function Get-JhtTerminalEnv {
+  $unicode = '0'
+  if ($env:WT_SESSION -or ($env:TERM_PROGRAM -cin @('vscode', 'WezTerm')) -or ($env:TERMINAL_EMULATOR -ceq 'JetBrains-JediTerm')) { $unicode = '1' }
+  if ($env:JHT_UNICODE -cin @('0', '1')) { $unicode = $env:JHT_UNICODE }
+  return @('-e', 'JHT_TERMINAL_PLATFORM=win32', '-e', "JHT_UNICODE=$unicode")
+}
+$JhtTerminalEnv = @(Get-JhtTerminalEnv)
+
 # Decide se passare -it a docker exec: serve solo se stdin/stdout sono terminali.
 # Su Windows pwsh, [Console]::IsInputRedirected restituisce true quando lo
 # script gira sotto pipe / redirect — in quel caso usiamo -i (no TTY).
@@ -8075,7 +8085,7 @@ switch ($Sub) {
 
   { $_ -in @('-V', '--version', 'version') } {
     if ((Test-DockerReachable) -and (Test-ContainerUp)) {
-      & { $ErrorActionPreference = 'Continue'; & docker exec @ExecFlags -e "JHT_HOST_TYPE=$env:JHT_HOST_TYPE" $Container node $NodeEntry --version }
+      & { $ErrorActionPreference = 'Continue'; & docker exec @ExecFlags @JhtTerminalEnv -e "JHT_HOST_TYPE=$env:JHT_HOST_TYPE" $Container node $NodeEntry --version }
     } else {
       $ConfiguredVersion = if ($env:JHT_IMAGE_TAG) {
         $env:JHT_IMAGE_TAG
@@ -8116,7 +8126,7 @@ switch ($Sub) {
       if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       $context = @{ mounts = ($mounts -join "`n"); cwd = $PWD.Path } | ConvertTo-Json -Compress
       $context = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($context))
-      & { $ErrorActionPreference = 'Continue'; & docker exec @ExecFlags -e "JHT_ARTIFACT_HOST_CONTEXT=$context" $target node $NodeEntry $Sub @Rest }
+      & { $ErrorActionPreference = 'Continue'; & docker exec @ExecFlags @JhtTerminalEnv -e "JHT_ARTIFACT_HOST_CONTEXT=$context" $target node $NodeEntry $Sub @Rest }
       exit $LASTEXITCODE
     }
     $uploadArgs = if ($Rest.Count -gt 1) { @($Rest[1..($Rest.Count - 1)]) } else { @() }
@@ -8216,7 +8226,7 @@ switch ($Sub) {
     if ($Rest.Count -ge 1 -and @('request', 'cancel') -ccontains [string]$Rest[0]) {
       exit (Invoke-ApplyHostCommand $Rest)
     }
-    & { $ErrorActionPreference = 'Continue'; & docker exec @ExecFlags -e "JHT_HOST_TYPE=$env:JHT_HOST_TYPE" $Container node $NodeEntry $Sub @Rest }
+    & { $ErrorActionPreference = 'Continue'; & docker exec @ExecFlags @JhtTerminalEnv -e "JHT_HOST_TYPE=$env:JHT_HOST_TYPE" $Container node $NodeEntry $Sub @Rest }
     exit $LASTEXITCODE
   }
 
@@ -8408,13 +8418,13 @@ switch ($Sub) {
       # -i only: a pipe is not a terminal. No byte-order mark goes in front of the key (Invoke-NativeWithStdin).
       try {
         [string[]]$setupArgs = $keyPlan.Args
-        Invoke-NativeWithStdin { $keyPlan.Key | & docker exec -i @setupEnv $Container node $NodeEntry 'setup' @setupArgs }
+        Invoke-NativeWithStdin { $keyPlan.Key | & docker exec -i @JhtTerminalEnv @setupEnv $Container node $NodeEntry 'setup' @setupArgs }
         if ($LASTEXITCODE -eq 0) { Write-Host (Format-JhtText 'line.the_setup_keeps_the_key' ($keyPlan.File)) }
       } finally {
         $keyPlan.Key = $null
       }
     } else {
-      & { $ErrorActionPreference = 'Continue'; & docker exec @ExecFlags @setupEnv $Container node $NodeEntry 'setup' @Rest }
+      & { $ErrorActionPreference = 'Continue'; & docker exec @ExecFlags @JhtTerminalEnv @setupEnv $Container node $NodeEntry 'setup' @Rest }
     }
     if (Test-JhtSetupWizardArgs $Rest) { Remove-JhtSetupOpenFlag }
     break
@@ -8433,7 +8443,7 @@ switch ($Sub) {
     Require-ComposeFile
     if ((Test-DockerReachable) -and (Test-ContainerUp)) {
       $hostFlags = @('-e', "JHT_HOST_TYPE=$env:JHT_HOST_TYPE")
-      & { $ErrorActionPreference = 'Continue'; & docker exec @ExecFlags @hostFlags $Container node $NodeEntry $Sub @Rest }
+      & { $ErrorActionPreference = 'Continue'; & docker exec @ExecFlags @JhtTerminalEnv @hostFlags $Container node $NodeEntry $Sub @Rest }
       exit $LASTEXITCODE
     }
     # A team that is simply off is not an error for a person (rc 0); a program reading the output keeps the line and rc 1.
@@ -8454,7 +8464,7 @@ switch ($Sub) {
       $hostFlags = @('-e', "JHT_HOST_TYPE=$env:JHT_HOST_TYPE")
       $wslAdvice = Get-JhtDoctorWslMemoryAdvice
       if ($wslAdvice) { $hostFlags += @('-e', "JHT_HOST_WSL_MEMORY_ADVICE=$wslAdvice") }
-      & { $ErrorActionPreference = 'Continue'; & docker exec @ExecFlags @hostFlags $Container node $NodeEntry $Sub @Rest }
+      & { $ErrorActionPreference = 'Continue'; & docker exec @ExecFlags @JhtTerminalEnv @hostFlags $Container node $NodeEntry $Sub @Rest }
       exit $LASTEXITCODE
     }
     exit (Invoke-JhtHostDoctor -Team 'off' -DoctorArgs $Rest)
@@ -8471,7 +8481,7 @@ switch ($Sub) {
     $code = $null
     if ($Sub -ceq 'team' -and $Rest.Count -gt 0 -and $Rest[0] -ceq 'chat') { $code = Invoke-JhtTeamChatOnConsole $hostFlags }
     if ($null -eq $code) {
-      & { $ErrorActionPreference = 'Continue'; & docker exec @ExecFlags @hostFlags $Container node $NodeEntry $Sub @Rest }
+      & { $ErrorActionPreference = 'Continue'; & docker exec @ExecFlags @JhtTerminalEnv @hostFlags $Container node $NodeEntry $Sub @Rest }
       $code = $LASTEXITCODE
     }
     # the REPL ended because the team is moving onto the full image: it comes back by itself once the team runs again

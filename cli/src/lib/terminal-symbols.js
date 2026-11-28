@@ -1,7 +1,7 @@
 /** Conservative font capability heuristic: a console cannot report its supported glyphs.
  * JHT_UNICODE=0 selects ASCII, JHT_UNICODE=1 keeps Unicode even with an unknown font.
  */
-export function usesUnicode(env = process.env, platform = process.platform) {
+export function usesUnicode(env = process.env, platform = env.JHT_TERMINAL_PLATFORM || process.platform) {
   if (env.JHT_UNICODE === '0') return false;
   if (env.JHT_UNICODE === '1') return true;
   if (platform !== 'win32') return env.TERM !== 'linux' && env.TERM !== 'dumb';
@@ -34,7 +34,7 @@ const installed = new WeakSet();
 /** Only terminal presentation is changed. Pipes, files, buffers and JSON stay intact.
  * Install before clack renders so frames, spinner, cancellation and custom text agree.
  */
-export function installTerminalSymbols({ env = process.env, platform = process.platform,
+export function installTerminalSymbols({ env = process.env, platform = env.JHT_TERMINAL_PLATFORM || process.platform,
   streams = [process.stdout, process.stderr], argv = process.argv } = {}) {
   if (usesUnicode(env, platform) || argv.some((arg) => /^--json(?:=|$)/.test(arg))) return;
   for (const stream of streams) {
