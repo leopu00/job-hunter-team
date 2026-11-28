@@ -30,6 +30,8 @@
  */
 const fs = require("node:fs");
 const path = require("node:path");
+const { spawnSync } = require("node:child_process");
+const { randomUUID } = require("node:crypto");
 
 const REASON = "pi_spend_cap";
 const FLAG_MAX_BYTES = 64 * 1024;
@@ -165,6 +167,42 @@ function agentName() {
   return String(process.env.JHT_AGENT_NAME || "").toLowerCase();
 }
 
+/** Admission is synchronous only while accounts and in-flight estimates are
+ * checked. The Python lock is released before the provider starts; requests run
+ * in parallel. A failed reading holds upstream workers, never the Scorer/core. */
+function burstAdmission() {
+  const role = agentName().split("-", 1)[0];
+  const exempt = ["capitano", "assistente", "scorer"].includes(role);
+  const home = process.env.JHT_HOME;
+  if (!home) return true;
+  // A readable non-dollar/subscription configuration takes the cheap path.
+  try {
+    const file = path.join(home, "jht.config.json");
+    const info = fs.lstatSync(file);
+    if (!info.isFile() || info.size > 4 * 1024 * 1024) return exempt;
+    const config = JSON.parse(fs.readFileSync(file, "utf8"));
+    const provider = String(config.active_provider || "").toLowerCase();
+    if (config.providers?.[provider]?.auth_method !== "api_key" ||
+        !(config.team?.budget?.usd > 0)) return true;
+  } catch (error) {
+    return exempt || error.code === "ENOENT"; // no configuration yet: no declared dollar budget
+  }
+  try {
+    const script = path.resolve(__dirname, "../../skills/burst_budget.py");
+    const result = spawnSync("python3", [script, "claim", agentName(), "--id", randomUUID()], {
+      env: process.env, encoding: "utf8", timeout: 10000, maxBuffer: 65536,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    if (result.status !== 0) {
+      logLine({ event: "burst_reserve_held" });
+      return exempt;
+    }
+    return exempt || JSON.parse(result.stdout).allowed === true;
+  } catch (_error) {
+    return exempt;
+  }
+}
+
 module.exports = function spendGate(pi) {
   if (EXEMPT.has(agentName())) return;
 
@@ -198,7 +236,7 @@ module.exports = function spendGate(pi) {
 
   pi.on("before_provider_request", (_event, ctx) => {
     try {
-      if ((paused() || standby() || queued()) && ctx && typeof ctx.abort === "function") {
+      if ((paused() || standby() || queued() || !burstAdmission()) && ctx && typeof ctx.abort === "function") {
         logLine({ event: "request_stopped" });
         ctx.abort();
       }

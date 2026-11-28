@@ -20,7 +20,7 @@ BOOT = ROOT / "shared" / "skills" / "captain_boot.py"
 START_AGENT = ROOT / ".launcher" / "start-agent.sh"
 LANGS = ("", ".it", ".de", ".es", ".fr", ".hu", ".pt")
 ROSTER = {"scout": 5, "analista": 3, "scorer": 2}
-FULL_ORDER = ["scout", "scout", "analista", "scorer", "scout", "scout", "scout", "analista", "analista", "scorer"]
+FULL_ORDER = ["scout", "analista", "scorer", "scout", "scout", "scout", "scout", "analista", "analista", "scorer"]
 
 
 def _module():
@@ -111,7 +111,7 @@ def test_the_capitano_start_completes_only_what_is_missing(tmp_path: Path):
     world = _world(tmp_path, sessions=["SCOUT-1", "SCOUT-2", "SCOUT-4", "ANALISTA-2"])
     _run(world, "start")
     roles = [c["role"] for c in _calls(world)]
-    assert roles == ["scout", "scout", "analista", "scorer", "analista", "scorer"]  # the missing ones, still in the order of the skill
+    assert roles == ["scout", "analista", "scorer", "scout", "analista", "scorer"]  # the missing ones, still in the order of the skill
     started_scouts = {c["n"] for c in _calls(world) if c["role"] == "scout"}
     assert not started_scouts & {"1", "2", "4"}  # never over a session that is up
 
@@ -238,15 +238,15 @@ def test_a_stop_during_the_burst_closes_the_worker_starting_and_starts_no_other(
     tmux.write_text(f"#!/bin/sh\n[ \"$1\" = kill-session ] && {{ echo \"$3\" >> '{kills}'; exit 0; }}\ncat '{world['listing']}'\n",
                     encoding="utf-8")
     launcher = Path(world["env"]["JHT_START_AGENT"])
-    # the stop of the person comes while the third worker of the order (the first Analista) is starting
+    # the stop of the person comes while the second worker of the order (the first Analista) is starting
     launcher.write_text(launcher.read_text() + f"[ \"$1\" = analista ] && : > '{halted}'\nexit 0\n", encoding="utf-8")
     out = _run(world, "start", "--auto")
     calls = _calls(world)
-    assert [c["role"] for c in calls] == FULL_ORDER[:3], f"after the stop nobody else starts: {out}"
-    session = f"ANALISTA-{calls[2]['n']}"
+    assert [c["role"] for c in calls] == FULL_ORDER[:2], f"after the stop nobody else starts: {out}"
+    session = f"ANALISTA-{calls[1]['n']}"
     assert kills.read_text(encoding="utf-8").split() == [f"={session}"], "the worker started across the stop is closed"
     assert [row for row in out["started"] if not row["ok"]] == [{"role": "scorer", "ok": False, "why": "brake: team-halted"}]
-    assert out["started"][2]["closed_by_stop"] is True
+    assert out["started"][1]["closed_by_stop"] is True
 
 
 def test_a_burst_with_the_team_halted_for_the_day_starts_nobody(tmp_path: Path):

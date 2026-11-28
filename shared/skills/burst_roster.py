@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
-"""burst_roster.py — starts the roster of the first run (the burst) in one go, as the system, in the order of the skill
-first-run-burst: two Scouts, one Analista, one Scorer, the other Scouts, the other Analisti, the last Scorer.
+"""burst_roster.py — starts the first-run roster in budget-checked stages.
+One Scout, one Analista and one Scorer start first; additional Scouts wait for
+the observation interval enforced by burst_budget.py, including direct spawns.
 
 Before, the Capitano started the roster itself, one model turn and one `sleep 12` per worker: the formation took about four
 minutes and the fifth Scout got its brief 2.8 minutes after the profile was ready (measured 11/11, run 6: a Scout needs
@@ -38,7 +39,7 @@ from pathlib import Path
 SKILLS = Path(__file__).resolve().parent
 RECENT_S = 180  # a run this young is still starting the roster
 SPAWN_TIMEOUT_S = 150  # one start-agent.sh (it waits for the spawn lock, up to ~75 s, and starts the REPL)
-ORDER = ("scout", "scout", "analista", "scorer", "scout", "scout", "scout", "analista", "analista", "scorer")
+ORDER = ("scout", "analista", "scorer", "scout", "scout", "scout", "scout", "analista", "analista", "scorer")
 ROLES = ("scout", "analista", "scorer")
 
 
@@ -242,6 +243,23 @@ def _close_started(session: str) -> bool:
     return closed
 
 
+def _budget_admission(role: str) -> dict:
+    mod = _skill("burst_budget")
+    if mod is None:
+        return {"allowed": role == "scorer", "reason": "burst-accounting-unavailable"}
+    return mod.check(role, spawn=True)
+
+
+def _wait_stage(seconds: float) -> bool:
+    """Observe between Scout starts; recheck the person's stop every second."""
+    until = time.monotonic() + seconds
+    while time.monotonic() < until:
+        if _stop_brake():
+            return False
+        time.sleep(min(1.0, max(0.0, until - time.monotonic())))
+    return True
+
+
 def _spawn(roles: list[str], state: dict) -> list[dict]:
     cap = state.get("scout_cap_first_pass")
     cap = cap if isinstance(cap, int) and not isinstance(cap, bool) and cap > 0 else None
@@ -251,11 +269,22 @@ def _spawn(roles: list[str], state: dict) -> list[dict]:
         if held:   # a stop, a standby or a halt came while the workers before were starting: nobody else starts
             done.append({"role": role, "ok": False, "why": f"brake: {held}"})
             break
+        admission = _budget_admission(role)
+        while admission.get("reason") == "burst-stage":
+            if not _wait_stage(float(admission.get("retry_after_s") or 1)):
+                done.append({"role": role, "ok": False, "why": "brake during stage"})
+                return done
+            admission = _budget_admission(role)
+        if not admission.get("allowed"):
+            row = {"role": role, "ok": False, "why": admission.get("reason", "burst-reserve")}
+            done.append(row)
+            _log(row)
+            continue
         number = _number(role)
         if number is None:
             done.append({"role": role, "ok": False, "why": "no free number"})
             continue
-        env = dict(os.environ, JHT_WORKER_BRIEF=brief(role, number, cap))
+        env = dict(os.environ, JHT_WORKER_BRIEF=brief(role, number, cap), JHT_BURST_STAGE_CLAIMED="1")
         try:
             result = subprocess.run(["bash", _launcher(), role, str(number)], capture_output=True, text=True,
                                     timeout=SPAWN_TIMEOUT_S, check=False, env=env, stdin=subprocess.DEVNULL)

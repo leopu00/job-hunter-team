@@ -907,6 +907,32 @@ tmux has-session -t "=$SESSION" 2>/dev/null || python3 /app/shared/skills/tools_
 if [ "$_tools_rc" -eq 1 ]; then echo "$ROLE not started: it needs the tools of the full image, still on their way." >&2; exit 75; fi
 # --- fine cancello degli strumenti
 
+# --- first-run dollar reserves and Scout stages (T362): every NEW worker,
+# including a direct Captain spawn, goes through the same gate as the roster.
+# A roster Scout already claimed its stage; its budget is still checked here.
+_spawn_stage="burst_reserve"
+if ! tmux has-session -t "=$SESSION" 2>/dev/null; then
+  _burst_command=spawn
+  if [ "${JHT_BURST_STAGE_CLAIMED:-}" = 1 ]; then _burst_command=check; fi
+  _burst_rc=0
+  _burst_output="$(python3 /app/shared/skills/burst_budget.py "$_burst_command" "$ROLE")" || _burst_rc=$?
+  if [ "$_burst_rc" -ne 0 ]; then
+    _role_refusal_reason=burst-accounting-unavailable
+    case "$_burst_output" in
+      *'"reason": "burst-stage"'*) _role_refusal_reason=burst-stage ;;
+      *'"reason": "burst-reserve"'*) _role_refusal_reason=burst-reserve ;;
+    esac
+    printf '%s\n' "$_burst_output" >&2
+  fi
+  if [ "$_burst_rc" -ne 0 ]; then
+    case "$ROLE" in
+      capitano|assistente|scorer) ;; # reserves never stop the downstream scorer or the person's voice
+      *) echo "$ROLE not started: burst reserve/stage gate (rc $_burst_rc); Analista and Scorer keep their reserved budget." >&2; exit 75 ;;
+    esac
+  fi
+fi
+# --- end first-run reserve/stage gate
+
 # --- cancello dei posti (spawn_gate.py)
 # Con host_agent_cap=4 il Capitano ha riempito i 4 posti di Scout e 12 posizioni sono rimaste ad aspettare un Analista e uno
 # Scorer che nessuno ha acceso: il tetto era una frase del prompt, nessun codice decideva a chi andavano i posti. Un NUOVO
