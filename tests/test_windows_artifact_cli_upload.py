@@ -30,6 +30,12 @@ $dispatch = @($ast.EndBlock.Statements | Where-Object {
   $_ -is [System.Management.Automation.Language.SwitchStatementAst] -and $_.Condition.Extent.Text -ceq '$Sub'
 })
 if ($dispatch.Count -ne 1) { throw 'real dispatcher missing or duplicated' }
+$terminalHelper = @($ast.FindAll({ param($n)
+  $n -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -ceq 'Get-JhtTerminalEnv'
+}, $true))
+if ($terminalHelper.Count -ne 1) { throw 'terminal metadata helper missing or duplicated' }
+Invoke-Expression $terminalHelper[0].Extent.Text
+$JhtTerminalEnv = @(Get-JhtTerminalEnv)
 function Require-ComposeFile { }
 function Require-Docker { }
 function Ensure-Up { }
@@ -130,6 +136,8 @@ def test_cli_only_upload_reads_the_real_mounted_document(upload_case, name):
     context = next(arg for arg in calls if arg.startswith('JHT_ARTIFACT_HOST_CONTEXT='))
     assert 'Synthetic' not in context, 'context must be encoded across the native boundary'
     assert calls[-4:] == ['artifact', 'upload', HOST_ROOT + '\\' + name, '--json']
+    assert 'JHT_TERMINAL_PLATFORM=win32' in calls
+    assert any(arg in ('JHT_UNICODE=0', 'JHT_UNICODE=1') for arg in calls)
 
 
 def test_cli_only_upload_uses_the_configured_shared_folder(upload_case):
