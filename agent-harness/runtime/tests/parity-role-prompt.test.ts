@@ -182,7 +182,7 @@ describe("the real SCOUT", () => {
 });
 
 it('loads the live panorama controls into the Assistant prompt in all seven languages', async () => {
-  for (const locale of ['en', 'it', 'de', 'es', 'fr', 'pt', 'hu']) {
+  for (const locale of ['en', 'it', 'de', 'es', 'fr', 'pt', 'hu'] as const) {
     const prompt = await loadRolePrompt({ appRoot: REPO_ROOT, role: 'assistente', locale });
     expect(prompt.identity).toContain('[AUTO-REPORT-PREFERENCES]');
     expect(prompt.identity).toContain('jht config set team.auto_report.enabled false');
