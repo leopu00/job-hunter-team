@@ -48,7 +48,7 @@ export default {
   "budget.spend_now_budget": "A keretből elköltve: ${spent} / ${budget} · ${rate} percenként az utolsó {window} percben (frissítve: {at})",
   "budget.onboarding_spend": "A ${budget} keretedből ${spent} a bevezetésre és a Capitanóra ment, mielőtt a Scoutok keresni kezdtek: ilyen kis kerettel kevés marad a csapatnak a keresésre. Emeld meg: jht setup",
   "alerts.open": "{agent} jelzi: {body}",
-  "alerts.where": "Az Assistentével folytatott csevegésben is megtalálod (jht team chat assistente), és az app Üzenetek részében.",
+  "alerts.where": "Az Assistentével folytatott csevegésben is megtalálod (jht team chat assistente).",
   "team.wait_before": "Várakozás {s} mp-ig {session} előtt...",
   "team.wait_ready": "Várakozás, amíg {previous} kész lesz (legfeljebb {s} mp), {session} előtt...",
   "team.ready_after": "{session} kész {s} mp után",
