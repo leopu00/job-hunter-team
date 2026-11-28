@@ -26,53 +26,6 @@ function prompter(answers) {
 // 22:30 in Rome (UTC+1 in November)
 const NOW = new Date('2026-11-15T21:30:00Z');
 
-test('the trial is the answer already chosen: $5 for 30 minutes that start when the team starts working, not at the setup, 24/7', async () => {
-  const p = prompter({});
-  const r = await promptBudget(p, { t, tf, now: NOW, timeZone: 'Europe/Rome' });
-  assert.equal(p.asked[0][2], 'trial');
-  assert.deepEqual(r, { kind: 'trial', workingHours: null, dailyUsd: null, budget: { usd: 5, duration_minutes: 30, saved_at: '2026-11-15T21:30:00.000Z', timezone: 'Europe/Rome', set_by: 'setup' } });
-  assert.equal('starts_at' in r.budget || 'ends_at' in r.budget, false, 'the period is fixed by the brake at the first work of the team');
-  assert.equal(budgetSummary(t, tf, r), 'The team can spend $5 in all; the 30 minutes start when the team starts working, then it stops by itself.');
-});
-
-test('one night ends at 8 tomorrow in the zone of the person, not in the zone of the computer', async () => {
-  const r = await promptBudget(prompter({ 'How much should the team work?': 'night' }), { t, tf, now: NOW, timeZone: 'Europe/Rome' });
-  assert.equal(r.budget.ends_at, '2026-11-16T07:00:00.000Z');
-  assert.equal(budgetSummary(t, tf, r), 'The team can spend $5 until 8:00 (Europe/Rome), then it stops by itself.');
-  const ny = await promptBudget(prompter({ 'How much should the team work?': 'night' }), { t, tf, now: NOW, timeZone: 'America/New_York' });
-  assert.equal(ny.budget.ends_at, '2026-11-16T13:00:00.000Z', '16:30 in New York: 8 tomorrow is 15.5 hours away');
-  // before 8 in the morning the night ends at 8 of the same day
-  assert.equal(nextLocalHour(new Date('2026-11-16T04:00:00Z'), 8, 'Europe/Rome').toISOString(), '2026-11-16T07:00:00.000Z');
-});
-
-test('a few days: the amount typed (a wrong one asked again), the days and the hours; the line of the order', async () => {
-  const p = prompter({ 'How much should the team work?': 'days', 'How many dollars in total?': ['ten', '10'], 'For how many days?': 3, 'When does it work?': 'ten_from_8' });
-  const r = await promptBudget(p, { t, tf, now: NOW, timeZone: 'Europe/Rome' });
-  assert.equal(r.budget.usd, 10);
-  assert.deepEqual([r.budget.duration_minutes, r.budget.saved_at, r.budget.ends_at], [3 * 24 * 60, '2026-11-15T21:30:00.000Z', undefined]);
-  assert.deepEqual(r.workingHours, { timezone: 'Europe/Rome', windows: [{ days: ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'], start: '08:00', end: '18:00' }] });
-  assert.equal(p.asked.filter((a) => a[1] === 'How many dollars in total?').length, 2);
-  assert.equal(budgetSummary(t, tf, r), 'The team can spend $10 in all, for 3 days from when it starts working, 10 hours a day (8:00-18:00 Europe/Rome), then it stops by itself.');
-  const i = catalog(it);
-  assert.equal(budgetSummary(i.t, i.tf, r), 'La squadra può spendere 10 $ in tutto, per 3 giorni da quando comincia a lavorare, 10 ore al giorno (8:00-18:00 Europe/Rome), poi si ferma da sola.');
-});
-
-test('an amount above the threshold is asked once more; a no asks the amount again', async () => {
-  const p = prompter({ 'How much should the team work?': 'days', 'How many dollars in total?': ['1000', '20'], confirm: false });
-  const r = await promptBudget(p, { t, tf, now: NOW, timeZone: 'Europe/Rome' });
-  assert.equal(r.budget.usd, 20);
-  assert.equal(p.asked.filter((a) => a[0] === 'confirm').length, 1);
-  assert.ok(1000 > BUDGET_CONFIRM_ABOVE);
-});
-
-test('no limit warns, saves no budget, and asks the working hours of before', async () => {
-  const p = prompter({ 'How much should the team work?': 'none' });
-  const r = await promptBudget(p, { t, tf, now: NOW, timeZone: 'Europe/Rome', askHours: async () => 'asked' });
-  assert.deepEqual(r, { kind: 'none', budget: null, workingHours: 'asked', dailyUsd: null });
-  assert.ok(p.asked.some((a) => a[0] === 'note' && /credit on your account/.test(a[1])));
-  assert.match(budgetSummary(t, tf, r), /^No limit/);
-});
-
 test('amounts: dollars with a point or a comma, never zero, negative or words', () => {
   assert.equal(parseUsd('10'), 10);
   assert.equal(parseUsd('7,5'), 7.5);
@@ -94,23 +47,6 @@ test('--budget-until takes a time of the day as 8, 08, 08:00 or 08:30 (JHT-T345)
   }
   assert.equal(budgetFromOptions({ budgetUsd: '5', budgetUntil: '08:30' }, { now: NOW, timeZone: 'Europe/Rome' }).budget.ends_at, '2026-11-16T07:30:00.000Z');
   for (const bad of ['24', '8:61', 'eight', '08:3']) assert.ok(budgetFromOptions({ budgetUsd: '5', budgetUntil: bad }, { now: NOW, timeZone: 'Europe/Rome' }).error, bad);
-});
-
-test('below the least that lets a team work on the service the setup asks an explicit yes; a no asks the amount again', async () => {
-  const { minimumFor } = await import('../wizard/setup-budget.js');
-  assert.deepEqual(['glm', 'kimi', 'openai', 'claude', 'anthropic', 'moonshot', 'other'].map(minimumFor), [2, 2, 5, 5, 5, 2, 0]);
-  const p = prompter({ 'How much should the team work?': 'days', 'How many dollars in total?': ['2', '6'], confirm: false });
-  const r = await promptBudget(p, { t, tf, now: NOW, timeZone: 'Europe/Rome', provider: 'claude' });
-  assert.equal(r.budget.usd, 6, 'the $2 was not kept on Claude: the amount was asked again');
-  assert.equal(p.asked.filter((a) => a[0] === 'confirm').length, 1);
-  assert.match(p.asked.find((a) => a[0] === 'confirm')[1], /^\$2 is below the least that lets a team do some work on this service \(\$5\)/);
-  // the same $2 on GLM is enough: no question
-  const glm = prompter({ 'How much should the team work?': 'days', 'How many dollars in total?': ['2'] });
-  assert.equal((await promptBudget(glm, { t, tf, now: NOW, timeZone: 'Europe/Rome', provider: 'glm' })).budget.usd, 2);
-  assert.equal(glm.asked.filter((a) => a[0] === 'confirm').length, 0);
-  // the trial of $5 and an answer of «yes» are never stopped
-  const yes = prompter({ 'How much should the team work?': 'days', 'How many dollars in total?': ['3'], confirm: true });
-  assert.equal((await promptBudget(yes, { t, tf, now: NOW, timeZone: 'Europe/Rome', provider: 'openai' })).budget.usd, 3);
 });
 
 test('the budget is saved with the moment of the confirmation, not the one of the question', async () => {
@@ -163,44 +99,6 @@ test('--budget-pace turns the pace on in the budget of the options, and without 
 
 const ALL = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
 
-test('the ready answers propose amount and period, Enter keeps them, and the person can change them: $2 for 10 minutes', async () => {
-  const p = prompter({ 'How many dollars in total?': ['2'], [en['wizard.budget.period_prompt']]: ['10m'], confirm: true });
-  const r = await promptBudget(p, { t, tf, now: NOW, timeZone: 'Europe/Rome' });
-  assert.deepEqual([r.kind, r.budget.usd, r.budget.duration_minutes, r.dailyUsd, r.workingHours], ['trial', 2, 10, null, null]);
-  const texts = p.asked.filter((a) => a[0] === 'text').map((a) => a[1]);
-  assert.deepEqual(texts, ['How many dollars in total?', en['wizard.budget.period_prompt']]);
-  assert.equal(budgetSummary(t, tf, r), 'The team can spend $2 in all; the 10 minutes start when the team starts working, then it stops by itself.');
-  // the night proposes 08:00 and takes another time of the day
-  const night = await promptBudget(prompter({ 'How much should the team work?': 'night', [en['wizard.budget.period_prompt']]: ['06:30'] }), { t, tf, now: NOW, timeZone: 'Europe/Rome' });
-  assert.deepEqual([night.kind, night.budget.ends_at], ['night', '2026-11-16T05:30:00.000Z']);
-});
-
-test('a period typed wrong is asked again; a few days keeps its hours', async () => {
-  const p = prompter({ 'How much should the team work?': 'days', [en['wizard.budget.period_prompt']]: ['soon', '5d'] });
-  const r = await promptBudget(p, { t, tf, now: NOW, timeZone: 'Europe/Rome' });
-  assert.deepEqual([r.kind, r.budget.usd, r.budget.duration_minutes], ['days', 10, 5 * 24 * 60]);
-  assert.equal(p.asked.filter((a) => a[1] === en['wizard.budget.period_prompt']).length, 2);
-  assert.ok(r.workingHours.windows[0].start === '08:00');
-});
-
-test('custom: the amount, the period, a ceiling per day and days and hours of the person\'s choice', async () => {
-  const p = prompter({
-    'How much should the team work?': 'custom', 'How many dollars in total?': ['3'], [en['wizard.budget.period_prompt']]: ['15 min'],
-    [en['wizard.budget.daily_prompt']]: ['1.5'], 'When does it work?': 'custom',
-    [en['wizard.budget.hours_from_prompt']]: ['21:00'], [en['wizard.budget.hours_to_prompt']]: ['06:00'], confirm: true,
-  });
-  p.multiselect = async (q) => { p.asked.push(['multiselect', q.message, q.options.map((o) => o.label)]); return ['sat', 'mon']; };
-  const r = await promptBudget(p, { t, tf, now: NOW, timeZone: 'Europe/Rome', lang: 'it' });
-  assert.deepEqual([r.kind, r.budget.usd, r.budget.duration_minutes, r.dailyUsd], ['trial', 3, 15, 1.5]);
-  assert.deepEqual(r.workingHours, { timezone: 'Europe/Rome', windows: [{ days: ['mon', 'sat'], start: '21:00', end: '06:00' }] });
-  assert.equal(p.asked.find((a) => a[0] === 'multiselect')[2][0], 'lunedì', 'the days are named in the language of the setup');
-  assert.equal(budgetSummary(t, tf, r), 'The team can spend $3 in all; the 15 minutes start when the team starts working, then it stops by itself. At most $1.5 a day.');
-  // no ceiling: an empty answer
-  const none = prompter({ 'How much should the team work?': 'custom', [en['wizard.budget.daily_prompt']]: [''], 'When does it work?': 'always', confirm: true });
-  const r2 = await promptBudget(none, { t, tf, now: NOW, timeZone: 'Europe/Rome' });
-  assert.deepEqual([r2.dailyUsd, r2.workingHours, r2.budget.usd, r2.budget.duration_minutes], [null, null, 5, 60]);
-});
-
 test('periods: minutes, hours, days in a few languages, and a time of the day', async () => {
   const { parseDuration, parseWorkDays, parseWorkTime } = await import('../wizard/setup-budget.js');
   const cases = { '30': 30, '30m': 30, '15 min': 15, '10 minuti': 10, '2h': 120, '1.5h': 90, '2 ore': 120, '3d': 4320, '3 giorni': 4320, '2 Tage': 2880 };
@@ -230,4 +128,129 @@ test('every new text of the budget is in the 7 languages', async () => {
     const cat = (await import(`../../shared/locales/${lang}.json`, { with: { type: 'json' } })).default;
     for (const k of keys) assert.equal(typeof cat[k], 'string', `${lang} ${k}`);
   }
+});
+
+
+// ── JHT-T345b: the budget step as a person meets it. A recommended ceiling a day already chosen (Enter and on), few
+// alternatives without the words of the tests, «I set it myself» one question at a time, and with a subscription no dollars.
+
+const PROMPT = 'How much may the team spend?';
+const HOURS = 'When does it work?';
+
+test('Enter and on: $10 a day, every day, is the answer already chosen, with what half an hour of the team costs', async () => {
+  const p = prompter({});
+  const r = await promptBudget(p, { t, tf, now: NOW, timeZone: 'Europe/Rome', provider: 'openai' });
+  assert.deepEqual(r, { kind: 'daily', budget: null, workingHours: null, dailyUsd: 10 });
+  const ask = p.asked.find((a) => a[0] === 'select');
+  assert.deepEqual([ask[1], ask[2]], [PROMPT, 'daily']);
+  assert.equal(p.asked.filter((a) => a[0] === 'text' || a[0] === 'confirm').length, 0, 'nothing else is asked');
+  const note = p.asked.find((a) => a[0] === 'note')[1];
+  assert.equal(note, 'You pay your OpenAI account per use. With $10 a day the team works at full strength about 60-100 minutes every day (Scouts, Analisti and Scorer cost about $3-5 every half hour). On the first day $1-2 go into preparing your profile.');
+  assert.equal(budgetSummary(t, tf, r), 'The team can spend at most $10 a day, at any hour; every day it starts again.');
+  const i = catalog(it);
+  assert.equal(budgetSummary(i.t, i.tf, { ...r, lang: 'it' }), 'La squadra può spendere al massimo 10 $ al giorno, a ogni ora; ogni giorno riparte da capo.');
+});
+
+test('the options: few, plain, and no trial of $5 for 30 minutes or night of $5 any more', async () => {
+  let options;
+  const p = prompter({});
+  p.select = async (q) => { options = q.options; return q.initialValue; };
+  await promptBudget(p, { t, tf, now: NOW, timeZone: 'Europe/Rome', provider: 'claude' });
+  assert.deepEqual(options.map((o) => o.value), ['daily', 'daily_other', 'total', 'custom', 'none']);
+  assert.equal(options[0].label, '$10 a day, every day (recommended)');
+  assert.ok(!options.some((o) => /30 minutes|8 tomorrow/.test(o.label)), options.map((o) => o.label).join(' | '));
+});
+
+test('the recommended amount and the sentence come from one table: changing it changes both', async () => {
+  const { BUDGET_SETUP, recommendedDaily, costNote } = await import('../wizard/setup-budget.js');
+  assert.deepEqual([recommendedDaily('openai'), recommendedDaily('claude'), recommendedDaily('anthropic'), recommendedDaily('other')], [10, 10, 10, 10]);
+  const setup = { ...BUDGET_SETUP, recommendedDailyUsd: { openai: 6 } };
+  const p = prompter({});
+  const r = await promptBudget(p, { t, tf, now: NOW, timeZone: 'UTC', provider: 'openai', setup });
+  assert.equal(r.dailyUsd, 6);
+  assert.match(costNote(tf, 'openai', setup), /With \$6 a day the team works at full strength about 40-60 minutes/);
+});
+
+test('another amount a day: proposed already written, Enter keeps it, a wrong one is asked again', async () => {
+  const keep = await promptBudget(prompter({ [PROMPT]: 'daily_other' }), { t, tf, now: NOW, timeZone: 'UTC', provider: 'openai' });
+  assert.equal(keep.dailyUsd, 10);
+  const p = prompter({ [PROMPT]: 'daily_other', [en['wizard.budget.daily_amount_prompt']]: ['lots', '4,5'] });
+  const r = await promptBudget(p, { t, tf, now: NOW, timeZone: 'UTC', provider: 'openai' });
+  assert.deepEqual([r.kind, r.dailyUsd, r.budget], ['daily', 4.5, null]);
+  assert.equal(p.asked.filter((a) => a[1] === en['wizard.budget.daily_amount_prompt']).length, 2);
+});
+
+test('an amount in all for a period: $20 in 7 days proposed, and $2 for 10 minutes possible', async () => {
+  const proposed = await promptBudget(prompter({ [PROMPT]: 'total' }), { t, tf, now: NOW, timeZone: 'Europe/Rome' });
+  assert.deepEqual([proposed.kind, proposed.budget.usd, proposed.budget.duration_minutes, proposed.dailyUsd], ['days', 20, 7 * 24 * 60, null]);
+  const small = await promptBudget(prompter({ [PROMPT]: 'total', 'How many dollars in total?': ['2'], [en['wizard.budget.period_prompt']]: ['10m'] }),
+    { t, tf, now: NOW, timeZone: 'Europe/Rome' });
+  assert.deepEqual([small.kind, small.budget.usd, small.budget.duration_minutes], ['trial', 2, 10]);
+  assert.equal(budgetSummary(t, tf, small), 'The team can spend $2 in all; the 10 minutes start when the team starts working, then it stops by itself.');
+  const until = await promptBudget(prompter({ [PROMPT]: 'total', [en['wizard.budget.period_prompt']]: ['soon', '08:00'] }), { t, tf, now: NOW, timeZone: 'Europe/Rome' });
+  assert.deepEqual([until.kind, until.budget.ends_at], ['until', '2026-11-16T07:00:00.000Z']);
+});
+
+test('below the least of the service an explicit yes; above 500 once more; a no asks the amount again', async () => {
+  const p = prompter({ [PROMPT]: 'total', 'How many dollars in total?': ['2', '1000', '6'], confirm: false });
+  const r = await promptBudget(p, { t, tf, now: NOW, timeZone: 'UTC', provider: 'claude' });
+  assert.equal(r.budget.usd, 6);
+  assert.equal(p.asked.filter((a) => a[0] === 'confirm').length, 2);
+  assert.ok(1000 > BUDGET_CONFIRM_ABOVE);
+});
+
+test('I set it myself: one question at a time, each with its default; Enter everywhere gives $10 a day at any hour', async () => {
+  const p = prompter({ [PROMPT]: 'custom' });
+  const r = await promptBudget(p, { t, tf, now: NOW, timeZone: 'UTC', provider: 'openai' });
+  assert.deepEqual(r, { kind: 'daily', budget: null, workingHours: null, dailyUsd: 10 });
+  assert.deepEqual(p.asked.filter((a) => a[0] !== 'note').map((a) => a[1]), [PROMPT, en['wizard.budget.daily_prompt'], en['wizard.budget.total_ask'], HOURS]);
+  assert.equal(p.asked.find((a) => a[1] === HOURS)[2], 'always');
+});
+
+test('I set it myself, all of it: a ceiling a day, an amount in all with its period, days and hours of my own', async () => {
+  const p = prompter({
+    [PROMPT]: 'custom', [en['wizard.budget.daily_prompt']]: ['1.5'], confirm: true, 'How many dollars in total?': ['3'],
+    [en['wizard.budget.period_prompt']]: ['15 min'], [HOURS]: 'custom',
+    [en['wizard.budget.hours_from_prompt']]: ['21:00'], [en['wizard.budget.hours_to_prompt']]: ['06:00'],
+  });
+  p.multiselect = async (q) => { p.asked.push(['multiselect', q.message, q.options.map((o) => o.label)]); return ['sat', 'mon']; };
+  const r = await promptBudget(p, { t, tf, now: NOW, timeZone: 'Europe/Rome', lang: 'it' });
+  assert.deepEqual([r.kind, r.budget.usd, r.budget.duration_minutes, r.dailyUsd], ['trial', 3, 15, 1.5]);
+  assert.deepEqual(r.workingHours, { timezone: 'Europe/Rome', windows: [{ days: ['mon', 'sat'], start: '21:00', end: '06:00' }] });
+  assert.equal(p.asked.find((a) => a[0] === 'multiselect')[2][0], 'lunedì', 'the days are named in the language of the setup');
+  assert.equal(budgetSummary(t, tf, r), 'The team can spend $3 in all; the 15 minutes start when the team starts working, then it stops by itself. At most $1.5 a day.');
+  // a ceiling a day only, weekdays 9-18: the line says the days in the language of the setup
+  const office = await promptBudget(prompter({ [PROMPT]: 'custom', [HOURS]: 'office' }), { t, tf, now: NOW, timeZone: 'Europe/Rome' });
+  assert.equal(budgetSummary(t, tf, { ...office, lang: 'en' }), 'The team can spend at most $10 a day, Mon, Tue, Wed, Thu, Fri from 9:00 to 18:00 (Europe/Rome); every day it starts again.');
+  // nothing at all: no ceiling a day and no amount in all is no limit
+  const none = await promptBudget(prompter({ [PROMPT]: 'custom', [en['wizard.budget.daily_prompt']]: [''] }), { t, tf, now: NOW, timeZone: 'UTC' });
+  assert.deepEqual([none.kind, none.budget, none.dailyUsd], ['none', null, null]);
+});
+
+test('with the ChatGPT subscription no question in dollars: a note and the working hours only', async () => {
+  const p = prompter({ [HOURS]: 'office' });
+  const r = await promptBudget(p, { t, tf, now: NOW, timeZone: 'Europe/Rome', provider: 'openai', authMethod: 'subscription' });
+  assert.deepEqual([r.kind, r.budget, r.dailyUsd], ['subscription', null, null]);
+  assert.deepEqual(r.workingHours.windows, [{ days: ['mon', 'tue', 'wed', 'thu', 'fri'], start: '09:00', end: '18:00' }]);
+  assert.deepEqual(p.asked.map((a) => a[0]), ['note', 'select']);
+  assert.match(p.asked[0][1], /limits of your plan/);
+  assert.match(budgetSummary(t, tf, { ...r, lang: 'en' }), /^ChatGPT subscription: the team follows the limits of your plan .* it works Mon, Tue, Wed, Thu, Fri from 9:00 to 18:00 \(Europe\/Rome\)\.$/);
+  // the choice is a parameter: with it on, the subscription is asked the dollars like a key
+  const { BUDGET_SETUP } = await import('../wizard/setup-budget.js');
+  const asked = await promptBudget(prompter({}), { t, tf, now: NOW, timeZone: 'UTC', provider: 'openai', authMethod: 'subscription', setup: { ...BUDGET_SETUP, subscriptionAsksDollars: true } });
+  assert.equal(asked.dailyUsd, 10);
+});
+
+test('no limit warns, saves nothing, and asks the working hours of before', async () => {
+  const p = prompter({ [PROMPT]: 'none' });
+  const r = await promptBudget(p, { t, tf, now: NOW, timeZone: 'Europe/Rome', askHours: async () => 'asked' });
+  assert.deepEqual(r, { kind: 'none', budget: null, workingHours: 'asked', dailyUsd: null });
+  assert.ok(p.asked.some((a) => a[0] === 'note' && /credit on your account/.test(a[1])));
+  assert.match(budgetSummary(t, tf, r), /^No limit/);
+});
+
+test('nextLocalHour: the next 8:00 in the zone of the person, today before 8 and tomorrow after', () => {
+  assert.equal(nextLocalHour(NOW, 8, 'Europe/Rome').toISOString(), '2026-11-16T07:00:00.000Z');
+  assert.equal(nextLocalHour(NOW, 8, 'America/New_York').toISOString(), '2026-11-16T13:00:00.000Z');
+  assert.equal(nextLocalHour(new Date('2026-11-16T04:00:00Z'), 8, 'Europe/Rome').toISOString(), '2026-11-16T07:00:00.000Z');
 });

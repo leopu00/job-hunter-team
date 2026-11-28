@@ -31,12 +31,56 @@ export const HOURS_PRESETS = Object.freeze({
 });
 
 export const BUDGET_DAYS = Object.freeze([1, 3, 7, 14, 30]);
+
+/**
+ * The choices of the budget step that the person in charge may change (JHT-T345b), in one place:
+ *   recommendedDailyUsd  the answer already chosen («$10 a day, every day»), per provider; fallbackDailyUsd for the others;
+ *   halfHourUsd          what half an hour of the full team costs (measured on our benches), said next to the question;
+ *   onboardingUsd        what the onboarding of the first day costs;
+ *   totalProposal        what «an amount in all, for a period» proposes;
+ *   subscriptionAsksDollars  with a subscription the plan paces the team: no question in dollars unless this is true;
+ *   hoursDefault         the working hours already chosen when they are asked.
+ * The pace of the ceiling per day (spreading it over the day) is not here yet: a work of its own.
+ */
+export const BUDGET_SETUP = Object.freeze({
+  recommendedDailyUsd: Object.freeze({ openai: 10, claude: 10 }),
+  fallbackDailyUsd: 10,
+  halfHourUsd: Object.freeze({ openai: Object.freeze([3, 5]), claude: Object.freeze([3, 5]) }),
+  fallbackHalfHourUsd: Object.freeze([3, 5]),
+  onboardingUsd: Object.freeze([1, 2]),
+  totalProposal: Object.freeze({ usd: '20', period: '7d' }),
+  subscriptionAsksDollars: false,
+  hoursDefault: 'always',
+});
+const PROVIDER_LABELS = Object.freeze({ openai: 'OpenAI', claude: 'Anthropic' });
+const canonicalProvider = (provider) => {
+  const name = String(provider ?? '').trim().toLowerCase();
+  return PROVIDER_NAMES[name] ?? name;
+};
+
+/** The ceiling per day already chosen for a provider. */
+export function recommendedDaily(provider, setup = BUDGET_SETUP) {
+  return setup.recommendedDailyUsd[canonicalProvider(provider)] ?? setup.fallbackDailyUsd;
+}
+
+/** The sentence above the question: who is paid, what the recommended amount buys, what the first day costs. */
+export function costNote(tf, provider, setup = BUDGET_SETUP) {
+  const name = canonicalProvider(provider);
+  const daily = recommendedDaily(provider, setup);
+  const [low, high] = setup.halfHourUsd[name] ?? setup.fallbackHalfHourUsd;
+  const round10 = (minutes) => Math.max(10, Math.round(minutes / 10) * 10);
+  const [first, second] = setup.onboardingUsd;
+  const money = (value) => tf('wizard.budget.money', String(value));
+  return tf('wizard.budget.cost_note', PROVIDER_LABELS[name] ?? name, money(daily), String(round10((daily / high) * 30)),
+    String(round10((daily / low) * 30)), money(`${low}-${high}`), money(`${first}-${second}`));
+}
 /**
  * The least that lets a team do some work on each service: the Assistente's onboarding and the Capitano's first rounds come before
  * the Scouts (a trial on Claude spent $1.7 of $2 before the first search). Below it the setup asks for an explicit yes.
  */
 export const BUDGET_MIN_USD = Object.freeze({ glm: 2, kimi: 2, openai: 5, claude: 5 });
 const PROVIDER_NAMES = Object.freeze({ anthropic: 'claude', moonshot: 'kimi' });
+// (BUDGET_SETUP below reads the names through this table)
 
 /** The recommended minimum for a provider (by any name the config uses), or 0 when the setup knows none. */
 export function minimumFor(provider) {
@@ -196,9 +240,21 @@ function workedHoursPerDay(window) {
  * The one line said before the configuration is saved, in words a person reads once: «The team can spend $10 in 3 days,
  * 10 hours a day (8:00-18:00 Europe/Rome), then it stops by itself.» `kind` = trial | night | days | none (what was chosen).
  */
-export function budgetSummary(t, tf, { budget, workingHours, kind, dailyUsd = null }) {
+export function budgetSummary(t, tf, { budget, workingHours, kind, dailyUsd = null, lang = 'en' }) {
+  if (kind === 'subscription') return tf('wizard.budget.summary_subscription', whenText(t, tf, workingHours, lang));
+  if (!budget && dailyUsd) {
+    return tf('wizard.budget.summary_daily', tf('wizard.budget.money', String(dailyUsd)), whenText(t, tf, workingHours, lang));
+  }
   const daily = dailyUsd ? ` ${tf('wizard.budget.daily_note', tf('wizard.budget.money', String(dailyUsd)))}` : '';
   return periodSummary(t, tf, { budget, workingHours, kind }) + (budget ? daily : '');
+}
+
+/** «at any hour», or «on Mon, Tue, Wed from 9:00 to 18:00 (Europe/Rome)» with the days named in the language of the setup. */
+function whenText(t, tf, workingHours, lang) {
+  const w = workingHours?.windows?.[0];
+  if (!w) return t('wizard.budget.when_always');
+  const days = w.days.length === 7 ? t('wizard.budget.when_every_day') : w.days.map((d) => dayLabel(d, lang, 'short')).join(', ');
+  return tf('wizard.budget.when_window', days, clock(w.start), clock(w.end), workingHours.timezone || 'UTC');
 }
 
 function periodSummary(t, tf, { budget, workingHours, kind }) {
@@ -271,10 +327,11 @@ async function askPeriod(prompter, { t, initial }) {
 }
 
 /** The daily ceiling, optional: empty = none. Saved as no_quota_cap.usd, the ceiling the brake of pi already applies. */
-async function askDaily(prompter, { t }) {
+async function askDaily(prompter, { t, initial = '', message = 'wizard.budget.daily_prompt', required = false }) {
   for (;;) {
-    const typed = String((await prompter.text({ message: t('wizard.budget.daily_prompt'), initialValue: '' })) ?? '').trim();
-    if (typed === '') return null;
+    const typed = String((await prompter.text({ message: t(message), initialValue: initial })) ?? '').trim();
+    if (typed === '' && !required) return null;
+    if (typed === '' && initial) return parseUsd(initial);
     const usd = parseUsd(typed);
     if (usd !== null) return usd;
     await prompter.note(t('wizard.budget.amount_invalid'), t('wizard.budget.title'));
@@ -282,19 +339,21 @@ async function askDaily(prompter, { t }) {
 }
 
 /** The names of the days in the language of the setup, from the system's own calendar (2026-11-16 is a Monday). */
-function dayLabel(day, lang) {
+function dayLabel(day, lang, width = 'long') {
   const monday = Date.UTC(2026, 10, 16, 12);
   try {
-    return new Intl.DateTimeFormat(lang, { weekday: 'long', timeZone: 'UTC' }).format(new Date(monday + ALL_DAYS.indexOf(day) * 86_400_000));
+    return new Intl.DateTimeFormat(lang, { weekday: width, timeZone: 'UTC' }).format(new Date(monday + ALL_DAYS.indexOf(day) * 86_400_000));
   } catch { return day; }
 }
 
 /** When the team works: one of the ready windows, or days and hours of the person's own (JHT-T345). */
-async function askHours(prompter, { t, timeZone, lang }) {
+const HOURS_OFFERED = Object.freeze(['always', 'office', 'ten_from_8', 'night', 'custom']);
+
+async function askHours(prompter, { t, timeZone, lang, initial = BUDGET_SETUP.hoursDefault }) {
   const choice = await prompter.select({
     message: t('wizard.budget.hours_prompt'),
-    initialValue: 'ten_from_8',
-    options: [...Object.keys(HOURS_PRESETS), 'custom'].map((key) => ({ value: key, label: t(`wizard.budget.hours_${key}`) })),
+    initialValue: initial,
+    options: HOURS_OFFERED.map((key) => ({ value: key, label: t(`wizard.budget.hours_${key}`) })),
   });
   if (choice !== 'custom') return windowsOf(HOURS_PRESETS[choice] ?? null, timeZone);
   let days = [];
@@ -316,21 +375,33 @@ async function askHours(prompter, { t, timeZone, lang }) {
 }
 
 /**
- * Asks the budget. Returns { kind, budget, workingHours, dailyUsd } (kind = trial | night | days | until | none): budget null = no
- * limit (nothing saved under team.budget); workingHours null = 24/7, undefined = keep what the config has (the «no limit» answer
- * asks the hours as before); dailyUsd the ceiling per day, null for none. The ready answers propose an amount and a period that
- * Enter keeps and the person may change («$5 for 30 minutes» can become «$2 for 10 minutes»); «custom» asks everything (JHT-T345).
- * @param {{ t: Function, tf: Function, now?: Date, timeZone?: string, askHours?: Function }} params askHours = the hours step of
- *   before (promptWorkingHours), asked only with «no limit»
+ * Asks the budget (JHT-T345b). One question, the answer already chosen: «$10 a day, every day» (Enter and on), with a sentence on
+ * what half an hour of the team really costs. The others: another amount a day; an amount in all for a period; «I set it myself»
+ * (a ceiling per day, a budget in all and its period, the working hours, each with its default); no limit. With a subscription the
+ * plan paces the team: no question in dollars, only the working hours (BUDGET_SETUP.subscriptionAsksDollars).
+ *
+ * Returns { kind, budget, workingHours, dailyUsd }: kind = daily | trial | days | until | subscription | none; budget = team.budget
+ * or null; dailyUsd = the ceiling per day (no_quota_cap.usd) or null; workingHours null = 24/7, undefined = keep what the config has
+ * (the «no limit» answer asks the hours as before).
+ * @param {{ t: Function, tf: Function, now?: Date, timeZone?: string, askHours?: Function, provider?: string, lang?: string,
+ *   authMethod?: string, setup?: object }} params askHours = the hours step of before (promptWorkingHours), asked only with «no limit»
  */
-export async function promptBudget(prompter, { t, tf, now = new Date(), timeZone = localTimeZone(), askHours: askHoursBefore = async () => undefined, provider = '', lang = 'en' }) {
+export async function promptBudget(prompter, { t, tf, now = new Date(), timeZone = localTimeZone(), askHours: askHoursBefore = async () => undefined,
+  provider = '', lang = 'en', authMethod = 'api_key', setup = BUDGET_SETUP }) {
+  if (authMethod === 'subscription' && !setup.subscriptionAsksDollars) {
+    await prompter.note(t('wizard.budget.subscription_note'), t('wizard.budget.title'));
+    const workingHours = await askHours(prompter, { t, timeZone, lang, initial: setup.hoursDefault });
+    return { kind: 'subscription', budget: null, workingHours, dailyUsd: null };
+  }
+  const daily = recommendedDaily(provider, setup);
+  await prompter.note(costNote(tf, provider, setup), t('wizard.budget.title'));
   const choice = await prompter.select({
     message: t('wizard.budget.prompt'),
-    initialValue: 'trial',
+    initialValue: 'daily',
     options: [
-      { value: 'trial', label: t('wizard.budget.trial') },
-      { value: 'night', label: t('wizard.budget.night') },
-      { value: 'days', label: t('wizard.budget.days') },
+      { value: 'daily', label: tf('wizard.budget.daily_recommended', tf('wizard.budget.money', String(daily))) },
+      { value: 'daily_other', label: t('wizard.budget.daily_other') },
+      { value: 'total', label: t('wizard.budget.total') },
       { value: 'custom', label: t('wizard.budget.custom') },
       { value: 'none', label: t('wizard.budget.none') },
     ],
@@ -339,13 +410,27 @@ export async function promptBudget(prompter, { t, tf, now = new Date(), timeZone
     await prompter.note(t('wizard.budget.none_warning'), t('wizard.budget.title'));
     return { kind: 'none', budget: null, workingHours: await askHoursBefore(), dailyUsd: null };
   }
-  const proposed = { trial: ['5', '30m'], night: ['5', '08:00'], days: ['10', '3d'], custom: ['5', '1h'] }[choice];
-  const usd = await askAmount(prompter, { t, tf, provider, initial: proposed[0] });
-  const period = await askPeriod(prompter, { t, initial: proposed[1] });
-  const dailyUsd = choice === 'custom' ? await askDaily(prompter, { t }) : null;
-  const workingHours = choice === 'days' || choice === 'custom' ? await askHours(prompter, { t, timeZone, lang }) : null;
-  const { kind, budget } = budgetForPeriod(usd, period, now, timeZone);
-  return { kind: choice === 'night' && kind === 'until' ? 'night' : kind, budget, workingHours, dailyUsd };
+  if (choice === 'daily') return { kind: 'daily', budget: null, workingHours: null, dailyUsd: daily };
+  if (choice === 'daily_other') {
+    const dailyUsd = await askDaily(prompter, { t, initial: String(daily), message: 'wizard.budget.daily_amount_prompt', required: true });
+    return { kind: 'daily', budget: null, workingHours: null, dailyUsd };
+  }
+  if (choice === 'total') {
+    const usd = await askAmount(prompter, { t, tf, provider, initial: setup.totalProposal.usd });
+    const period = await askPeriod(prompter, { t, initial: setup.totalProposal.period });
+    return { ...budgetForPeriod(usd, period, now, timeZone), workingHours: null, dailyUsd: null };
+  }
+  // «I set it myself»: one question at a time, each with the answer Enter keeps
+  const dailyUsd = await askDaily(prompter, { t, initial: String(daily) });
+  let chosen = { kind: 'daily', budget: null };
+  if (await prompter.confirm({ message: t('wizard.budget.total_ask'), initialValue: false }) === true) {
+    const usd = await askAmount(prompter, { t, tf, provider, initial: setup.totalProposal.usd });
+    const period = await askPeriod(prompter, { t, initial: setup.totalProposal.period });
+    chosen = budgetForPeriod(usd, period, now, timeZone);
+  }
+  const workingHours = await askHours(prompter, { t, timeZone, lang, initial: setup.hoursDefault });
+  if (!chosen.budget && !dailyUsd) return { kind: 'none', budget: null, workingHours, dailyUsd: null };
+  return { ...chosen, workingHours, dailyUsd };
 }
 
 /**

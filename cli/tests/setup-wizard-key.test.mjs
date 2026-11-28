@@ -357,46 +357,41 @@ test('a kept configuration of a service this release does not offer is said, and
   assert.equal(events.at(-1).ok, true);
 });
 
-test('the budget in the wizard: the trial of $5 for 30 minutes is the answer already chosen, saved as team.budget, 24/7, and said in one line', () => {
+test('the budget in the wizard: Enter keeps $10 a day, saved as the ceiling per day the brake applies, said in one line with how to change it', () => {
   const box = sandbox();
-  const t0 = Date.now();
   const { events, configText } = run(box, { select: { 'AI Provider': 'claude' }, keys: [KEY] });
-  const ask = events.find((e) => e.kind === 'select' && e.message === 'How much should the team work?');
-  assert.deepEqual(ask.options, ['trial', 'night', 'days', 'custom', 'none']);
+  const ask = events.find((e) => e.kind === 'select' && e.message === 'How much may the team spend?');
+  assert.deepEqual(ask.options, ['daily', 'daily_other', 'total', 'custom', 'none']);
   assert.equal(events.some((e) => e.kind === 'select' && e.message === 'When should the team work?'), false, 'the old hours question is not asked');
-  const { budget, working_hours: hours } = JSON.parse(configText).team;
-  assert.equal(budget.usd, 5);
-  assert.equal(budget.set_by, 'setup');
-  assert.equal(budget.timezone, Intl.DateTimeFormat().resolvedOptions().timeZone, 'the zone of the person goes with the budget');
-  assert.equal(budget.duration_minutes, 30);
-  assert.equal(budget.starts_at, undefined, 'the 30 minutes start when the team starts working, not at the setup');
-  assert.ok(Date.parse(budget.saved_at) >= t0 - 1000 && Date.parse(budget.saved_at) <= Date.now());
-  assert.equal(hours, undefined, 'no working hours = 24/7 for the trial');
-  assert.ok(events.some((e) => e.kind === 'note' && e.message === 'The team can spend $5 in all; the 30 minutes start when the team starts working, then it stops by itself.'));
+  const config = JSON.parse(configText);
+  assert.deepEqual(config.no_quota_cap, { usd: 10 });
+  assert.equal(config.team?.budget, undefined, 'a ceiling per day is no budget of a period');
+  assert.equal(config.team?.working_hours, undefined, 'at any hour');
+  assert.ok(events.some((e) => e.kind === 'note' && /^You pay your Anthropic account per use\. With \$10 a day/.test(e.message)));
+  assert.ok(events.some((e) => e.kind === 'note' && e.message === 'The team can spend at most $10 a day, at any hour; every day it starts again.\n\nYou can change it whenever you want with jht budget (for example: jht budget set --daily-usd 15).'));
   assert.equal(events.at(-1).ok, true);
 });
 
-test('the budget in the wizard: «a few days» asks the amount, the days and the hours, and saves the period with the hours in the zone of the person', () => {
+test('the budget in the wizard: an amount in all for a period is saved as team.budget, in the zone of the person, the period from the first work', () => {
   const box = sandbox();
+  const t0 = Date.now();
   const { events, configText } = run(box, {
-    select: { 'AI Provider': 'claude', 'How much should the team work?': 'days', 'For how many days?': 3, 'When does it work?': 'ten_from_8' },
-    text: { 'How many dollars in total?': '10' },
+    select: { 'AI Provider': 'claude', 'How much may the team spend?': 'total' },
+    text: { 'How many dollars in total?': '15', 'For how long? (30m, 2h, 3d, or a time of the day such as 18:30)': '3d' },
     keys: [KEY],
   });
-  const { budget, working_hours: hours } = JSON.parse(configText).team;
-  assert.equal(budget.usd, 10);
-  assert.equal(budget.duration_minutes, 72 * 60);
-  assert.deepEqual(hours.windows, [{ days: ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'], start: '08:00', end: '18:00' }]);
-  assert.ok(hours.timezone);
-  assert.ok(events.some((e) => e.kind === 'note' && e.message.startsWith(`The team can spend $10 in all, for 3 days from when it starts working, 10 hours a day (8:00-18:00 ${hours.timezone}), then it stops by itself.`) && e.message.includes('works until the budget of the period is spent')));
+  const { budget } = JSON.parse(configText).team;
+  assert.deepEqual([budget.usd, budget.duration_minutes, budget.set_by, budget.starts_at], [15, 72 * 60, 'setup', undefined]);
+  assert.equal(budget.timezone, Intl.DateTimeFormat().resolvedOptions().timeZone, 'the zone of the person goes with the budget');
+  assert.ok(Date.parse(budget.saved_at) >= t0 - 1000 && Date.parse(budget.saved_at) <= Date.now());
+  assert.ok(events.some((e) => e.kind === 'note' && e.message.startsWith('The team can spend $15 in all, for 3 days from when it starts working, at any hour, then it stops by itself.') && e.message.includes('works until the budget of the period is spent')));
   assert.equal(budget.pace, undefined, 'the pace is off unless the person says yes');
 });
 
 test('the budget in the wizard: a yes to the pace saves it in the budget and the note says it is spread over the time', () => {
   const box = sandbox();
   const { events, configText } = run(box, {
-    select: { 'AI Provider': 'claude', 'How much should the team work?': 'days', 'For how many days?': 3, 'When does it work?': 'ten_from_8' },
-    text: { 'How many dollars in total?': '10' },
+    select: { 'AI Provider': 'claude', 'How much may the team spend?': 'total' },
     confirm: true,
     keys: [KEY],
   });
@@ -406,23 +401,21 @@ test('the budget in the wizard: a yes to the pace saves it in the budget and the
 
 test('the budget in the wizard: «no limit» warns, saves no budget and asks the working hours as before', () => {
   const box = sandbox();
-  const { events, configText } = run(box, { select: { 'AI Provider': 'claude', 'How much should the team work?': 'none', 'When should the team work?': 'office' }, keys: [KEY] });
+  const { events, configText } = run(box, { select: { 'AI Provider': 'claude', 'How much may the team spend?': 'none', 'When should the team work?': 'office' }, keys: [KEY] });
   assert.ok(events.some((e) => e.kind === 'note' && /spends as long as there is credit on your account/.test(e.message)));
-  const team = JSON.parse(configText).team;
-  assert.equal(team.budget, undefined);
-  assert.deepEqual(team.working_hours.windows[0].days, ['mon', 'tue', 'wed', 'thu', 'fri']);
+  const config = JSON.parse(configText);
+  assert.equal(config.team.budget, undefined);
+  assert.equal(config.no_quota_cap, undefined);
+  assert.deepEqual(config.team.working_hours.windows[0].days, ['mon', 'tue', 'wed', 'thu', 'fri']);
 });
 
-test('the budget in the wizard: a reset with the same trial opens a new period (the old one may be spent or over)', () => {
+test('the budget in the wizard: a reset with the same amount in all opens a new period (the old one may be spent or over)', () => {
   const saved = '2026-11-15T21:30:00.000Z';
   const before = JSON.stringify({ version: 4, active_provider: 'claude', harness: 'pi', providers: { claude: { name: 'claude', auth_method: 'api_key', model: 'm' } }, channels: {},
-    team: { budget: { usd: 5, duration_minutes: 30, saved_at: saved, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone, set_by: 'setup' } } });
+    team: { budget: { usd: 20, duration_minutes: 7 * 24 * 60, saved_at: saved, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone, set_by: 'setup' } } });
   const box = sandbox({ existingConfig: before });
-  const { configText } = run(box, { select: { 'Config management': 'reset', 'AI Provider': 'claude' }, keys: [KEY] });
-  assert.notEqual(JSON.parse(configText).team.budget.saved_at, saved, 'the same trial after a reset is a new period');
-  const box2 = sandbox({ existingConfig: before.replace('"usd":5', '"usd":7') });
-  const second = run(box2, { select: { 'Config management': 'reset', 'AI Provider': 'claude' }, keys: [KEY] });
-  assert.notEqual(JSON.parse(second.configText).team.budget.saved_at, saved, 'another amount starts again');
+  const { configText } = run(box, { select: { 'Config management': 'reset', 'AI Provider': 'claude', 'How much may the team spend?': 'total' }, keys: [KEY] });
+  assert.notEqual(JSON.parse(configText).team.budget.saved_at, saved, 'the same amount after a reset is a new period');
 });
 
 test('agents refused for the disk at the end of the setup: set up and saved, the team needs space, and the setup ends with 3 (giro Mac build8)', async () => {
