@@ -1,6 +1,7 @@
 import pkg from '../package.json' with { type: 'json' };
 import { Command } from 'commander';
 import { registerSetupCommand } from './commands/setup.js';
+import { registerLoginCommand } from './commands/login.js';
 import { registerConfigCommand } from './commands/config.js';
 import { registerWorkingHoursCommand } from './commands/working-hours.js';
 import { registerBudgetCommand } from './commands/budget.js';
@@ -95,6 +96,7 @@ export function buildProgram() {
   program.helpCommand(false);
 
   registerSetupCommand(program);
+  registerLoginCommand(program);
   registerConfigCommand(program);
   registerWorkingHoursCommand(program);
   registerBudgetCommand(program);

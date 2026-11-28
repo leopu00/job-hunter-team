@@ -48,6 +48,16 @@ ${piLogsIn ? `mkdir -p "$PI_CODING_AGENT_DIR" && echo '{"openai":{"type":"oauth"
   chmodSync(pi, 0o755);
   const driver = join(root, 'driver.mjs');
   writeFileSync(driver, `
+import { registerHooks } from 'node:module';
+const chatgptFixture = \`import fs from 'node:fs'; import {join} from 'node:path';
+export async function loginChatGpt() {
+ const home=process.env.JHT_HOME; const dir=join(home,'.pi','agent');
+ fs.appendFileSync(${JSON.stringify(calls)}, 'chatgpt-login dir='+dir+'\\n');
+ fs.appendFileSync(${JSON.stringify(join(root, 'flag-at-login.log'))}, fs.existsSync(join(home,'.setup-open.flag')) ? 'present\\n' : 'absent\\n');
+ ${piLogsIn ? "fs.mkdirSync(dir,{recursive:true}); fs.writeFileSync(join(dir,'auth.json'),JSON.stringify({openai:{type:'oauth',access:'synthetic'}}));" : ''}
+ return {status:${piLogsIn ? 0 : 1}};
+}\`;
+registerHooks({ load(url, context, next) { if (url.endsWith('/auth/chatgpt-login.js')) return {format:'module',shortCircuit:true,source:chatgptFixture}; return next(url,context); } });
 const verdicts = JSON.parse(process.env.FAKE_VERDICTS || '[]');
 // a verdict is a status, or { status, body } for an answer whose words count (an account with no credit)
 globalThis.fetch = async () => { const v = verdicts.shift() ?? 200; const status = typeof v === 'object' ? v.status : v;
@@ -128,7 +138,7 @@ test('OpenAI in the wizard with the ChatGPT subscription: Pi, its own sign-in, n
   assert.deepEqual(ask.options, ['subscription', 'api_key']);
   assert.equal(events.some((e) => e.kind === 'password'), false, 'no key is asked');
   assert.equal(events.some((e) => e.kind === 'select' && /Program that runs the agents|How does Codex sign in/.test(e.message)), false);
-  assert.ok(events.some((e) => e.kind === 'note' && /Pi signs in to ChatGPT with its own login/.test(e.message)), 'what Pi needs is said');
+  assert.ok(events.some((e) => e.kind === 'note' && e.title === 'ChatGPT'), 'the account is named without the internal terminal UI');
   const config = JSON.parse(configText);
   assert.equal(config.active_provider, 'openai');
   assert.equal(config.harness, 'pi');
@@ -139,9 +149,9 @@ test('OpenAI in the wizard with the ChatGPT subscription: Pi, its own sign-in, n
   const order = calls.map((c) => c.replace(/ dir=.*/, ''));
   assert.ok(order.includes('jht providers update pi'));
   assert.equal(order.some((c) => /^codex |providers update codex/.test(c)), false, 'Codex is not touched');
-  assert.ok(order.findIndex((c) => c.startsWith('pi ')) > order.indexOf('jht providers update pi'));
-  assert.ok(order.indexOf('jht team start') > order.findIndex((c) => c.startsWith('pi ')));
-  assert.match(calls.find((c) => c.startsWith('pi ')), new RegExp(`dir=${join(box.home, '.pi', 'agent').replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`));
+  assert.ok(order.findIndex((c) => c.startsWith('chatgpt-login ')) > order.indexOf('jht providers update pi'));
+  assert.ok(order.indexOf('jht team start') > order.findIndex((c) => c.startsWith('chatgpt-login ')));
+  assert.match(calls.find((c) => c.startsWith('chatgpt-login ')), new RegExp(`dir=${join(box.home, '.pi', 'agent').replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`));
   assert.equal(keyFiles(box).length, 0, 'no key kept');
   assert.equal(events.at(-1).ok, true, out);
 });

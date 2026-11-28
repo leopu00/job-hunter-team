@@ -9,6 +9,7 @@ import { join } from 'node:path';
 import { JHT_CONFIG_DIR } from './setup-helpers.js';
 import { recordLoginFailure } from './codex-device-login.js';
 import { PI_IMAGE_BIN } from '../../shared/runtime/agent-harness.js';
+import { loginChatGpt } from '../src/auth/chatgpt-login.js';
 
 /** Pi's arguments for a sign-in only: no identity files, no skills, no extensions, no MCP around it. */
 export const PI_LOGIN_ARGS = ['-nc', '-na', '-ns', '-ne', '--no-mcp'];
@@ -54,6 +55,10 @@ const labelOf = (provider) => PI_PROVIDER_LABEL[String(provider || '').toLowerCa
 
 /** After a sign-in that is there and is the right one: the provider it is for and the model the team will use. */
 export async function announcePiLogin({ prompter, tf, provider, model, path, read }) {
+  if (['openai', 'codex'].includes(provider)) {
+    await prompter.note(`ChatGPT: ${model || '-'}`, 'ChatGPT');
+    return;
+  }
   const seen = typeof read === 'function' ? read(provider) : null;
   const names = seen && seen.found.length > 0 ? seen.found.join(', ') : '-';
   await prompter.note(tf('wizard.oauth.pi_found', labelOf(provider), names, model || '-', path), tf('wizard.oauth.inline_title', 'Pi'));
@@ -64,8 +69,15 @@ export async function announcePiLogin({ prompter, tf, provider, model, path, rea
  * provider of the setup: a file with only Anthropic's entry (the Claude subscription, billed per token from Pi) is said and refused.
  */
 export async function runPiLoginStep({
-  prompter, t, tf, find, login = runPiLogin, report = recordLoginFailure, provider, model, read = null,
+  prompter, t, tf, find, login, report = recordLoginFailure, provider, model, read = null,
 }) {
+  if (['openai', 'codex'].includes(provider)) {
+    const result = await (login || loginChatGpt)();
+    const found = result.status === 0 ? find('pi') : null;
+    if (found) await announcePiLogin({ prompter, tf, provider, model, path: found, read });
+    return found;
+  }
+  login ||= runPiLogin;
   const before = typeof read === 'function' ? read(provider) : null;
   if (before && before.state !== 'ok' && before.state !== 'no_rule') {
     await prompter.note(tf('wizard.oauth.pi_wrong_provider', labelOf(provider), before.found.join(', ') || '-', labelOf(provider)), tf('wizard.oauth.inline_title', 'Pi'));

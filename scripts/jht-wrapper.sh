@@ -9043,17 +9043,72 @@ convert_setup_key_args() {
   return 0
 }
 
+# ChatGPT's short callback relay uses the team's locally present image, including core.
+CHATGPT_LOGIN_HELPER=/app/cli/src/auth/chatgpt-login.js
+CHATGPT_LOGIN_ENV=()
+chatgpt_login_url_allowed() {
+  case "$1" in https://auth.openai.com/*) ;; *) return 1 ;; esac
+  case "$1" in *[[:space:]]*|*\\*) return 1 ;; esac
+}
+chatgpt_bridge_cleanup() {
+  [ -z "${CHATGPT_LOGIN_SESSION:-}" ] || docker exec "$ATTESTED_CONTAINER_ID" node "$CHATGPT_LOGIN_HELPER" --cancel "$CHATGPT_LOGIN_SESSION" >/dev/null 2>&1 || true
+  [ -z "${CHATGPT_WATCH_PID:-}" ] || { kill "$CHATGPT_WATCH_PID" 2>/dev/null || true; wait "$CHATGPT_WATCH_PID" 2>/dev/null || true; }
+  [ -z "${CHATGPT_RELAY:-}" ] || docker stop --time 10 "$CHATGPT_RELAY" >/dev/null 2>&1 || true
+}
+chatgpt_bridge_watch() {
+  local previous='' url callback
+  while :; do
+    url="$(docker exec "$ATTESTED_CONTAINER_ID" node "$CHATGPT_LOGIN_HELPER" --request "$CHATGPT_LOGIN_SESSION" 2>/dev/null)" || url=''
+    if [ -n "$url" ] && [ "$url" != "$previous" ] && chatgpt_login_url_allowed "$url"; then
+      previous="$url"
+      case "$(uname -s)" in
+        Darwin) open "$url" >/dev/null 2>&1 || true ;;
+        *) [ -z "${DISPLAY:-}${WAYLAND_DISPLAY:-}" ] || xdg-open "$url" >/dev/null 2>&1 || true ;;
+      esac
+    fi
+    if [ -n "${CHATGPT_RELAY:-}" ]; then
+      callback="$(docker exec "$CHATGPT_RELAY" node "$CHATGPT_LOGIN_HELPER" --relay-read 2>/dev/null)" || callback=''
+      case "$callback" in ''|*[!A-Za-z0-9_-]*) ;; *) docker exec "$ATTESTED_CONTAINER_ID" node "$CHATGPT_LOGIN_HELPER" --accept "$CHATGPT_LOGIN_SESSION" "$callback" >/dev/null 2>&1 || true ;; esac
+    fi
+    sleep 1
+  done
+}
+chatgpt_bridge_start() {
+  local image method=device_code relay
+  CHATGPT_LOGIN_SESSION="$(docker exec "$ATTESTED_CONTAINER_ID" node -e 'process.stdout.write(require("crypto").randomBytes(16).toString("hex"))')" || return 1
+  case "$CHATGPT_LOGIN_SESSION" in ''|*[!a-f0-9]*) return 1 ;; esac
+  [ "${#CHATGPT_LOGIN_SESSION}" -eq 32 ] || return 1
+  CHATGPT_RELAY=''
+  if [ "$(uname -s)" = Darwin ] || { [ -n "${DISPLAY:-}${WAYLAND_DISPLAY:-}" ] && command -v xdg-open >/dev/null 2>&1; }; then
+    image="$(docker inspect "$ATTESTED_CONTAINER_ID" --format '{{.Image}}')" || return 1
+    relay="jht-chatgpt-$CHATGPT_LOGIN_SESSION"
+    # No pull, host network, shared mounts or provider packages in this relay.
+    if docker run -d --rm --pull=never --name "$relay" --publish 127.0.0.1:1455:1455 --read-only --tmpfs /tmp:rw,noexec,nosuid,size=1m --cap-drop ALL --security-opt no-new-privileges --log-driver none --user 1001:1001 --entrypoint node "$image" "$CHATGPT_LOGIN_HELPER" --relay >/dev/null 2>&1; then
+      CHATGPT_RELAY="$relay"; method=browser
+    else
+      # A failed port publication may leave a stopped container: it belongs to this session only.
+      docker stop --time 10 "$relay" >/dev/null 2>&1 || true
+    fi
+  fi
+  CHATGPT_LOGIN_ENV=(-e "JHT_LOGIN_CLIPBOARD=$(if [ "$(uname -s)" = Darwin ]; then printf pbcopy; else printf clipboard; fi)" -e "JHT_CHATGPT_LOGIN_SESSION=$CHATGPT_LOGIN_SESSION" -e "JHT_CHATGPT_LOGIN_METHOD=$method")
+  chatgpt_bridge_watch &
+  CHATGPT_WATCH_PID=$!
+  trap 'chatgpt_bridge_cleanup' EXIT
+  trap 'exit 130' INT
+  trap 'exit 143' TERM
+}
+
 # The setup in the container: with a key from a file of this computer it goes on the standard input (-i only: a pipe is not a
 # terminal), otherwise exactly as before. The arguments are the ones the wrapper got («setup» first).
 setup_exec_container() {
   local rc=0
   if [ -n "${SETUP_KEY_VALUE:-}" ]; then
-    printf '%s\n' "$SETUP_KEY_VALUE" | docker exec -i -e JHT_HOST_TYPE="$JHT_HOST_TYPE" "$ATTESTED_CONTAINER_ID" node "$NODE_ENTRY" ${SETUP_KEY_ARGS[@]+"${SETUP_KEY_ARGS[@]}"} || rc=$?
+    printf '%s\n' "$SETUP_KEY_VALUE" | docker exec -i "${CHATGPT_LOGIN_ENV[@]}" -e JHT_HOST_TYPE="$JHT_HOST_TYPE" "$ATTESTED_CONTAINER_ID" node "$NODE_ENTRY" ${SETUP_KEY_ARGS[@]+"${SETUP_KEY_ARGS[@]}"} || rc=$?
     SETUP_KEY_VALUE=""
     if [ "$rc" -eq 0 ]; then info "$(jht_say line.the_setup_keeps_the_key "$SETUP_KEY_FILE")"; fi
     return "$rc"
   fi
-  docker exec $EXEC_FLAGS -e JHT_HOST_TYPE="$JHT_HOST_TYPE" "$ATTESTED_CONTAINER_ID" node "$NODE_ENTRY" "$@" || rc=$?
+  docker exec $EXEC_FLAGS "${CHATGPT_LOGIN_ENV[@]}" -e JHT_HOST_TYPE="$JHT_HOST_TYPE" "$ATTESTED_CONTAINER_ID" node "$NODE_ENTRY" "$@" || rc=$?
   return "$rc"
 }
 
@@ -10335,6 +10390,16 @@ case "$SUB" in
     esac
     ;;
 
+  login)
+    [ "${2:-}" = chatgpt ] && [ "$#" -eq 2 ] || { err 'Usage: jht login chatgpt'; exit 2; }
+    require_compose_file
+    require_docker
+    ensure_up
+    chatgpt_bridge_start || exit 1
+    docker exec $EXEC_FLAGS "${CHATGPT_LOGIN_ENV[@]}" "$ATTESTED_CONTAINER_ID" node "$NODE_ENTRY" login chatgpt
+    exit $?
+    ;;
+
   # ── Setup: host-side preflight (swap, VPS detect) prima del wizard ────
   setup)
     # --api-key-file of a file on this computer: the key goes to the setup on its standard input (convert_setup_key_args).
@@ -10366,7 +10431,10 @@ case "$SUB" in
     agents_room_cleanup
     tools_tell_person kick
     rc=0
+    chatgpt_bridge_start || exit 1
     setup_exec_container "$@" || rc=$?
+    chatgpt_bridge_cleanup
+    trap - EXIT INT TERM
     if setup_wizard_args "$@"; then setup_open_flag_remove; fi
     if [ "${1:-}" = cloud ] && [ "${2:-}" = pair ] && [ "$rc" -eq 0 ]; then ensure_broker && broker_configure_web_authorisations; fi
     exit "$rc"

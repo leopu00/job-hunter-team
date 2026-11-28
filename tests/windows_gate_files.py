@@ -28,6 +28,7 @@ TESTS = Path(__file__).resolve().parent
 
 # Native pieces, run in the `host` job. The probe's file is named for one case only: its other cases are in OPEN.
 HOST = (
+    "tests/test_windows_chatgpt_login.py",
     "tests/test_windows_native_runtime_pieces.py",
     "tests/test_podman_windows_probe.py::test_native_shim_compiles_and_propagates_backend_exit_code",
     "tests/test_windows_powershell51_json.py",
