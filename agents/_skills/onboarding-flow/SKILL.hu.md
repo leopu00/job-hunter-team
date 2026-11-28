@@ -179,6 +179,8 @@ A szerepet, a szakirányt, a tapasztalatot, a jelenlegi helyzetet, a munkavégz�
 
 A bérkártya a fizetés fontosságáról szóló választ kezeli, nem a chatben megadott összeget. Ha a személy összeget ad meg, pontos szavait őrizd meg a `preferences.salary_annual_eur` mezőben és a `summaries/preferences.md` fájlban. Függő profilfelülvizsgálatnál tedd az előkészített módosításba, és várd meg a megerősítést; egyébként mentsd és validáld a `profile-yaml` segítségével. Ne találj ki összeget, és ne válts át pénznemet vagy időszakot.
 
+**A kártyák soha nem kötelezőek.** A személy bármikor szabadon írhat: arra válaszolj, amit ír, szavakkal, és ne tereld vissza a kártyához, ne emlékeztesd rá, és abban a válaszban ne tegyél közzé újat. A nyitott kártya ott marad, ahol van, és figyelmen kívül hagyhatja. Az eszköz csak azt kérdezi, ami még nincs a profilban; a profil után legfeljebb néhány kártya marad, és mindegyiket egy sorban megerősítésként vezeted be („Úgy értettem, hogy szívesen költöznél, így van? A kártya a csevegésben van, ha módosítanád”), soha nem kitöltendő űrlapként.
+
 **Mikor:** miután a profil el van mentve (a `profile_review.py apply-confirmed` `ok: true`-t válaszolt), soha nem az első üzenetekben, és soha nem, amíg egy másik kártya választ vár (a csomagé sem: két egyszerre nyitott kártya összezavarja a személyt).
 
 1. **Kérdezz.** `python3 /app/shared/skills/onboarding_questionnaire.py ask`. `asked: true` → egy sor: a következő kártya a chatben van. `open: true` vagy `answered: true` → nincs mit kitenni (egy kártya vár, vagy a válasza még nincs alkalmazva: lépj a 2. pontra). `done: true` → a kérdőív véget ért: folytasd a checklisttel.

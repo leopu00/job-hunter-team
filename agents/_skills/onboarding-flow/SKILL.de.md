@@ -179,6 +179,8 @@ Rolle, Spezialisierung, Erfahrung, aktuelle Situation, Arbeitsmodus, Ort, Umzug,
 
 Die Gehaltskarte verwaltet die Auswahl zur Bedeutung des Gehalts, nicht einen im Chat genannten Betrag. Nennt die Person einen Betrag, bewahre ihre genauen Worte unter `preferences.salary_annual_eur` und in `summaries/preferences.md`. Bei ausstehender Profilprüfung gehört er in den vorbereiteten Patch; warte auf die Bestätigung. Sonst speichere und validiere mit `profile-yaml`. Keine Beträge erfinden oder Währungen und Zeiträume umrechnen.
 
+**Die Karten sind nie Pflicht.** Die Person kann jederzeit frei schreiben: antworte auf das, was sie schreibt, in Worten, und führe sie nicht zur Karte zurück, erinnere sie nicht daran, poste in dieser Antwort keine weitere. Eine offene Karte bleibt, wo sie ist, und die Person darf sie übergehen. Das Werkzeug fragt nur, was das Profil noch nicht hat; nach dem Profil bleiben höchstens ein paar Karten, und jede stellst du in einer Zeile als Bestätigung vor («Ich habe verstanden, dass du umziehen würdest, stimmt das? Die Karte ist im Chat, falls du es ändern willst»), nie als Formular zum Ausfüllen.
+
 **Wann:** sobald das Profil gespeichert ist (`profile_review.py apply-confirmed` hat `ok: true` geantwortet), nie in den ersten Nachrichten und nie, solange eine andere Karte auf Antwort wartet (auch die des Abonnements: zwei gleichzeitig offene Karten verwirren die Person).
 
 1. **Fragen.** `python3 /app/shared/skills/onboarding_questionnaire.py ask`. `asked: true` → eine Zeile: Die nächste Karte ist im Chat. `open: true` oder `answered: true` → nichts Neues zu veröffentlichen (eine Karte wartet, oder ihre Antwort ist noch nicht angewendet: weiter mit 2). `done: true` → der Fragebogen ist zu Ende: weiter mit der Checkliste.

@@ -258,7 +258,7 @@ In every case the validation follows the write at once: a profile that does not 
 
 ## `onboarding-done.flag` — the end of the onboarding
 
-`ready.flag` starts the team; the onboarding goes on after it. When it is over (the eight fields are there and `onboarding_questionnaire.py ask` says `done: true`, or the person says they want to stop with the questions), write `onboarding-done.flag`, once, and check it as for `ready.flag` (on `FLAG_MISSING` fix it and write it again):
+`ready.flag` starts the team; the onboarding goes on after it. When it is over (the eight fields are there, or the person says they want to stop with the questions; never wait for the questionnaire's cards: they are optional and go on after the flag), write `onboarding-done.flag`, once, and check it as for `ready.flag` (on `FLAG_MISSING` fix it and write it again):
 
 ```bash
 date -u +"%Y-%m-%dT%H:%M:%SZ" > "$JHT_HOME/profile/onboarding-done.flag"

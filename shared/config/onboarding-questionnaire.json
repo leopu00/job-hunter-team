@@ -1,5 +1,5 @@
 {
-  "about": "The Assistant's questionnaire as data, neutral from language: the steps, their choices and what each choice writes into candidate_profile.yml. Texts: shared/locales/<lang>.json, keys onb.<step>.object, onb.<step>.text, onb.<step>.opt.<id> (and onb.role.other_prompt). The steps are the game's scripted onboarding without its intro, confidence and finish steps. Only fields of the canonical profile (shared/config/profile-schema.ts) are written; tests/test_onboarding_questionnaire.py keeps this file, the schema and the seven languages in step.",
+  "about": "The Assistant's questionnaire as data, neutral from language: the steps, their choices and what each choice writes into candidate_profile.yml. Texts: shared/locales/<lang>.json, keys onb.<step>.object, onb.<step>.text, onb.<step>.opt.<id> (and onb.role.other_prompt). The steps are the game's scripted onboarding without its intro, confidence and finish steps. Only fields of the canonical profile (shared/config/profile-schema.ts) are written; tests/test_onboarding_questionnaire.py keeps this file, the schema and the seven languages in step. skip_when_profile_has_any (in each step): fields of the profile (dotted for a mapping: preferences.work_mode) any one of which settles the step: the person said it before, in the chat or in a file, and a card would ask it twice. An item of the recommended «preferences» block whose heading is the step's question, in any of the seven languages, settles it too. optional_once_profile_built (in a step): once the profile is built (a target role and a place), the step is not proposed: what it writes is only an item for the person to read, the search does not use it, and the cards after the profile are few confirmations, not a form.",
   "effects": {
     "set": "fields of the profile set to a value (L1 fields of the schema)",
     "add": "values added to a list field of the profile",
@@ -74,6 +74,11 @@
             "field": "target_role"
           }
         }
+      ],
+      "skip_when_profile_has_any": [
+        "target_role_category_id",
+        "target_role",
+        "target_roles_priority"
       ]
     },
     {
@@ -134,6 +139,9 @@
             }
           }
         }
+      ],
+      "skip_when_profile_has_any": [
+        "target_specialty"
       ]
     },
     {
@@ -194,6 +202,9 @@
             }
           }
         }
+      ],
+      "skip_when_profile_has_any": [
+        "target_specialty"
       ]
     },
     {
@@ -246,6 +257,9 @@
             }
           }
         }
+      ],
+      "skip_when_profile_has_any": [
+        "target_specialty"
       ]
     },
     {
@@ -301,6 +315,9 @@
             }
           }
         }
+      ],
+      "skip_when_profile_has_any": [
+        "target_specialty"
       ]
     },
     {
@@ -421,7 +438,12 @@
             }
           }
         }
-      ]
+      ],
+      "skip_when_profile_has_any": [
+        "preferences.current_status",
+        "preferences.availability"
+      ],
+      "optional_once_profile_built": true
     },
     {
       "id": "mode",
@@ -483,6 +505,9 @@
             }
           }
         }
+      ],
+      "skip_when_profile_has_any": [
+        "preferences.work_mode"
       ]
     },
     {
@@ -546,6 +571,10 @@
             }
           }
         }
+      ],
+      "skip_when_profile_has_any": [
+        "location_preferences",
+        "location"
       ]
     },
     {
@@ -613,6 +642,9 @@
             }
           }
         }
+      ],
+      "skip_when_profile_has_any": [
+        "preferences.relocation"
       ]
     },
     {
@@ -668,7 +700,12 @@
             }
           }
         }
-      ]
+      ],
+      "skip_when_profile_has_any": [
+        "preferences.contract",
+        "preferences.contract_type"
+      ],
+      "optional_once_profile_built": true
     },
     {
       "id": "salary",
@@ -723,6 +760,11 @@
             }
           }
         }
+      ],
+      "skip_when_profile_has_any": [
+        "preferences.salary_annual_eur",
+        "salary_target",
+        "preferences.salary_target"
       ]
     },
     {
@@ -778,7 +820,13 @@
             }
           }
         }
-      ]
+      ],
+      "skip_when_profile_has_any": [
+        "preferences.company",
+        "preferences.company_type",
+        "preferences.company_size"
+      ],
+      "optional_once_profile_built": true
     }
   ]
 }
