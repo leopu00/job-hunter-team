@@ -60,7 +60,7 @@ function twin(script: string, toolName: string, argv: string[]): { py: ScriptRes
   const pyDb = seeded(pyPath);
   const ourDb = seeded(ourPath);
   const pyRun = runPython(skills!, [script, ...argv], { JHT_DB: pyPath, JHT_HOME: join(root, "home"), JHT_AGENT_NAME: "scout-1" });
-  return { py: { stdout: pyRun.stdout, exitCode: pyRun.status }, ours: tools(ourDb)(toolName)(argv), pyDb, ourDb, pyRun };
+  return { py: { stdout: pyRun.stdout, stderr: pyRun.stderr, exitCode: pyRun.status }, ours: tools(ourDb)(toolName)(argv), pyDb, ourDb, pyRun };
 }
 
 const INSERTS: string[][] = [

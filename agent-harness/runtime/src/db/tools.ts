@@ -636,7 +636,7 @@ const POSITION_INSERT: CommandSpec = {
 
 const SCOUT_CHECK_FLAGS = new Set(["check_only", "link_verified", "filters_checked", "scout_check"]);
 
-function placeholderLocation(value: Parsed[string]): boolean {
+function placeholderLocation(value: Parsed[string] | undefined): boolean {
   if (!value) return false;
   const text = String(value).toLowerCase().trim().replace(/\s+/gu, " ");
   return new Set(["n/a", "na", "none", "null", "unknown", "tbd", "tbc", "not specified", "not available",
