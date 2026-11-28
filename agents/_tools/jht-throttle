@@ -78,9 +78,13 @@ if [ -n "$SECONDS_EXPLICIT" ]; then
   REG_ARGS+=( "$(printf '%.0f' "$SECONDS_EXPLICIT")" )
 fi
 [ -n "$REASON" ] && REG_ARGS+=( --reason "$REASON" )
-REG_ARGS+=( --print until )
+REG_ARGS+=( --print wait )
 
 UNTIL="$(python3 "${REG_ARGS[@]}" || true)"
+if [ "$UNTIL" = IDLE ]; then
+  echo "WAITING_FOR_WORK — END YOUR TURN. Do not poll or rearm; the engine will wake you when work is available."
+  exit 0
+fi
 
 # Durata 0 (core interattivo, o config a 0 in deroga): nessuna pausa, nessuna
 # sveglia da attendere. Il fast path resta un no-op come prima.
@@ -95,7 +99,14 @@ fi
 # flag all'uscita è precisamente ciò che faceva perdere i throttle.
 while :; do
   NOW=$(date '+%s')
-  if [ "$NOW" -ge "$UNTIL" ]; then break; fi
+  if [ "$NOW" -ge "$UNTIL" ]; then
+    UNTIL="$(python3 "$ENGINE" status "$AGENT" --print wait)"
+    if [ "$UNTIL" = IDLE ]; then
+      echo "WAITING_FOR_WORK — END YOUR TURN. Do not poll or rearm; the engine will wake you when work is available."
+      break
+    fi
+    [ -n "$UNTIL" ] && [ "$NOW" -lt "$UNTIL" ] || break
+  fi
   REMAINING=$(( UNTIL - NOW ))
   CHUNK=15
   if [ "$REMAINING" -lt "$CHUNK" ]; then CHUNK="$REMAINING"; fi
