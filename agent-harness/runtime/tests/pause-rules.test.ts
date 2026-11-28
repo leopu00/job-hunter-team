@@ -144,7 +144,8 @@ describe("a mock SCOUT run with the pause rules", () => {
   it("sleeps the full pause after an insert and the short one after a duplicate", async () => {
     const env = { JHT_API_HOME: join(root, "api") };
     const config = loadConfig(env, "scout-1");
-    const provider = new MockProvider(SCRIPT);
+    const script = structuredClone(SCRIPT);
+    const provider = new MockProvider(script);
     const guardrails = new Guardrails({ limits: config.limits, pricing: { inputPerMTokUsd: 0, outputPerMTokUsd: 0 } });
     await prepareAgentHome({ dir: config.agentHome, role: config.role, fresh: true });
     const role = await prepareProductRole({
@@ -158,13 +159,28 @@ describe("a mock SCOUT run with the pause rules", () => {
       env: {},
     });
     const toolkit = await buildToolkit(config, { provider });
+    const tools = role.tools(toolkit.tools);
+    // This scenario studies pauses after a checked insert: prepare its candidate through the real SC-09 tool.
+    const checkTool = tools.find((t) => t.spec.name === "db_insert")!;
+    const checked = await checkTool.execute(checkTool.spec.schema.parse({
+      args: [...insert(1).args.args, "--check-only", "--link-verified", "--filters-checked"],
+    }), {} as never);
+    expect(checked.ok, checked.content).toBe(true);
+    const receipt = JSON.parse(checked.content).scout_check as string;
+    for (const turn of script) {
+      for (const call of turn.toolCalls ?? []) {
+        if (call.name === "db_insert") {
+          call.args = { args: [...(call.args as { args: string[] }).args, "--scout-check", receipt] };
+        }
+      }
+    }
     const events: SessionEvent[] = [];
     const session = new RoleSession({
       provider,
       guardrails,
       audit: new NullAuditLog(),
       systemPrompt: role.systemPrompt,
-      tools: role.tools(toolkit.tools),
+      tools,
       permissions: toolkit.permissions,
       onEvent: (e) => events.push(e),
     });

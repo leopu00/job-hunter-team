@@ -134,7 +134,12 @@ describe("rows in jobs.db", () => {
   it("writes new rows under the canonical id", async () => {
     const db = openJobsDb(":memory:");
     const insert = createDbTools({ db: () => db, agent: "scout" }).find((t) => t.spec.name === "db_insert")!;
-    await run(insert, { args: ["position", "--title", "T", "--company", "C", "--url", "https://c.example/1"] });
+    const candidate = ["position", "--title", "T", "--company", "C", "--url", "https://c.example/1",
+      "--source", "synthetic", "--jd-text", "Complete synthetic description.", "--requirements", "TypeScript"];
+    const checked = await run(insert, { args: [...candidate, "--check-only", "--link-verified", "--filters-checked"] });
+    expect(checked.ok, checked.content).toBe(true);
+    const inserted = await run(insert, { args: [...candidate, "--scout-check", JSON.parse(checked.content).scout_check] });
+    expect(inserted.ok, inserted.content).toBe(true);
     expect(db.prepare("SELECT found_by FROM positions").all()).toEqual([{ found_by: "scout-1" }]);
     expect(db.prepare("SELECT by_agent FROM position_state_transitions").all()).toEqual([{ by_agent: "scout-1" }]);
   });
