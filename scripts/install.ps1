@@ -1982,7 +1982,8 @@ function Save-JhtLanguageChoice {
   $hostEnvFile = Join-Path $JhtHome 'host.env'
   if (Test-Path -LiteralPath $hostEnvFile -PathType Leaf) {
     $lines = @([IO.File]::ReadAllLines($hostEnvFile) | ForEach-Object { if ($_ -match '^\s*JHT_LANG=') { "JHT_LANG=$Code" } else { $_ } })
-    Write-HostFile -Path $hostEnvFile -Content (($lines -join "`n") + "`n") -NoNewline
+    # ASCII: host.env is all ASCII, and the UTF8 of Windows PowerShell 5.1 would put a BOM before its first line
+    Write-HostFile -Path $hostEnvFile -Content (($lines -join "`n") + "`n") -Encoding ASCII -NoNewline
   }
 }
 
