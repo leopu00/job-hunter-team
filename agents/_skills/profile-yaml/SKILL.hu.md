@@ -253,7 +253,7 @@ A validálás minden esetben azonnal követi az írást: a validáláson át nem
 
 ## `onboarding-done.flag` — az onboarding vége
 
-A `ready.flag` elindítja a csapatot; az onboarding utána folytatódik. Amikor véget ért (megvan a nyolc mező, és az `onboarding_questionnaire.py ask` azt feleli, hogy `done: true`, vagy a személy azt mondja, hogy nem kér több kérdést), írd meg az `onboarding-done.flag` fájlt, egyszer, és ellenőrizd úgy, mint a `ready.flag` fájlt (`FLAG_MISSING` esetén javítsd ki, és írd meg újra):
+A `ready.flag` elindítja a csapatot; az onboarding utána folytatódik. Amikor véget ért (megvan a nyolc mező, vagy a személy azt mondja, hogy nem kér több kérdést; soha ne várd meg a kérdőív kártyáit: nem kötelezőek, és a flag után folytatódnak), írd meg az `onboarding-done.flag` fájlt, egyszer, és ellenőrizd úgy, mint a `ready.flag` fájlt (`FLAG_MISSING` esetén javítsd ki, és írd meg újra):
 
 ```bash
 date -u +"%Y-%m-%dT%H:%M:%SZ" > "$JHT_HOME/profile/onboarding-done.flag"

@@ -253,7 +253,7 @@ Dans tous les cas la validation suit aussitôt l'écriture : un profil qui ne pa
 
 ## `onboarding-done.flag` — la fin de l'onboarding
 
-`ready.flag` lance l'équipe ; l'onboarding continue ensuite. Quand il est fini (les huit champs sont là et `onboarding_questionnaire.py ask` répond `done: true`, ou la personne dit qu'elle veut arrêter les questions), écris `onboarding-done.flag`, une fois, et vérifie-le comme `ready.flag` (avec `FLAG_MISSING`, corrige et réécris-le) :
+`ready.flag` lance l'équipe ; l'onboarding continue ensuite. Quand il est fini (les huit champs sont là, ou la personne dit qu'elle veut arrêter les questions ; n'attends jamais les cartes du questionnaire : elles sont facultatives et continuent après le flag), écris `onboarding-done.flag`, une fois, et vérifie-le comme `ready.flag` (avec `FLAG_MISSING`, corrige et réécris-le) :
 
 ```bash
 date -u +"%Y-%m-%dT%H:%M:%SZ" > "$JHT_HOME/profile/onboarding-done.flag"

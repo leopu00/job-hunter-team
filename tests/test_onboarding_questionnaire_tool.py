@@ -56,7 +56,8 @@ def profile(box) -> dict:
 def put_profile(box, **fields) -> None:
     path = box.home / PROFILE
     path.parent.mkdir(exist_ok=True)
-    path.write_text(yaml.safe_dump({"name": "Test Person", "target_role": "Backend engineer", **fields}), encoding="utf-8")
+    # no target role unless the test gives one: a profile that names the role settles the role step (JHT-T363)
+    path.write_text(yaml.safe_dump({"name": "Test Person", **fields}), encoding="utf-8")
 
 
 def answer_step(box, choice: str) -> dict:
@@ -104,13 +105,13 @@ def test_the_click_writes_the_category_and_the_next_card_is_that_roles_specialty
 
     assert done["applied"] and done["option"] == "software" and done["next"] == "specialty_sw"
     assert profile(box)["target_role_category_id"] == "software"
-    assert profile(box)["target_role"] == "Backend engineer"  # what the questionnaire does not own stays
+    assert profile(box)["name"] == "Test Person"  # what the questionnaire does not own stays
     nxt = ok(box, "ask")
     assert nxt["step"] == "specialty_sw" and len(cards(box)) == 2
 
 
 def test_the_specialty_belongs_to_its_category(box):
-    put_profile(box, target_role_category_id="data", target_specialty="ml")
+    put_profile(box, target_specialty="ml")  # a specialty of another family: it does not settle the software one
 
     answer_step(box, "software")
 
@@ -448,3 +449,79 @@ def test_a_preferences_that_is_not_a_mapping_is_refused_and_a_field_outside_the_
         oq.write_effect({"preferences": "on site"}, step, chosen, lambda key: key)
     with pytest.raises(oq.QuestionnaireError):
         oq.write_effect({}, step, {"id": "x", "effect": {"preference_field": {"salary_annual_eur": "1"}}}, lambda key: key)
+
+
+# ── JHT-T363: a step the profile already answers is never asked, whatever the person's language ──────────────────────
+# A made-up profile confirmed from a CV and a full document: the roles in order, the years and the level, the work mode, the
+# places, a yes to moving, a pay target, and the items of the «preferences» block the questionnaire would write (current
+# status, contract, company) with their question in the person's language as the heading.
+LANGS = ("en", "it", "de", "es", "fr", "pt", "hu")
+
+
+def _block_items(lang: str) -> list[dict]:
+    catalog = json.loads((LOCALES / f"{lang}.json").read_text(encoding="utf-8"))
+    return [{"heading": catalog[f"onb.{step}.object"], "text": catalog[f"onb.{step}.opt.{choice}"]}
+            for step, choice in (("current_status", "active"), ("contract", "permanent"), ("company", "established"))]
+
+
+def test_the_steps_to_read_are_asked_only_before_the_profile_is_built(box):
+    put_profile(box, target_specialty="backend")  # no role and no place yet: the whole questionnaire, as before
+    assert ok(box, "status")["total"] == 9
+    put_profile(box, target_role="Data Analyst", location="Valencia, Spain")
+    out = ok(box, "status")
+    assert out["next"] == "experience" and out["total"] == 4, out  # experience, mode, relocation, salary (the place settles where)
+
+
+def _full_profile(lang: str) -> dict:
+    return {
+        "target_role": "Data Analyst", "target_roles_priority": ["Data Analyst", "BI Analyst"], "location": "Valencia, Spain",
+        "experience_years": 11, "seniority_target": "lead", "location_preferences": ["Valencia, Spain", "Remote EU"],
+        "preferences": {"work_mode": "hybrid", "relocation": False, "salary_annual_eur": "38000 EUR gross"},
+        "blocks": [{"key": "preferences", "title": "Preferences", "kind": "key_points", "content": _block_items(lang)}],
+    }
+
+
+@pytest.mark.parametrize("lang", LANGS)
+def test_a_full_profile_asks_no_card_in_any_language(box, lang):
+    put_profile(box, **_full_profile(lang))
+    out = ok(box, "status", lang=lang)
+    assert out["done"] and out["next"] is None and out["total"] == 0, out
+    asked = ok(box, "ask", lang=lang)
+    assert asked["asked"] is False and asked["done"] is True, asked
+    assert cards(box) == []
+
+
+def test_a_partial_profile_asks_only_what_is_missing(box):
+    # the role, the years, the mode and the places are known; nothing about moving, pay, status, contract or company
+    put_profile(box, target_role="Data Analyst", experience_years=4, seniority_target="mid", location="Valencia, Spain",
+                preferences={"work_mode": "remote"})
+    out = ok(box, "status")
+    # after the profile: only what the search needs, never the steps that write an item to read (status, contract, company)
+    assert out["next"] == "relocation" and out["total"] == 2, out
+    seen = []
+    while True:
+        asked = ok(box, "ask")
+        if not asked["asked"]:
+            break
+        seen.append(asked["step"])
+        step_options = {"current_status": "active", "relocation": "never", "contract": "permanent", "salary": "market",
+                        "company": "established"}
+        click(box, asked["question_id"], step_options[asked["step"]])
+        ok(box, "apply")
+    assert seen == ["relocation", "salary"]
+    # never the family of roles: the person named the role already
+    assert "role" not in seen and not [c for c in cards(box) if "role" in json.dumps(c["payload"]).lower() and "famil" in json.dumps(c["payload"]).lower()]
+
+
+def test_a_relocation_no_is_an_answer_and_an_empty_list_is_not():
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("oq_t363", TOOL)
+    oq = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(oq)
+    steps = {s["id"]: s for s in oq.load_steps()}
+    assert oq._known(steps["relocation"], {"preferences": {"relocation": False}})
+    assert not oq._known(steps["where"], {"location_preferences": []})
+    assert oq._known(steps["role"], {"target_roles_priority": ["Designer"]})
+    # a specialty of another family does not settle this one
+    assert not oq._known(steps["specialty_sw"], {"target_specialty": "ml"})
+    assert oq._known(steps["specialty_data"], {"target_specialty": "ml"})

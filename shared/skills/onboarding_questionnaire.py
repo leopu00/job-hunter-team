@@ -157,11 +157,78 @@ def _profile_fields() -> dict[str, Any]:
     return profile if isinstance(profile, dict) else {}
 
 
+def _value(profile: dict[str, Any], path: str) -> Any:
+    """A field of the profile by its dotted path (`preferences.work_mode`); None when any part is missing."""
+    value: Any = profile
+    for part in path.split("."):
+        if not isinstance(value, dict):
+            return None
+        value = value.get(part)
+    return value
+
+
+def _holds(value: Any) -> bool:
+    """A field that holds an answer: a text that is not blank, a number, a yes or a no (relocation false is an answer),
+    a list with something in it (the roles in order of priority)."""
+    if isinstance(value, bool):
+        return True
+    if isinstance(value, list):
+        return any(_holds(item) for item in value)
+    return _given(value)
+
+
+def _step_headings(step: dict[str, Any]) -> set[str]:
+    """The question of the step as the recommended «preferences» block writes it (heading = onb.<step>.object), in each of
+    the seven languages: an item the questionnaire wrote before, or one in a profile the person imported."""
+    found: set[str] = set()
+    folder = Path(__file__).resolve().parent.parent / "locales"
+    for path in folder.glob("*.json"):
+        try:
+            text = json.loads(path.read_text(encoding="utf-8")).get(f"{step['key']}.object")
+        except (OSError, ValueError, AttributeError):
+            continue
+        if isinstance(text, str) and text.strip():
+            found.add(text.strip().casefold())
+    return found
+
+
+def _in_preferences_block(step: dict[str, Any], profile: dict[str, Any]) -> bool:
+    blocks = profile.get("blocks") if isinstance(profile.get("blocks"), list) else []
+    headings = None
+    for block in blocks:
+        if not isinstance(block, dict) or block.get("key") != "preferences" or not isinstance(block.get("content"), list):
+            continue
+        headings = headings if headings is not None else _step_headings(step)
+        for item in block["content"]:
+            if isinstance(item, dict) and str(item.get("heading") or "").strip().casefold() in headings and _given(item.get("text")):
+                return True
+    return False
+
+
+def _fits(step: dict[str, Any], field: str, value: Any) -> bool:
+    """A field the step's choices write with fixed values (the specialty of a family) settles the step only with one of
+    them: a specialty of another family is not this step's answer."""
+    written = [((o.get("effect") or {}).get("set") or {}).get(field) for o in step.get("options", [])]
+    written = [w for w in written if isinstance(w, str)]
+    return not written or value in written
+
+
 def _known(step: dict[str, Any], profile: dict[str, Any] | None) -> bool:
-    """A step whose answer the profile already holds (`skip_when_profile_has`): the person gave it before, in the
-    chat or in a file they imported, and a card would ask it twice."""
-    fields = step.get("skip_when_profile_has")
-    return bool(profile) and isinstance(fields, list) and bool(fields) and all(_given(profile.get(f)) for f in fields)
+    """A step whose answer the profile already holds (JHT-T363): any one of its `skip_when_profile_has_any` fields (the
+    role, the work mode, the places, the pay…), or an item of the «preferences» block that answers its question. The
+    person gave it before, in the chat or in a file they imported, and a card would ask it twice («why should I choose to
+    be a designer when I gave my CV?»). `skip_when_profile_has` (all of them) still works for data written before."""
+    if not profile:
+        return False
+    if step.get("optional_once_profile_built") and _holds(profile.get("target_role")) and _holds(profile.get("location")):
+        return True  # after the profile only the few cards the search needs, as confirmations, never a form
+    every = step.get("skip_when_profile_has")
+    if isinstance(every, list) and every and all(_holds(_value(profile, f)) for f in every):
+        return True
+    some = step.get("skip_when_profile_has_any")
+    if isinstance(some, list) and any(_holds(_value(profile, f)) and _fits(step, f, _value(profile, f)) for f in some):
+        return True
+    return _in_preferences_block(step, profile)
 
 
 def _next_step(steps: list[dict[str, Any]], answers: dict[str, str], profile: dict[str, Any] | None = None) -> dict[str, Any] | None:
@@ -285,7 +352,7 @@ def _options_the_profile_stands_for(step: dict[str, Any], profile: dict[str, Any
     """The choices of `step` that say what the profile already says, best first: the one whose text fields (the seniority)
     are the profile's, else the band the years fall in. Empty when no choice says it (then nothing is closed in the
     person's name or the system's)."""
-    watched = step.get("skip_when_profile_has") or []
+    watched = set(step.get("skip_when_profile_has") or []) | set(step.get("skip_when_profile_has_any") or [])
     found: list[str] = []
     banded: list[tuple[float, str]] = []
     years = profile.get("experience_years")
@@ -294,6 +361,11 @@ def _options_the_profile_stands_for(step: dict[str, Any], profile: dict[str, Any
         texts = [f for f in effect if f in watched and isinstance(effect[f], str)]
         if texts and all(profile.get(f) == effect[f] for f in texts):
             found.append(option["id"])
+        # a choice that writes a field of `preferences` (work_mode, relocation) the profile already holds with that value
+        wanted = (option.get("effect") or {}).get("preference_field") or {}
+        if wanted and all(f"preferences.{f}" in watched and _value(profile, f"preferences.{f}") == v for f, v in wanted.items()):
+            if option["id"] not in found:
+                found.append(option["id"])
         threshold = effect.get("experience_years")
         if isinstance(threshold, (int, float)) and not isinstance(threshold, bool) and isinstance(years, (int, float)) and threshold <= years:
             banded.append((threshold, option["id"]))
