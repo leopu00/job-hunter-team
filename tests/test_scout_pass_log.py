@@ -427,3 +427,23 @@ def test_a_partial_search_retains_returned_candidates_when_a_later_page_is_block
     assert _run("pass", "--source", "remoteok", "--returned", "13", "--status", "blocked") == 0
     row = _lines(home)[0]
     assert row["returned"] == 13 and row["status"] == "blocked"
+
+
+@pytest.mark.parametrize("source,country", [("remoteok", "remote"), ("jobspresso", "remote"), ("concorsipubblici-it", "it")])
+def test_the_pass_counts_the_cached_source_candidates_before_local_filters(home, source, country):
+    cached = home / "cached-source.json"
+    candidates = [{"url": f"https://jobs.example/{n}", "position" if source == "remoteok" else "title": f"Synthetic role {n}"}
+                  for n in range(3)]
+    cached.write_text(json.dumps(([{"legal": "Synthetic attribution notice"}] if source == "remoteok" else []) + candidates))
+    assert _run("pass", "--source", source, "--results-file", str(cached), "--status", "ok") == 0
+    row = _lines(home)[0]
+    assert (row["returned"], row["source"], row["country"]) == (3, source, country)
+    assert "Synthetic role" not in plog.log_path().read_text(), "the source content never enters the pass log"
+
+
+@pytest.mark.parametrize("payload", [{"error": "not a list"}, [{"url": "https://jobs.example/1"}], [None]])
+def test_an_unrecognized_cached_response_is_refused_instead_of_logged_as_an_empty_source(home, payload):
+    cached = home / "cached-source.json"
+    cached.write_text(json.dumps(payload))
+    assert _run("pass", "--source", "remoteok", "--results-file", str(cached)) == 2
+    assert not _lines(home)

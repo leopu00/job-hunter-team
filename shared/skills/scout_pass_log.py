@@ -125,6 +125,32 @@ def _count(name: str, value) -> int:
     return value
 
 
+def _returned(args) -> int:
+    """Count the cached candidate list, not how many survived the Scout's local filters."""
+    filename = getattr(args, "results_file", None)
+    if not filename:
+        return _count("returned", args.returned)
+    try:
+        path = Path(filename)
+        if path.stat().st_size > 10 * 1024 * 1024:
+            raise Refused("results-file is too large")
+        rows = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        raise Refused("results-file must be a readable JSON candidate list") from None
+    if not isinstance(rows, list):
+        raise Refused("results-file must be a JSON list of candidates with url and title (or position)")
+    count = 0
+    for row in rows:
+        if isinstance(row, dict) and "legal" in row and not any(row.get(k) for k in ("url", "title", "position")):
+            continue  # a board's attribution notice is not a candidate
+        if not (isinstance(row, dict) and isinstance(row.get("url"), str) and row["url"].strip()
+                and isinstance(row.get("title", row.get("position")), str)
+                and row.get("title", row.get("position")).strip()):
+            raise Refused("every candidate in results-file needs a nonempty url and title (or position)")
+        count += 1
+    return _count("returned", count)
+
+
 def _common(args, kind: str, now: float) -> dict:
     source = str(args.source or "").strip().lower()
     source = {"remoteok.com": "remoteok", "remoteok.io": "remoteok", "remote-ok": "remoteok",
@@ -146,7 +172,7 @@ def build(args, now: float = None) -> dict:
     now = time.time() if now is None else now
     if args.cmd in ("pass", "correct"):
         row = _common(args, "pass" if args.cmd == "pass" else "correction", now)
-        row["returned"] = _count("returned", args.returned)
+        row["returned"] = _returned(args)
         kind = args.query_kind or "other"
         if kind not in QUERY_KINDS:
             raise Refused("query-kind must be one of: %s" % ", ".join(QUERY_KINDS))
@@ -227,7 +253,9 @@ def parser() -> argparse.ArgumentParser:
     c.set_defaults(query_kind="other", query=None)
     p = sub.choices["pass"]
     p.add_argument("--json", action="store_true", help="print the pass id for later correction")
-    p.add_argument("--returned", type=int, required=True, help="how many candidates the source gave back")
+    counts = p.add_mutually_exclusive_group(required=True)
+    counts.add_argument("--returned", type=int, help="how many candidates the source gave back")
+    counts.add_argument("--results-file", help="cached JSON candidate list: count url+title/position rows before local filters")
     p.add_argument("--query-kind", default="other", choices=QUERY_KINDS)
     p.add_argument("--query", default=None, help="only its hash is stored, never the text")
     p.add_argument("--status", default=None, choices=STATUSES, help="how the portal answered; left out = a normal pass")
