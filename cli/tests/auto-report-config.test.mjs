@@ -12,7 +12,7 @@ test('config accepts live panorama preferences and refuses invalid values withou
   try {
     const file = join(home, 'jht.config.json');
     writeFileSync(file, JSON.stringify({ language: 'en', team: { keep: 'unchanged' } }));
-    const run = (...args) => spawnSync(process.execPath, [entry, 'config', ...args], {
+    const run = (...args) => spawnSync(process.execPath, [entry, 'config', ...(args[0] === 'set' ? ['set', '--', ...args.slice(1)] : args)], {
       env: { ...process.env, JHT_HOME: home, JHT_LANG: 'en' }, encoding: 'utf8', timeout: 15000,
     });
     for (const [key, value] of [['enabled', 'false'], ['interval_min', '5'], ['interval_min', '10080'], ['enabled', 'true']]) {
