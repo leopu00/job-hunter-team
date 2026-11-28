@@ -716,12 +716,11 @@ def test_jht_team_chat_comes_back_by_itself_when_the_switch_ended_it():
 def _console_chat_functions() -> str:
     text = WRAPPER.read_text(encoding="utf-8").replace("\r\n", "\n")
     return "".join(re.search(rf"^function {name} \{{\n.*?^\}}\n", text, re.S | re.M).group(0)
-                   for name in ("Get-JhtTerminalEnv", "Invoke-JhtTeamChatOnConsole", "Complete-JhtTeamChatErrors"))
+                   for name in ("Get-JhtTerminalEnv", "Invoke-JhtTeamChatOnConsole", "Complete-JhtTeamChatErrors")) + "\n$env:JHT_UNICODE = '0'; $JhtTerminalEnv = @(Get-JhtTerminalEnv)\n"
 
 
 def _console_chat(box, flags: str = "'-it'", rest: str = "'chat', 'assistente'", drop: bool = False):
     body = (_console_chat_functions()
-            + "\n$env:JHT_UNICODE = '0'; $JhtTerminalEnv = @(Get-JhtTerminalEnv)\n"
             + f"\n$ExecFlags = @({flags}); $Container = 'jht'; $NodeEntry = '/app/cli/bin/jht.js'; $Sub = 'team'; $Rest = @({rest})\n"
             "$code = Invoke-JhtTeamChatOnConsole @('-e', 'JHT_HOST_TYPE=windows')\n"
             "[Console]::Out.WriteLine('CODE ' + $(if ($null -eq $code) { 'none' } else { [string]$code }))\n"
