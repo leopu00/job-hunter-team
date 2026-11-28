@@ -42,10 +42,14 @@ export function readLoginRequest(id) {
 }
 export function acceptRedirect(id, input) {
   const request = readLoginRequest(id);
-  const expected = new URL(request.url).searchParams.get('state');
-  const url = new URL(input);
-  if (url.protocol !== 'http:' || !['localhost', '127.0.0.1'].includes(url.hostname) || url.port !== '1455' || url.pathname !== '/auth/callback' || !expected || url.searchParams.get('state') !== expected || !url.searchParams.get('code')) throw new Error('Invalid login callback');
+  const url = validateRedirect(request.url, input);
   privateWrite(responsePath(id), { url: url.href });
+}
+function validateRedirect(authorizeUrl, input) {
+  const expected = new URL(authorizeUrl).searchParams.get('state');
+  const url = new URL(input);
+  if (url.protocol !== 'http:' || !['localhost', '127.0.0.1'].includes(url.hostname) || url.port !== '1455' || url.pathname !== '/auth/callback' || !expected || url.searchParams.get('state') !== expected || (!url.searchParams.get('code') && !url.searchParams.get('error'))) throw new Error('Invalid login callback');
+  return url;
 }
 
 /** Relay uses only Node's standard library, including in the core image; no Pi, mounts or credentials. */
@@ -53,7 +57,7 @@ export async function startRelay({ port = 1455, host = '0.0.0.0', path = '/tmp/j
   const server = createServer((req, res) => {
     try {
       const url = new URL(req.url, 'http://localhost:1455');
-      if (req.method !== 'GET' || url.pathname !== '/auth/callback' || !url.searchParams.get('state') || !url.searchParams.get('code') || req.url.length > 8192) {
+      if (req.method !== 'GET' || url.pathname !== '/auth/callback' || !url.searchParams.get('state') || (!url.searchParams.get('code') && !url.searchParams.get('error')) || req.url.length > 8192) {
         res.writeHead(400).end('Invalid callback'); return;
       }
       privateWrite(path, { url: url.href });
@@ -82,7 +86,7 @@ export async function loginChatGpt({ load = loadProvider, output = console.log, 
   process.once('SIGINT', stop); process.once('SIGTERM', stop);
   const timer = setTimeout(stop, TTL);
   const cancelled = setInterval(() => { if (session && fs.existsSync(cancelPath(session))) stop(); }, 250);
-  let reader;
+  let reader, authorizeUrl;
   const wasRaw = input.isRaw === true;
   if (input.isTTY && typeof input.setRawMode === 'function') input.setRawMode(false);
   try {
@@ -97,6 +101,7 @@ export async function loginChatGpt({ load = loadProvider, output = console.log, 
       notify(event) {
         if (event.type === 'auth_url' || event.type === 'device_code') {
           const url = loginUrl(event.url || event.verificationUri);
+          authorizeUrl = url;
           if (session) privateWrite(requestPath(), { session, expires: Date.now() + TTL, url });
           output(url);
           output(`Copy link: ${process.env.JHT_LOGIN_CLIPBOARD === 'pbcopy' ? `printf '%s' '${url.replaceAll("'", "'\\''")}' | pbcopy` : `Set-Clipboard -Value '${url.replaceAll("'", "''")}'`}`);
@@ -110,6 +115,7 @@ export async function loginChatGpt({ load = loadProvider, output = console.log, 
         const onAbort = () => abort.abort();
         controller.signal.addEventListener('abort', onAbort, { once: true });
         prompt.signal?.addEventListener('abort', onAbort, { once: true });
+        if (controller.signal.aborted || prompt.signal?.aborted) abort.abort();
         try {
           const poll = async () => {
             for (;;) {
@@ -122,6 +128,7 @@ export async function loginChatGpt({ load = loadProvider, output = console.log, 
           if (input.isTTY) {
             reader = createInterface({ input, output: process.stdout });
             waits.push(reader.question('Redirect URL: ', { signal: abort.signal }).then((url) => {
+              validateRedirect(authorizeUrl, url);
               if (session) acceptRedirect(session, url);
               return url;
             }));
