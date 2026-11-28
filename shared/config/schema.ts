@@ -250,6 +250,12 @@ export const JHTConfigSchema = z
     version: z.number().int().positive().default(1),
     active_provider: z.enum(["claude", "openai", "kimi", "glm"]),
     harness: AgentHarnessSchema.optional(),
+    folders: z.object({
+      allegati: z.string(),
+      critiche: z.string(),
+      cv: z.string(),
+      output: z.string(),
+    }).partial().optional(),
     providers: z.object({
       claude: AIProviderSchema.optional(),
       openai: AIProviderSchema.optional(),

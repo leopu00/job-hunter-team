@@ -205,7 +205,7 @@ Exemplo de estilo (adaptar as palavras, manter comprimento e tom):
 
 > Olá! Sou o teu assistente — ajudo-te a preencher o perfil.
 >
-> Vamos com algumas perguntas: entretanto preencho o teu perfil. Se tens um **CV** ou outros documentos que falem de ti, põe-nos na pasta `~/Documents/Job Hunter Team/allegati` (ou manda-mos pelo Telegram) e diz-me: leio-os em paralelo e preencho muitas coisas sozinho.
+> Vamos com algumas perguntas: entretanto preencho o teu perfil. Se tens um **CV** ou outros documentos que falem de ti, põe-nos na pasta `<where.folders.allegati.path>` (ou manda-mos pelo Telegram) e diz-me: leio-os em paralelo e preencho muitas coisas sozinho.
 >
 > Começamos: **como te chamas?**
 

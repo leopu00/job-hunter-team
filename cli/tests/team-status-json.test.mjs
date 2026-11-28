@@ -10,12 +10,13 @@ process.env.JHT_HOME = mkdtempSync(join(tmpdir(), 'jht-team-status-json-'));
 const { handleAgents } = await import('../src/commands/agents.js');
 const { hostType, hostOs, hostWhere, mountFsType } = await import('../src/lib/host-where.js');
 
+const FOLDERS = (os) => ({ allegati: { name: 'Anlagen', path: `~/Documents/Job Hunter Team/Anlagen (${os})` } });
 const EMPTY = () => ({ ok: true, at: 0, running: 3, total: 3, usage: {}, sampling: {}, errors: [], agents: [] });
 function jsonOf(pause, spend = null) {
   const lines = [];
   const log = console.log;
   console.log = (line) => lines.push(String(line));
-  try { handleAgents({ json: true }, EMPTY, { pauseOf: () => pause, spendOf: () => spend, whereOf: () => ({ host_type: 'vps', host_os: 'linux' }) }); }
+  try { handleAgents({ json: true }, EMPTY, { pauseOf: () => pause, spendOf: () => spend, whereOf: () => ({ host_type: 'vps', host_os: 'linux' }), foldersOf: FOLDERS }); }
   finally { console.log = log; }
   return JSON.parse(lines.join('\n'));
 }
@@ -25,7 +26,7 @@ test('a team paused by the budget says it in the JSON, with the sessions still o
   const seen = jsonOf(pause);
   assert.equal(seen.running, 3);
   assert.deepEqual(seen.pause, pause);
-  assert.deepEqual(seen.where, { host_type: 'vps', host_os: 'linux' });
+  assert.deepEqual(seen.where, { host_type: 'vps', host_os: 'linux', folders: FOLDERS('linux') });
 });
 
 test('a team at work has pause null, never a missing field', () => {

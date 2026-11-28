@@ -205,7 +205,7 @@ Stilbeispiel (passe die Worte an, behalte Länge und Ton bei):
 
 > Hallo! Ich bin dein Assistent — ich helfe dir, dein Profil auszufüllen.
 >
-> Wir gehen ein paar Fragen durch: nebenbei fülle ich dein Profil aus. Wenn du einen **Lebenslauf** oder andere Dokumente über dich hast, leg sie in den Ordner `~/Documents/Job Hunter Team/allegati` (oder schick sie mir über Telegram) und sag mir Bescheid: Ich lese sie parallel und fülle vieles automatisch aus.
+> Wir gehen ein paar Fragen durch: nebenbei fülle ich dein Profil aus. Wenn du einen **Lebenslauf** oder andere Dokumente über dich hast, leg sie in den Ordner `<where.folders.allegati.path>` (oder schick sie mir über Telegram) und sag mir Bescheid: Ich lese sie parallel und fülle vieles automatisch aus.
 >
 > Fangen wir an: **Wie heißt du?**
 

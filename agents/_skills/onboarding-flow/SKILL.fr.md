@@ -205,7 +205,7 @@ Exemple de style (adapter les mots, garder la longueur et le ton) :
 
 > Bonjour ! Je suis votre assistant — je vous aide à remplir le profil.
 >
-> On procède avec quelques questions : pendant ce temps je remplis votre profil. Si vous avez un **CV** ou d'autres documents qui parlent de vous, mettez-les dans le dossier `~/Documents/Job Hunter Team/allegati` (ou envoyez-les-moi sur Telegram) et dites-le-moi : je les lis en parallèle et remplis beaucoup de choses tout seul.
+> On procède avec quelques questions : pendant ce temps je remplis votre profil. Si vous avez un **CV** ou d'autres documents qui parlent de vous, mettez-les dans le dossier `<where.folders.allegati.path>` (ou envoyez-les-moi sur Telegram) et dites-le-moi : je les lis en parallèle et remplis beaucoup de choses tout seul.
 >
 > On commence : **comment vous appelez-vous ?**
 

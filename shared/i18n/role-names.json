@@ -1,4 +1,48 @@
 {
+  "folders": {
+    "it": {
+      "allegati": "allegati",
+      "critiche": "critiche",
+      "cv": "cv",
+      "output": "risultati"
+    },
+    "en": {
+      "allegati": "attachments",
+      "critiche": "reviews",
+      "cv": "cv",
+      "output": "output"
+    },
+    "de": {
+      "allegati": "Anlagen",
+      "critiche": "Bewertungen",
+      "cv": "cv",
+      "output": "Ergebnisse"
+    },
+    "fr": {
+      "allegati": "pieces-jointes",
+      "critiche": "relectures",
+      "cv": "cv",
+      "output": "resultats"
+    },
+    "es": {
+      "allegati": "adjuntos",
+      "critiche": "revisiones",
+      "cv": "cv",
+      "output": "resultados"
+    },
+    "pt": {
+      "allegati": "anexos",
+      "critiche": "revisoes",
+      "cv": "cv",
+      "output": "resultados"
+    },
+    "hu": {
+      "allegati": "mellekletek",
+      "critiche": "ertekelesek",
+      "cv": "cv",
+      "output": "eredmenyek"
+    }
+  },
   "_doc": "The names of the team's roles as the person reads them, in the seven languages: one file for the CLI, the wizard, the Python texts, the prompts' [ROLE-NAMES] line, the app and the site. The ids (sessions like CAPITANO or SCOUT-2, the folders agents/<role>, the database, the files) never change: only the name shown does. A text writes {role:<id>} and the reader puts the name of the person's language there. Readers: shared/skills/role_names.py, shared/i18n/role-names.js.",
   "languages": ["en", "it", "de", "es", "fr", "pt", "hu"],
   "roles": {

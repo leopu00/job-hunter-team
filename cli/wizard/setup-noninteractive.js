@@ -12,6 +12,7 @@
  */
 import { lstatSync, readFileSync } from 'node:fs';
 import pc from 'picocolors';
+import { userFolders, writeUserFolders } from '../src/lib/user-folders.js';
 import {
   findProviderChoice,
   OPENAI_PI_CHOICE,
@@ -379,7 +380,9 @@ function saveNonInteractiveConfig({ providerName, selectedProvider, authMethod, 
   }
 
   try {
+    config.folders = userFolders({ home: JHT_CONFIG_DIR });
     writeConfigFile(config);
+    try { writeUserFolders({ home: JHT_CONFIG_DIR }); } catch { /* rebuilt at team start */ }
   } catch (err) {
     console.error(pc.red(`Save Error: ${err.message}`));
     process.exitCode = 1;

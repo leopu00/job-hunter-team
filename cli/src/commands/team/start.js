@@ -1,4 +1,5 @@
 // Comando team start
+import { writeUserFolders } from '../../lib/user-folders.js';
 import { execSync, spawn, spawnSync } from 'node:child_process';
 import { join } from 'node:path';
 import { existsSync, mkdirSync, copyFileSync, unlinkSync } from 'node:fs';
@@ -670,6 +671,9 @@ export async function startAction(agentArg, options) {
   if (budgetPaused) console.log(c.yellow(`⚠ ${show(budgetPaused)}`));
   // the alerts for the person nobody has read (the Capitano's «no spending ceiling»): delivered on the web, never seen here
   for (const line of await openAlertLines()) console.log(c.yellow(`⚠ ${line}`));
+
+  // Shared with the host readers; refresh for container starts as well as legacy starts.
+  try { writeUserFolders(); } catch { /* the host side keeps the internal names */ }
 
   // Container mode: deleghiamo a /app/.launcher/start-agent.sh dentro
   // jht — coerente col boot del bridge Sentinella e con le dipendenze CLI

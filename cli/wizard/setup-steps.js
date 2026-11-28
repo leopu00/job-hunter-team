@@ -14,6 +14,7 @@ import { hasBrowserSupport } from '../src/auth/browser-open.js';
 import { startSubscriptionLogin } from '../src/auth/subscription-login.js';
 import { t } from './i18n.js';
 import { migrateToLatest } from '../src/commands/migrate.js';
+import { userFolders, writeUserFolders } from '../src/lib/user-folders.js';
 import { summarizeRoleModels } from './setup-models.js';
 import { localTimeZone } from '../src/lib/local-tz.js';
 
@@ -138,7 +139,9 @@ export async function assembleAndSaveConfig(prompter, params) {
   if (dailyUsd) config.no_quota_cap = { usd: dailyUsd };
 
   // Written without a word: «saved» is said at the end of the setup, not before the steps that can still fail.
+  config.folders = userFolders({ home: JHT_CONFIG_DIR });
   writeConfigFile(config);
+  try { writeUserFolders({ home: JHT_CONFIG_DIR }); } catch { /* rebuilt at team start */ }
   return config;
 }
 
