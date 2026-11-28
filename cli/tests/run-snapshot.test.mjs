@@ -2,7 +2,7 @@
 // must never reach a snapshot. The team's stop and start are counted, never run.
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, readlinkSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -244,4 +244,93 @@ test('a snapshot without the copy keeps the fresh restore as before', async () =
   assert.equal(manifest.profile_at_start, null);
   await lib.restoreSnapshot({ name: 'run-a', fresh: true, ...w.deps });
   assert.match(readFileSync(join(w.home, 'profile', 'candidate_profile.yml'), 'utf8'), /Synthetic Candidate/);
+});
+
+
+test('the copy a restore keeps is whole: every part it deletes comes back from it, keys and links included', async () => {
+  const w = world();
+  symlinkSync('budget-start.json', join(w.home, 'state', 'current-budget.json'));
+  const before = everyByte(join(w.home, 'agents')).map(([p, b]) => [p, b.toString('hex')]);
+  await snap(w, 'run-a');
+  const { kept } = await lib.restoreSnapshot({ name: 'run-a', fresh: true, ...w.deps });
+  const manifest = JSON.parse(readFileSync(join(kept, 'manifest.json'), 'utf8'));
+  assert.equal(manifest.raw, true);
+  assert.equal(statSync(kept).mode & 0o777, 0o700);
+  // what the redacted snapshot leaves out is in it as it was
+  assert.equal(readFileSync(join(kept, 'home', 'agents', 'scout-1', 'credentials', 'gh'), 'utf8'), FAKE_GH);
+  assert.match(readFileSync(join(kept, 'home', 'agents', 'scout-1', '.claude', '.credentials.json'), 'utf8'), new RegExp(FAKE_TOKEN));
+  assert.match(readFileSync(join(kept, 'home', 'logs', 'bridge.log'), 'utf8'), new RegExp(FAKE_KEY));
+  assert.equal(statSync(join(kept, 'home', 'logs', 'bridge.log')).mode & 0o777, 0o600);
+  const db = new DatabaseSync(join(kept, 'home', 'jobs.db'), { readOnly: true });
+  assert.equal(db.prepare('SELECT api_token FROM settings').get().api_token, FAKE_TOKEN);
+  db.close();
+  assert.ok(lstatSync(join(kept, 'home', 'state', 'current-budget.json')).isSymbolicLink(), 'a link is kept as a link');
+  // the fresh restore deleted them in the home; the copy puts every byte back
+  assert.ok(!existsSync(join(w.home, 'agents')));
+  await lib.restoreSnapshot({ name: kept.split(/[\\/]/).pop(), ...w.deps });
+  const after = everyByte(join(w.home, 'agents')).map(([p, b]) => [p, b.toString('hex')]);
+  assert.deepEqual(after, before);
+  assert.equal(readlinkSync(join(w.home, 'state', 'current-budget.json')), 'budget-start.json');
+  const back = new DatabaseSync(join(w.home, 'jobs.db'), { readOnly: true });
+  assert.equal(back.prepare('SELECT api_token FROM settings').get().api_token, FAKE_TOKEN);
+  back.close();
+});
+
+test('a restore writes only what the manifest lists: a file added to the archive is refused, and nothing changes', async () => {
+  const w = world();
+  const { dir } = await snap(w, 'run-a');
+  // a hook dropped into an agent's folder of the archive after the snapshot
+  mkdirSync(join(dir, 'home', 'agents', 'scout-1', '.claude'), { recursive: true });
+  writeFileSync(join(dir, 'home', 'agents', 'scout-1', '.claude', 'settings.json'), '{"hooks":{"PreToolUse":[]}}\n');
+  symlinkSync('/etc/passwd', join(dir, 'user', 'allegati', 'extra-link'));
+  await assert.rejects(lib.restoreSnapshot({ name: 'run-a', ...w.deps }), (error) => {
+    assert.equal(error.message, 'run_unlisted');
+    assert.deepEqual(error.files.sort(), ['home/agents/scout-1/.claude/settings.json', 'user/allegati/extra-link']);
+    return true;
+  });
+  assert.equal(w.counts.stop, 1, 'only the snapshot stopped the team: the restore did not');
+  assert.equal(w.counts.start, 0);
+  assert.ok(!existsSync(join(w.home, 'agents', 'scout-1', '.claude', 'settings.json')));
+  assert.equal(lib.listSnapshots(w.archive).filter((s) => s.name.startsWith('before-restore')).length, 0, 'nothing was even copied');
+});
+
+test('the help of snapshot says what is left out and what is inside, in the seven languages', async () => {
+  for (const lang of ['en', 'it', 'de', 'es', 'fr', 'pt', 'hu']) {
+    const { default: t } = await import(`../src/lib/texts/${lang}.js`);
+    for (const key of ['run.help.snapshot', 'run.restore.kept', 'run.error.run_unlisted']) assert.ok(t[key], `${lang} ${key}`);
+  }
+  const { default: en } = await import('../src/lib/texts/en.js');
+  assert.doesNotMatch(en['run.help.snapshot'], /no keys or tokens/);
+  assert.match(en['run.help.snapshot'], /it recognises/);
+  assert.match(en['run.restore.kept'], /keys and tokens in clear/);
+  assert.match(en['run.restore.kept'], /synced or shared folder/);
+  assert.ok(en['run.error.run_link_refused']);
+});
+
+test('a link is put back only from the copy a restore keeps, and only inside its own part of the home', () => {
+  const raw = { raw: true };
+  assert.equal(lib.linkAllowed(raw, 'home/state/current-budget.json', 'budget-start.json'), true);
+  assert.equal(lib.linkAllowed(raw, 'home/state/a/b.json', '../c.json'), true);
+  assert.equal(lib.linkAllowed({ raw: false }, 'home/state/current-budget.json', 'budget-start.json'), false, 'a normal snapshot never holds a link');
+  assert.equal(lib.linkAllowed({}, 'home/state/current-budget.json', 'budget-start.json'), false);
+  for (const target of ['/etc/passwd', '../logs/x.log', '../../jht.config.json', '../../../.ssh/id_ed25519', '..', '']) {
+    assert.equal(lib.linkAllowed(raw, 'home/state/current-budget.json', target), false, target);
+  }
+  assert.equal(lib.linkAllowed(raw, 'home/jht.config.json', 'profile/x'), false, 'a file entry holds no link');
+  assert.equal(lib.linkAllowed(raw, 'other/x', 'y'), false);
+});
+
+test('a restore refuses a copy with a link pointing out of its folder, before touching anything', async () => {
+  const w = world();
+  symlinkSync('../../jht.config.json', join(w.home, 'state', 'trap.json'));
+  const { kept } = await lib.restoreSnapshot({ name: (await snap(w, 'run-a')).manifest.name, fresh: true, ...w.deps });
+  assert.equal(readlinkSync(join(kept, 'home', 'state', 'trap.json')), '../../jht.config.json', 'the copy keeps what was there');
+  const stops = w.counts.stop;
+  await assert.rejects(lib.restoreSnapshot({ name: kept.split(/[\\/]/).pop(), ...w.deps }), (error) => {
+    assert.equal(error.message, 'run_link_refused');
+    assert.deepEqual(error.files, ['home/state/trap.json']);
+    return true;
+  });
+  assert.equal(w.counts.stop, stops, 'refused before stopping the team');
+  assert.ok(!existsSync(join(w.home, 'state', 'trap.json')));
 });
