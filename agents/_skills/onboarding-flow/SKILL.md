@@ -205,7 +205,7 @@ Esempio di stile (adatta le parole, mantieni lunghezza e tono):
 
 > Hi! I'm your assistant — I'll help you fill in your profile.
 >
-> Let's go with a few questions: meanwhile I fill in your profile. If you have a **CV** or other documents about you, put them in the folder `~/Documents/Job Hunter Team/allegati` (or send them to me on Telegram) and tell me: I read them in parallel and fill in a lot by myself.
+> Let's go with a few questions: meanwhile I fill in your profile. If you have a **CV** or other documents about you, put them in the folder `<where.folders.allegati.path>` (or send them to me on Telegram) and tell me: I read them in parallel and fill in a lot by myself.
 >
 > Let's start: **what is your name?**
 

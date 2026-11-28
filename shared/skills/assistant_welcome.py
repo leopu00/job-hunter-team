@@ -177,12 +177,41 @@ def host_kind() -> str:
     return "linux"
 
 
+_FOLDER_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
+
+
+def attachments_folder() -> str:
+    """The name the attachments folder really has on the person's computer (JHT-T360): the one the wrapper mounted, else the
+    name of their language when that folder is there, else `allegati`. Never a folder that is not on the disk."""
+    try:
+        state = json.loads((jht_home() / "user-folders.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        state = {}
+    if not isinstance(state, dict):
+        state = {}
+    def name_from(key):
+        names = state.get(key)
+        name = names.get("allegati") if isinstance(names, dict) else None
+        return name if (isinstance(name, str) and _FOLDER_NAME.fullmatch(name)
+                        and not name.endswith(".")
+                        and not re.match(r"(?i)^(con|prn|aux|nul|com[0-9]|lpt[0-9])(?:\.|$)", name)) else None
+    mounted = name_from("mounted")
+    if mounted:
+        return mounted
+    wanted = name_from("folders")
+    user = Path(os.environ.get("JHT_USER_DIR") or "/jht_user")
+    if wanted and (user / wanted).is_dir():
+        return wanted
+    return "allegati"
+
+
 def render_welcome(base: str, t) -> str:
-    """`welcome.assistente` with its {file_way}: the way to hand over a file that works where the team runs."""
+    """`welcome.assistente` with its {file_way}: the way to hand over a file that works where the team runs, with the real name
+    of the attachments folder."""
     if "{file_way}" not in base:
         return base
     way = _lookup(t, f"welcome.assistente_file_{host_kind()}") or _lookup(t, "welcome.assistente_file_unknown")
-    return base.replace("{file_way}", way)
+    return base.replace("{file_way}", way).replace("{attachments}", attachments_folder())
 
 
 def welcome_texts() -> tuple[str, str]:

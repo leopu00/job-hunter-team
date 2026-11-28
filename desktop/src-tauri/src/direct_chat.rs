@@ -3506,6 +3506,7 @@ struct AttachTarget {
     wrapper: PathBuf,
     runtime: PathBuf,
     user_dir: PathBuf,
+    folder_name: String,
     start_dir: Option<PathBuf>,
 }
 
@@ -3526,11 +3527,14 @@ fn attach_target(
         return Err(failure(code));
     }
     let home = person_home().ok_or_else(|| failure("attach_platform"))?;
+    let user_dir = home.join("Documents").join("Job Hunter Team");
+    let folder_name = crate::chat_attachment::folder_name(&home.join(".jht"), &user_dir);
     Ok(AttachTarget {
         wrapper: connection.local_wrapper.clone().ok_or_else(|| failure("runtime_missing"))?,
         runtime: connection.local_runtime.clone().ok_or_else(|| failure("runtime_missing"))?,
         start_dir: downloads_of(&home),
-        user_dir: home.join("Documents").join("Job Hunter Team"),
+        user_dir,
+        folder_name,
     })
 }
 
@@ -3601,11 +3605,12 @@ pub(crate) async fn direct_chat_attach(
     let source = chosen.into_path().map_err(|_| failure("attachment_unreadable"))?;
     let saved = {
         let user_dir = target.user_dir.clone();
+        let folder_name = target.folder_name.clone();
         // the name of the copy reads the clock of this computer, not UTC
         let now = crate::chat_attachment::local_wall_clock(
             SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0),
         );
-        tauri::async_runtime::spawn_blocking(move || crate::chat_attachment::store(&user_dir, &source, now, &mut |_| {}))
+        tauri::async_runtime::spawn_blocking(move || crate::chat_attachment::store_named(&user_dir, &folder_name, &source, now, &mut |_| {}))
             .await
             .map_err(|_| failure("attach_failed"))?
             .map_err(failure)?
@@ -3619,7 +3624,8 @@ pub(crate) async fn direct_chat_attach(
     };
     if !seen {
         let (user_dir, file) = (target.user_dir.clone(), saved.file.clone());
-        let _ = tauri::async_runtime::spawn_blocking(move || crate::chat_attachment::remove(&user_dir, &file)).await;
+        let folder_name = target.folder_name.clone();
+        let _ = tauri::async_runtime::spawn_blocking(move || crate::chat_attachment::remove_named(&user_dir, &folder_name, &file)).await;
         return Err(failure("attachment_not_shared"));
     }
     let text = attachment_message(&locale, &saved.file);
@@ -7125,11 +7131,11 @@ mod attachment_command_tests {
         assert!(command.contains("agent_id != \"assistente\""));
         // the same gate as a message, then the window, then the copy, then the proof, then the message
         assert!(at("attach_target(") < at("blocking_pick_file()"));
-        assert!(at("blocking_pick_file()") < at("chat_attachment::store("));
-        assert!(at("chat_attachment::store(") < at("team_sees_the_copy("));
+        assert!(at("blocking_pick_file()") < at("chat_attachment::store_named("));
+        assert!(at("chat_attachment::store_named(") < at("team_sees_the_copy("));
         assert!(at("team_sees_the_copy(") < at("send_impl("));
         // a copy the team does not see is taken back, and nothing is told
-        assert!(at("chat_attachment::remove(") < at("send_impl("));
+        assert!(at("chat_attachment::remove_named(") < at("send_impl("));
         // the text is ours: built from the name of our copy, never from the page or the person's file
         assert!(command.contains("attachment_message(&locale, &saved.file)"));
         // the window opens where the person keeps downloads, and the copy is named by the local clock

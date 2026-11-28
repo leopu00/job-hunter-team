@@ -1,5 +1,5 @@
-//! A file the person attaches in the chat: copied into the team's `allegati` folder of this
-//! computer (`~/Documents/Job Hunter Team/allegati`, the `/jht_user/allegati` of the container) so
+//! A file the person attaches in the chat: copied into this computer's configured attachments
+//! folder (the container still reads `/jht_user/allegati`) so
 //! the Assistant can read it for the profile.
 //!
 //! The folder is read-write inside the container, so an agent can put anything in it, a link that
@@ -25,6 +25,31 @@ const MAX_FOLDER_BYTES: u64 = 250 * 1024 * 1024;
 const MAX_SAME_SECOND: u32 = 20;
 const DISPLAY_MAX_CHARS: usize = 80;
 pub(crate) const FOLDER: &str = "allegati";
+
+fn safe_folder_name(name: &str) -> bool {
+    let bytes = name.as_bytes();
+    let stem = name.split('.').next().unwrap_or("").to_ascii_lowercase();
+    !bytes.is_empty() && bytes.len() <= 64 && bytes[0].is_ascii_alphanumeric()
+        && bytes.iter().all(|c| c.is_ascii_alphanumeric() || matches!(*c, b'.' | b'_' | b'-'))
+        && !name.ends_with('.') && !matches!(stem.as_str(), "con" | "prn" | "aux" | "nul")
+        && !(stem.len() == 4 && (stem.starts_with("com") || stem.starts_with("lpt")) && stem.as_bytes()[3].is_ascii_digit())
+}
+
+/// Names are resolved by the CLI from the shared catalog. Prefer the wrapper's
+/// actual mount; before migration keep the old folder when it is still there.
+pub(crate) fn folder_name(home: &std::path::Path, user_dir: &std::path::Path) -> String {
+    let state: serde_json::Value = std::fs::read(home.join("user-folders.json"))
+        .ok().and_then(|bytes| serde_json::from_slice(&bytes).ok()).unwrap_or_default();
+    let valid = |key: &str| state.get(key).and_then(|v| v.get(FOLDER))
+        .and_then(|v| v.as_str()).filter(|name| safe_folder_name(name));
+    if let Some(mounted) = valid("mounted") { return mounted.to_owned(); }
+    if let Some(wanted) = valid("folders") {
+        if user_dir.join(wanted).is_dir() || !user_dir.join(FOLDER).exists() {
+            return wanted.to_owned();
+        }
+    }
+    FOLDER.to_owned()
+}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct Saved {
@@ -269,17 +294,18 @@ mod unix {
 
     /// The `allegati` folder as a descriptor: the person's folder is opened as it is (nothing in the
     /// container reaches its parent), `allegati` itself without following a link, made when absent.
-    fn open_folder(user_dir: &Path) -> Result<OwnedFd, &'static str> {
+    fn open_folder(user_dir: &Path, folder_name: &str) -> Result<OwnedFd, &'static str> {
+        if !safe_folder_name(folder_name) { return Err("attachments_folder_unsafe"); }
         let directory = OFlags::RDONLY | OFlags::DIRECTORY | OFlags::CLOEXEC;
         let root = open(user_dir, directory, Mode::empty()).map_err(|_| "attachments_folder_unsafe")?;
         let own = |fd: &OwnedFd| -> Result<OwnedFd, Errno> {
-            openat(fd, FOLDER, directory | OFlags::NOFOLLOW, Mode::empty())
+            openat(fd, folder_name, directory | OFlags::NOFOLLOW, Mode::empty())
         };
         match own(&root) {
             Ok(folder) => Ok(folder),
             Err(Errno::NOENT) => {
                 let mode = Mode::RWXU | Mode::RGRP | Mode::XGRP | Mode::ROTH | Mode::XOTH;
-                mkdirat(&root, FOLDER, mode).map_err(|_| "attachments_folder_unsafe")?;
+                mkdirat(&root, folder_name, mode).map_err(|_| "attachments_folder_unsafe")?;
                 own(&root).map_err(|_| "attachments_folder_unsafe")
             }
             Err(_) => Err("attachments_folder_unsafe"),
@@ -310,9 +336,10 @@ mod unix {
         format!(".cv-{}-{}-{n}.part", std::process::id(), seconds)
     }
 
-    /// Copies the person's file into `<user_dir>/allegati`. `now`: seconds since the epoch (the name).
-    pub(crate) fn store(
+    /// Copies the person's file into `<user_dir>/<folder_name>`. `now`: seconds since the epoch (the name).
+    pub(crate) fn store_named(
         user_dir: &Path,
+        folder_name: &str,
         source: &Path,
         now: u64,
         moment: &mut dyn FnMut(Moment),
@@ -324,7 +351,7 @@ mod unix {
         }
         let bytes = read_source(source, moment)?;
         let decided = classify(&extension, &bytes)?;
-        let folder = open_folder(user_dir)?;
+        let folder = open_folder(user_dir, folder_name)?;
         moment("folder_open");
         let (files, used) = folder_load(&folder)?;
         if files >= MAX_FILES || used + bytes.len() as u64 > MAX_FOLDER_BYTES {
@@ -365,18 +392,18 @@ mod unix {
 
     /// Takes back a copy this run made (the team did not see it): only that name, relative to the
     /// folder, a link there is removed as a link.
-    pub(crate) fn remove(user_dir: &Path, file: &str) {
+    pub(crate) fn remove_named(user_dir: &Path, folder_name: &str, file: &str) {
         if file.contains('/') || !file.starts_with("cv-") {
             return;
         }
-        if let Ok(folder) = open_folder(user_dir) {
+        if let Ok(folder) = open_folder(user_dir, folder_name) {
             let _ = unlinkat(&folder, file, AtFlags::empty());
         }
     }
 }
 
 #[cfg(any(target_os = "macos", target_os = "linux"))]
-pub(crate) use unix::{remove, store};
+pub(crate) use unix::{remove_named, store_named};
 
 /// The same copy on Windows, where there is no `openat`: the folder is held open instead, and what is
 /// checked is checked on handles, never on a path that can change after.
@@ -501,12 +528,13 @@ mod windows {
     }
 
     /// `create`: the folder is made when it is not there (a copy); a take-back leaves it alone.
-    fn open_folder(user_dir: &Path, create: bool) -> Result<Folder, &'static str> {
+    fn open_folder(user_dir: &Path, folder_name: &str, create: bool) -> Result<Folder, &'static str> {
+        if !safe_folder_name(folder_name) { return Err("attachments_folder_unsafe"); }
         // the person's folder is taken as it is, like on Unix; it has to be a folder
         if !std::fs::metadata(user_dir).is_ok_and(|meta| meta.is_dir()) {
             return Err("attachments_folder_unsafe");
         }
-        let path = user_dir.join(FOLDER);
+        let path = user_dir.join(folder_name);
         let held = match hold(&path) {
             Ok(file) => file,
             Err(error) if error.kind() == std::io::ErrorKind::NotFound && create => {
@@ -563,19 +591,21 @@ mod windows {
         }
     }
 
-    /// Copies the person's file into `<user_dir>\allegati`. `now`: seconds on the wall clock (the name).
-    pub(crate) fn store(
+    /// Copies the person's file into `<user_dir>/<folder_name>`. `now`: seconds on the wall clock (the name).
+    pub(crate) fn store_named(
         user_dir: &Path,
+        folder_name: &str,
         source: &Path,
         now: u64,
         moment: &mut dyn FnMut(Moment),
     ) -> Result<Saved, &'static str> {
-        store_with_part_name(user_dir, source, now, moment, part_name)
+        store_named_with_part_name(user_dir, folder_name, source, now, moment, part_name)
     }
 
     // The same copy path, with a deterministic temporary name for collision tests.
-    pub(super) fn store_with_part_name(
+    pub(super) fn store_named_with_part_name(
         user_dir: &Path,
+        folder_name: &str,
         source: &Path,
         now: u64,
         moment: &mut dyn FnMut(Moment),
@@ -588,7 +618,7 @@ mod windows {
         }
         let bytes = read_source(source, moment)?;
         let decided = classify(&extension, &bytes)?;
-        let folder = open_folder(user_dir, true)?;
+        let folder = open_folder(user_dir, folder_name, true)?;
         moment("folder_open");
         let (files, used) = folder_load(&folder)?;
         if files >= MAX_FILES || used + bytes.len() as u64 > MAX_FOLDER_BYTES {
@@ -626,26 +656,37 @@ mod windows {
 
     /// Takes back a copy this run made (the team did not see it): only that name, inside the folder; a
     /// link there is removed as a link.
-    pub(crate) fn remove(user_dir: &Path, file: &str) {
+    pub(crate) fn remove_named(user_dir: &Path, folder_name: &str, file: &str) {
         if !file.starts_with("cv-") || !file.bytes().all(|b| b.is_ascii_alphanumeric() || matches!(b, b'-' | b'.')) {
             return;
         }
-        if let Ok(folder) = open_folder(user_dir, false) {
+        if let Ok(folder) = open_folder(user_dir, folder_name, false) {
             let _ = std::fs::remove_file(folder.path.join(file));
         }
     }
 }
 
 #[cfg(windows)]
-pub(crate) use windows::{remove, store};
+pub(crate) use windows::{remove_named, store_named};
 
 #[cfg(not(any(target_os = "macos", target_os = "linux", windows)))]
-pub(crate) fn store(_user_dir: &Path, _source: &Path, _now: u64, _moment: &mut dyn FnMut(&'static str)) -> Result<Saved, &'static str> {
+pub(crate) fn store_named(_user_dir: &Path, _folder_name: &str, _source: &Path, _now: u64, _moment: &mut dyn FnMut(&'static str)) -> Result<Saved, &'static str> {
     Err("attach_platform")
 }
 
 #[cfg(not(any(target_os = "macos", target_os = "linux", windows)))]
-pub(crate) fn remove(_user_dir: &Path, _file: &str) {}
+pub(crate) fn remove_named(_user_dir: &Path, _folder_name: &str, _file: &str) {}
+
+#[cfg(test)]
+fn store(user_dir: &std::path::Path, source: &std::path::Path, now: u64,
+         moment: &mut dyn FnMut(&'static str)) -> Result<Saved, &'static str> {
+    store_named(user_dir, FOLDER, source, now, moment)
+}
+
+#[cfg(test)]
+fn remove(user_dir: &std::path::Path, file: &str) {
+    remove_named(user_dir, FOLDER, file)
+}
 
 #[cfg(not(any(target_os = "macos", target_os = "linux", windows)))]
 use std::path::Path;
@@ -660,6 +701,42 @@ mod tests {
     use std::sync::atomic::{AtomicU32, Ordering};
 
     static SEQUENCE: AtomicU32 = AtomicU32::new(0);
+
+    #[test]
+    fn translated_folder_names_are_read_from_the_manifest_in_all_languages() {
+        let s = Scratch::new();
+        let catalog: serde_json::Value = serde_json::from_str(include_str!("../../../shared/i18n/role-names.json")).unwrap();
+        for (lang, names) in catalog["folders"].as_object().unwrap() {
+            let wanted = names[FOLDER].as_str().unwrap();
+            assert!(safe_folder_name(wanted), "{lang}");
+            fs::write(s.0.join("user-folders.json"), serde_json::json!({"mounted": {(FOLDER): wanted}}).to_string()).unwrap();
+            assert_eq!(folder_name(&s.0, &s.user()), wanted);
+        }
+    }
+
+    #[test]
+    fn old_folders_are_kept_and_unsafe_manifest_names_are_ignored() {
+        let s = Scratch::new();
+        fs::create_dir(s.user().join(FOLDER)).unwrap();
+        fs::write(s.0.join("user-folders.json"), r#"{"folders":{"allegati":"attachments"}}"#).unwrap();
+        assert_eq!(folder_name(&s.0, &s.user()), FOLDER);
+        for name in ["../outside", "CON", "aux.txt", "name.", "attachments\n"] {
+            fs::write(s.0.join("user-folders.json"), serde_json::json!({"mounted": {(FOLDER): name}}).to_string()).unwrap();
+            assert_eq!(folder_name(&s.0, &s.user()), FOLDER);
+        }
+    }
+
+    #[test]
+    fn a_copy_and_its_rollback_use_the_selected_folder_only() {
+        let s = Scratch::new();
+        let source = s.put("input.pdf", &pdf());
+        let saved = store_named(&s.user(), "attachments", &source, 7, &mut |_| {}).unwrap();
+        assert!(s.user().join("attachments").join(&saved.file).is_file());
+        assert!(!s.user().join(FOLDER).exists());
+        remove_named(&s.user(), "attachments", &saved.file);
+        assert!(!s.user().join("attachments").join(&saved.file).exists());
+        assert_eq!(store_named(&s.user(), "../outside", &source, 8, &mut |_| {}).unwrap_err(), "attachments_folder_unsafe");
+    }
 
     /// A folder of its own for one test, removed at the end (that folder only).
     struct Scratch(PathBuf);
@@ -1121,7 +1198,7 @@ mod tests {
         fs::write(&part, original).unwrap();
         let source = s.put("cv.pdf", &pdf());
 
-        let result = windows::store_with_part_name(&user, &source, 7, &mut quiet, |_| name.to_owned());
+        let result = windows::store_named_with_part_name(&user, FOLDER, &source, 7, &mut quiet, |_| name.to_owned());
 
         assert_eq!(result.unwrap_err(), "attachment_save_failed");
         assert_eq!(fs::read(&part).unwrap(), original);

@@ -130,6 +130,13 @@ const validKimiConfig = {
 };
 
 describe("validateConfig — config valide", () => {
+  it("keeps the configured user folder names when a config is read and written again", () => {
+    const folders = { allegati: "attachments", critiche: "reviews", cv: "cv", output: "output" };
+    const result = validateConfig({ ...validOpenAIConfig, folders });
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.folders).toEqual(folders);
+    expect(validateConfig({ ...validOpenAIConfig, folders: { allegati: ["outside"] } }).success).toBe(false);
+  });
   it("valida config Claude con api_key", () => {
     const r = validateConfig(validClaudeConfig);
     expect(r.success).toBe(true);

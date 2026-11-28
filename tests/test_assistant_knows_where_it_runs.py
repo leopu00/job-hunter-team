@@ -73,7 +73,7 @@ def test_the_assistente_reads_where_it_runs_and_gives_only_the_ways_of_that_plac
                   "`$JHT_HOME`", "`$JHT_USER_DIR`", "`[CHAT]`", "`[TG]`"):
         assert token in where, token
     # scenario CLI + VPS: the file in the home of the server goes into the mounted folder, or through the upload
-    assert "`mv ~/<" in where and "~/Documents/Job\\ Hunter\\ Team/allegati/`" in where
+    assert "`mv ~/<" in where and "~/Documents/Job\\ Hunter\\ Team/<where.folders.allegati.name>/`" in where
     assert "`jht artifact upload ~/<" in where
     # from the terminal: no paperclip, no dragging, nowhere «on the left»
     assert "📎" in where
@@ -96,7 +96,7 @@ def test_the_onboarding_never_asks_for_the_paperclip_of_an_app_that_is_not_there
     text = _skill(lang)
     first = next(line for line in text.splitlines() if line.startswith("> ") and "allegati" in line)
     assert "📎" not in first
-    assert "`~/Documents/Job Hunter Team/allegati`" in first
+    assert "`<where.folders.allegati.path>`" in first, "the real folder, from team status (JHT-T360)"
     intro = next(line for line in text.splitlines() if "`/onboarding`" in line and "candidate_profile.yml" in line)
     assert intro.index("`jht team chat assistente`") < intro.index("`/onboarding`")
     assert "`jht artifact upload <" in intro

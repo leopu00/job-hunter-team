@@ -3,6 +3,7 @@ import { say, show, textLanguage } from '../lib/texts.js';
 import { agentTitle } from '../../../shared/i18n/role-names.js';
 import { onboardingSpendText, quotaWallText, ramGuardText, spendNow, teamPause, teamPauseText } from '../lib/budget-pause.js';
 import { hostWhere } from '../lib/host-where.js';
+import { whereFolders } from '../lib/user-folders.js';
 import { toolsSwitch } from '../lib/tools-switch.js';
 import { readObservation } from '../lib/agent-observation.js';
 import { errorText, renderObservation } from '../lib/agent-observation-view.js';
@@ -13,14 +14,18 @@ import { spawnFailureTexts } from '../lib/spawn-failed.js';
 /**
  * `--json` is what the Assistente reads for the state of the team (JHT-T354): the sessions stay open in a pause, so the pause
  * (of the budget, of the person, technical; null when the team works), the spending the brake measured last and
- * where the team runs are in it, from the same files the text of `jht team status` reads.
+ * where the team runs are in it, from the same files the text of `jht team status` reads. where.folders (JHT-T360): the person's
+ * folders with the name they really have on disk and their path on that system, so they are never named by hand.
  */
-export function handleAgents(options = {}, read = readObservation, { pauseOf = teamPause, whereOf = hostWhere, spendOf = spendNow, switchOf = toolsSwitch } = {}) {
+export function handleAgents(options = {}, read = readObservation, { pauseOf = teamPause, whereOf = hostWhere, spendOf = spendNow, switchOf = toolsSwitch, foldersOf = whereFolders } = {}) {
   try {
     const snapshot = read();
     if (options.json) {
       const moving = switchOf();
-      console.log(JSON.stringify({ ...snapshot, pause: pauseOf() ?? null, spend_now: spendOf() ?? null, where: whereOf(),
+      const where = whereOf();
+      let folders = null;
+      try { folders = foldersOf(where?.host_os ?? null, { hostType: where?.host_type ?? 'local' }); } catch { folders = null; }
+      console.log(JSON.stringify({ ...snapshot, pause: pauseOf() ?? null, spend_now: spendOf() ?? null, where: { ...where, folders },
         tools_switch: moving ? { at: new Date(moving.at * 1000).toISOString() } : null }, null, 2));
     }
     else {

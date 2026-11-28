@@ -205,7 +205,7 @@ Stíluspélda (igazítsd a szavakat, tartsd meg a hosszúságot és a hangnemet)
 
 > Szia! Én vagyok a te asszisztensed — segítek kitölteni a profilodat.
 >
-> Pár kérdéssel haladunk: közben kitöltöm a profilodat. Ha van **önéletrajzod** vagy más dokumentumod magadról, tedd a `~/Documents/Job Hunter Team/allegati` mappába (vagy küldd el Telegramon), és szólj: párhuzamosan elolvasom és sok mindent kitöltök magamtól.
+> Pár kérdéssel haladunk: közben kitöltöm a profilodat. Ha van **önéletrajzod** vagy más dokumentumod magadról, tedd a `<where.folders.allegati.path>` mappába (vagy küldd el Telegramon), és szólj: párhuzamosan elolvasom és sok mindent kitöltök magamtól.
 >
 > Kezdjük: **hogy hívnak?**
 

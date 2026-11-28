@@ -50,7 +50,8 @@ EN = _catalog("en")
 def _welcome(catalog: dict, kind: str = "unknown") -> str:
     """The welcome as the person reads it: {file_way} is the way to hand over a file where the team runs (JHT-T354). A test
     environment (no JHT_HOST_TYPE, no /jht_user mounted) is one that cannot be told: the upload command only."""
-    return catalog["welcome.assistente"].replace("{file_way}", catalog[f"welcome.assistente_file_{kind}"])
+    # no user-folders.json in a test home: the folder is the one that is there, `allegati` (JHT-T360)
+    return catalog["welcome.assistente"].replace("{file_way}", catalog[f"welcome.assistente_file_{kind}"]).replace("{attachments}", "allegati")
 
 
 class Home:
@@ -311,13 +312,16 @@ KINDS = ("unknown", "vps", "linux", "macos", "windows")
 
 @pytest.mark.parametrize("lang", LANGS)
 @pytest.mark.parametrize("kind", KINDS)
-def test_the_welcome_names_the_upload_command_that_works_on_every_host_before_the_folder(lang, kind):
+def test_the_welcome_names_the_upload_command_and_on_a_computer_of_its_own_the_file_manager_first(lang, kind):
     """P2-3 of the Linux CLI gate (02/11): on Linux the folder named by the welcome is the container's (1001:1001, 700)
-    and the person cannot write in it; `jht artifact upload <file>` works there and on the Mac."""
+    and the person cannot write in it; `jht artifact upload <file>` works there and on the Mac. JHT-T360: on a Mac or a
+    Windows computer the person new to terminals gets Finder or Explorer first, the command after."""
     text = _welcome(_catalog(lang), kind)
     assert "jht artifact upload" in text and "{file_way}" not in text
-    if kind != "unknown":
+    if kind in ("vps", "linux"):
         assert text.index("jht artifact upload") < text.index("allegati")
+    if kind in ("macos", "windows"):
+        assert text.index("allegati") < text.index("jht artifact upload")
 
 
 @pytest.mark.parametrize("lang", LANGS)
@@ -331,12 +335,12 @@ def test_the_welcome_gives_only_the_way_of_the_place_where_the_team_runs(lang):
     assert catalog["welcome.assistente"].count("{file_way}") == 1
     assert "allegati" not in catalog["welcome.assistente"] and "jht artifact upload" not in catalog["welcome.assistente"]
     assert "Documents" not in way["unknown"] and "%USERPROFILE%" not in way["unknown"]
-    assert "`mv`" in way["vps"] and "`~/Documents/Job Hunter Team/allegati`" in way["vps"]
+    assert "`mv`" in way["vps"] and "`~/Documents/Job Hunter Team/{attachments}`" in way["vps"]
     for other in ("%USERPROFILE%", "Finder", "Explorer", "Esplora", "Explorador", "Explorateur", "Fájlkezelő"):
         assert other not in way["vps"] and other not in way["linux"], other
-    assert "`~/Documents/Job Hunter Team/allegati`" in way["linux"] and "`~/Documents/Job Hunter Team/allegati`" in way["macos"]
+    assert "`~/Documents/Job Hunter Team/{attachments}`" in way["linux"] and "`~/Documents/Job Hunter Team/{attachments}`" in way["macos"]
     assert "Finder" in way["macos"] and "%USERPROFILE%" not in way["macos"]
-    assert "`%USERPROFILE%\\Documents\\Job Hunter Team\\allegati`" in way["windows"] and "~/Documents" not in way["windows"]
+    assert "`%USERPROFILE%\\Documents\\Job Hunter Team\\{attachments}`" in way["windows"] and "~/Documents" not in way["windows"]
     assert "Finder" not in way["windows"]
 
 
@@ -374,7 +378,7 @@ def test_the_catalog_welcome_does_not_send_the_user_to_telegram_and_asks_the_nam
     # the one other way in is the drop-zone the Assistente reads (skill onboarding-flow): named by its real folder, in the
     # way of every place that can be told (JHT-T354)
     for kind in ("vps", "linux", "macos", "windows"):
-        assert "Job Hunter Team" in catalog[f"welcome.assistente_file_{kind}"] and "allegati" in catalog[f"welcome.assistente_file_{kind}"]
+        assert "Job Hunter Team" in catalog[f"welcome.assistente_file_{kind}"] and "{attachments}" in catalog[f"welcome.assistente_file_{kind}"]
     assert catalog["welcome.assistente_first"].strip().endswith("?")
     assert "\n" not in catalog["welcome.assistente_first"]
 
@@ -441,7 +445,7 @@ def test_all_seven_prompts_say_the_same_protocol(suffix):
                   "profile_flag", "welcome-error.log", "[WELCOME-ACK]"):
         assert token in section, token
     # the drop-zone the welcome points to is one the prompt tells it to read
-    assert "$JHT_USER_DIR/allegati/" in section and "Job Hunter Team/allegati" in section
+    assert "$JHT_USER_DIR/allegati/" in section and "where.folders.allegati" in section
     # the old way: Telegram alone, and the flag made by hand
     assert "mkdir -p $JHT_HOME/profile && touch" not in section
     assert "test -f $JHT_HOME/profile/welcomed.flag" not in section

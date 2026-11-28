@@ -122,6 +122,10 @@ test('a language chosen with jht setup after the installation wins over the JHT_
 
 test('--json is the same in every language', () => {
   const box = sandbox();
+  // Changing the screen's language keeps the actual mounted folder names.
+  writeFileSync(join(box.home, 'user-folders.json'), JSON.stringify({
+    mounted: { allegati: 'attachments', critiche: 'reviews', cv: 'cv', output: 'output' },
+  }));
   for (const command of [['status', '--json'], ['agents', '--json'], ['doctor', '--json']]) {
     const normalize = (out) => out.replace(/"at": [0-9.]+/g, '"at": 0').replace(/"message": ".*"/g, '"message": "-"').replace(/"section": ".*"/g, '"section": "-"');
     assert.equal(normalize(jht(command, box, { JHT_LANG: 'it' }).out), normalize(jht(command, box, { JHT_LANG: 'en' }).out), command.join(' '));

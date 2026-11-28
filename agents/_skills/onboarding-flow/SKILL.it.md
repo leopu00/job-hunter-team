@@ -206,7 +206,7 @@ Esempio di stile (adatta le parole, mantieni lunghezza e tono):
 
 > Ciao! Sono il tuo assistente — ti aiuto a compilare il profilo.
 >
-> Procediamo con qualche domanda: intanto compilo il tuo profilo. Se hai un **CV** o altri documenti che parlano di te, mettili nella cartella `~/Documents/Job Hunter Team/allegati` (o mandameli su Telegram) e dimmelo: li leggo in parallelo e compilo molte cose da solo.
+> Procediamo con qualche domanda: intanto compilo il tuo profilo. Se hai un **CV** o altri documenti che parlano di te, mettili nella cartella `<where.folders.allegati.path>` (o mandameli su Telegram) e dimmelo: li leggo in parallelo e compilo molte cose da solo.
 >
 > Iniziamo: **come ti chiami?**
 
