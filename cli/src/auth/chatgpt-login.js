@@ -140,8 +140,8 @@ export async function loginChatGpt({ load = loadProvider, output = console.log, 
   const cancelled = setInterval(() => { if (session && fs.existsSync(cancelPath(session))) stop(); }, 250);
   let reader, authorizeUrl, notificationFailed = false;
   const wasRaw = input.isRaw === true;
-  if (input.isTTY && typeof input.setRawMode === 'function') input.setRawMode(false);
   try {
+    if (input.isTTY && typeof input.setRawMode === 'function') input.setRawMode(false);
     fs.mkdirSync(stateDir(), { recursive: true, mode: 0o700 });
     lockToken = claimLock(lock, session);
     if (method === 'bridge') method = await hostLoginMethod(session, controller.signal);
@@ -224,7 +224,7 @@ export async function loginChatGpt({ load = loadProvider, output = console.log, 
     controller.abort();
     clearTimeout(timer); clearInterval(cancelled); reader?.close();
     process.removeListener('SIGINT', stop); process.removeListener('SIGTERM', stop);
-    if (input.isTTY && typeof input.setRawMode === 'function') input.setRawMode(wasRaw);
+    try { if (input.isTTY && typeof input.setRawMode === 'function') input.setRawMode(wasRaw); } catch { }
     if (lockToken && session) for (const path of [requestPath(), responsePath(session), cancelPath(session), modePath(session)]) {
       try {
         if (path !== requestPath() || readSmall(path).session === session) fs.unlinkSync(path);

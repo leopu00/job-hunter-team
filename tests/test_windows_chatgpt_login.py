@@ -50,9 +50,13 @@ try {
   if ($env:FAKE_OBSERVER_ERROR -eq '1') {
     if ($script:ChatGptEnv.Count) { throw 'observer failure did not fall back' }
   } elseif ($env:FAKE_PROBE -eq '1') {
+    if (-not $script:ChatGptEnv.Count) { throw ('observer startup: ' + ($Error | Select-Object -First 3 | Out-String)) }
     $deadline = [DateTime]::UtcNow.AddSeconds(15)
     while (-not (Test-Path (Join-Path $env:FAKE_STATE 'mode')) -and [DateTime]::UtcNow -lt $deadline) { Start-Sleep -Milliseconds 100 }
-    if (-not (Test-Path (Join-Path $env:FAKE_STATE 'mode'))) { throw 'no login negotiation' }
+    if (-not (Test-Path (Join-Path $env:FAKE_STATE 'mode'))) {
+      $diagnostic = ($script:ChatGptWatcher | Receive-Job -Keep *>&1 | Out-String)
+      throw ('no login negotiation: ' + $diagnostic)
+    }
     $mode = [IO.File]::ReadAllText((Join-Path $env:FAKE_STATE 'mode'))
     if (($env:FAKE_BUSY -eq '1' -or $env:FAKE_DEAD -eq '1') -and $mode -notmatch ' device_code$') { throw 'no device fallback' }
     if ($env:FAKE_BUSY -ne '1' -and $env:FAKE_DEAD -ne '1' -and $mode -notmatch ' browser$') { throw 'no browser flow' }
