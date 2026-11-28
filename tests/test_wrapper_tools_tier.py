@@ -33,7 +33,7 @@ case "$1" in
       [ -e "$FAKE/full-present" ] && { echo sha256:fullid; exit 0; }; exit 1
     fi
     [ -e "$FAKE/full-present" ] && exit 0; exit 1 ;;
-  pull) printf '%s\\n' "$*" >> "$FAKE/pulls"; n=0; while [ -e "$FAKE/pull-hold" ] && [ "$n" -lt 300 ]; do sleep 0.1; n=$((n+1)); done; [ -e "$FAKE/pull-fails" ] && exit 1; touch "$FAKE/full-present"; exit 0 ;;
+  pull) printf '%s\\n' "$*" >> "$FAKE/pulls"; n=0; while [ -e "$FAKE/pull-hold" ] && [ "$n" -lt 300 ]; do sleep 0.1; n=$((n+1)); done; [ -e "$FAKE/pull-fails" ] && exit 1; if [ -s "$FAKE/pull-fails-left" ]; then left=$(cat "$FAKE/pull-fails-left"); if [ "$left" -gt 0 ]; then echo $((left-1)) > "$FAKE/pull-fails-left"; exit 1; fi; fi; touch "$FAKE/full-present"; exit 0 ;;
 esac
 exit 0
 """
@@ -80,7 +80,7 @@ def box(tmp_path):
             + body
         )
         return subprocess.run(["bash", "-c", script, *argv], capture_output=True, text=True, timeout=60,
-                              env={**os.environ, "LC_ALL": "C", **env})
+                              env={**os.environ, "LC_ALL": "C", "JHT_TOOLS_RETRY_FOR": "0", **env})   # one try, unless a test asks more
 
     def tier(attested: bool = True, text: str = "core\n"):
         path = runtime / "runtime-tier"
@@ -1423,3 +1423,34 @@ def test_a_command_that_only_reads_the_team_waits_for_the_switch_instead_of_sayi
     assert "wait_for_tools_switch" in body
     assert body.index("wait_for_tools_switch") < body.index("container_up"), "before the check of the container"
     assert "jht_machine_output; then wait_for_tools_switch quiet" in body, "a program reading the output gets no extra line"
+
+
+def test_a_pull_the_network_broke_is_tried_again_by_itself_and_says_so_meanwhile(box):
+    """JHT-T367: the pull fell with the network and nobody started it again; the notice stayed `failed`. It is tried again after
+    growing waits, says `pulling`/`retrying` meanwhile (the Capitano keeps waiting), and ends `ready` the third time."""
+    box.tier()
+    (box.fake / "pull-fails-left").write_text("2\n", encoding="utf-8")
+    assert box.run("tools_main pull", JHT_TOOLS_RETRY_WAITS="1 2", JHT_TOOLS_RETRY_FOR="60").returncode == 0
+    seen = box.wait_for("pulling")
+    for _ in range(100):
+        seen = box.notice()
+        if seen and seen.get("reason") == "retrying":
+            break
+        time.sleep(0.05)
+    assert seen["state"] == "pulling" and seen["reason"] == "retrying", seen
+    for _ in range(150):
+        if (box.notice() or {}).get("state") == "ready":
+            break
+        time.sleep(0.1)
+    assert box.notice()["state"] == "ready", box.notice()
+    assert len((box.fake / "pulls").read_text(encoding="utf-8").splitlines()) == 3
+    box.wait_for_pull_end()
+
+
+def test_the_tries_end_with_failed_when_their_time_is_over(box):
+    box.tier()
+    (box.fake / "pull-fails").write_text("", encoding="utf-8")
+    assert box.run("tools_main pull", JHT_TOOLS_RETRY_WAITS="1", JHT_TOOLS_RETRY_FOR="2").returncode == 0
+    box.wait_for_pull_end()
+    assert box.notice()["state"] == "failed" and box.notice()["reason"] == "pull_failed"
+    assert len((box.fake / "pulls").read_text(encoding="utf-8").splitlines()) == 3, "1 s + 1 s of waits, then the time is over"

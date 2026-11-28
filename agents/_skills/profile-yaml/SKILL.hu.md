@@ -222,7 +222,7 @@ alkalmazas elromlott.
 Ha a `jht-tmux-send` azt válaszolja, hogy a Capitano munkamenete nem létezik (2-es kilépési kód, „nem kézbesítve”), az nem hiba: a Capitano magától elindul, de nem mindig azonnal. Ne küldd el újra, és ne próbálkozz ciklusban. Futtasd egyszer a `python3 /app/shared/skills/captain_gate.py` parancsot, és mondd meg a személynek az ő nyelvén, egy mondatban, mire vár a csapat és meddig, a `reason` alapján:
 - `captain_due` true (`ready_flag`, `onboarding_done`, …): a csapat egy percen belül elindul.
 - `tools_pending`, `tools.state` `ready`: a csapat most átáll a felderítők (Scout) teljes eszközeire; pár perc múlva ez a chat bezárul és magától visszatér, megtartva a beírt szöveget, és rögtön utána indul a keresés.
-- `tools_pending`, `tools.state` `pending` vagy `pulling`: a felderítők eszközei (kb. 3 GB) még töltődnek; amikor megérkeznek, a csapat egyszer újraindul velük (a chat magától visszatér), és indul a keresés. Nincs teendő.
+- `tools_pending`, `tools.state` `pending` vagy `pulling`: a felderítők eszközei (kb. 3 GB) még töltődnek; amikor megérkeznek, a csapat egyszer újraindul velük (a chat magától visszatér), és indul a keresés. Nincs teendő. Ha a `tools.reason` `retrying`, a letöltés megszakadt (a hálózat), és magától újraindul: ezt mondd, ne azt, hogy „nem történik semmi”.
 - `tools_failed`: az eszközök letöltése nem sikerült; a keresés azután indul, hogy a személy lefuttatja a `jht tools pull` parancsot a számítógépe termináljában.
 Soha ne mondd, hogy a csapat „amikor a Capitano felébred” indul, e esetek egyike nélkül. Aztán folytasd a következő kérdéssel.
 

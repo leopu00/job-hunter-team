@@ -103,10 +103,30 @@ EOF
 # The pull itself, in the background: its end is on disk (the image, or the failed marker), and in the notice. With `auto` (the
 # job tools_kick starts) it goes on: it waits for the profile and makes the switch, holding the lock, so a second `jht up` finds
 # the job there and starts no other.
+# A pull that fails (the network went away for a while: JHT-T367) is tried again by itself, after JHT_TOOLS_RETRY_WAITS seconds
+# (60 120 300 600, then every 900), for JHT_TOOLS_RETRY_FOR seconds in all (a day), as long as the core tier is there. The engine
+# keeps the layers it already has, so every try goes on from where the last one stopped. Between two tries the notice says
+# `pulling` with the reason `retrying`: the Capitano keeps waiting and the Assistente says the download stopped and goes on by itself.
+tools_pull_with_retries() {
+  local since="$1" waits="${JHT_TOOLS_RETRY_WAITS:-60 120 300 600 900}" total="${JHT_TOOLS_RETRY_FOR:-86400}" spent=0 wait=900 w
+  case "$total" in ''|*[!0-9]*) total=86400 ;; esac
+  set -- $waits
+  while :; do
+    tools_full_here && return 0
+    docker pull "$DEFAULT_RUNTIME_IMAGE" >/dev/null 2>&1 && tools_full_here && return 0
+    [ -f "$RUNTIME_TIER_FILE" ] || return 1
+    if [ "$#" -gt 0 ]; then w="$1"; shift; case "$w" in ''|*[!0-9]*) ;; *) wait="$w" ;; esac; fi
+    [ $((spent + wait)) -le "$total" ] || return 1
+    tools_notice pulling core retrying "$since"
+    sleep "$wait"
+    spent=$((spent + wait))
+  done
+}
+
 tools_pull_job() {
   local since="$1" auto="${2:-}"
   trap '' HUP
-  if tools_full_here || { docker pull "$DEFAULT_RUNTIME_IMAGE" >/dev/null 2>&1 && tools_full_here; }; then
+  if tools_pull_with_retries "$since"; then
     rm -f "$TOOLS_FAILED_FILE"; tools_notice ready core "" "$since"
     [ "$auto" = auto ] && tools_wait_and_switch
   else

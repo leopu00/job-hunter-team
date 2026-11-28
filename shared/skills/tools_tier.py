@@ -94,7 +94,8 @@ def verdict(home: Path | None = None, tier: str | None = None) -> dict | None:
         return None
     if seen["state"] == "failed":
         return {"state": "failed", "wait": True, "degraded": "failed", "reason": seen["reason"]}
-    return {"state": seen["state"], "wait": True, "degraded": None}
+    # `reason` "retrying": the pull fell (the network) and the host tries it again by itself (JHT-T367)
+    return {"state": seen["state"], "wait": True, "degraded": None, "reason": seen["reason"]}
 
 
 def role_ready(role: str, tier: str | None = None) -> bool:

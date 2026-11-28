@@ -59,6 +59,13 @@ def test_the_capitano_waits_while_the_full_image_is_on_its_way(tmp_path: Path, s
     assert out["tools"]["wait"] is True and "left" not in out["tools"]
 
 
+def test_a_pull_tried_again_says_it_and_still_holds_the_capitano(tmp_path: Path):
+    """JHT-T367: between two tries of a pull the network broke, the notice is pulling/retrying: the Capitano waits, and the reason
+    reaches the gate, where the Assistente reads it to tell the person the download goes on by itself."""
+    code, out = _gate(_home(tmp_path, _tools("pulling", reason="retrying")))
+    assert (code, out["reason"], out["tools"]["reason"]) == (1, "tools_pending", "retrying")
+
+
 def test_the_case_of_the_server_ten_minutes_are_no_longer_a_reason_to_open_the_first_run_on_the_core_image(tmp_path: Path):
     """A server with the CLI only: the full image pulled hours before (state ready), ready.flag eleven minutes old, the switch
     of the host still to come. The Capitano used to start at ten minutes and open the first run with every Scout refused."""

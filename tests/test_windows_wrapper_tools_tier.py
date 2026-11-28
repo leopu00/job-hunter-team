@@ -41,7 +41,7 @@ case "$1" in
     [ -e "$FAKE/exec-engine-gone" ] && { echo REPL-LINE; echo 'Error: Get "http://d/v6.0.2/libpod/exec/0123abcd/json": EOF' >&2; exit 125; }
     [ -e "$FAKE/exec-session-gone" ] && { echo REPL-LINE; echo 'Error: retrieving exec session 0123abcd from container 99ff00: no container with ID 99ff00 found in database: no such container' >&2; exit 125; }
     exit 0 ;;
-  pull) echo "$*" >> "$FAKE/pulls"; n=0; while [ -e "$FAKE/pull-hold" ] && [ "$n" -lt 300 ]; do sleep 0.1; n=$((n+1)); done; [ -e "$FAKE/pull-fails" ] && exit 1; : > "$FAKE/full-present"; exit 0 ;;
+  pull) echo "$*" >> "$FAKE/pulls"; n=0; while [ -e "$FAKE/pull-hold" ] && [ "$n" -lt 300 ]; do sleep 0.1; n=$((n+1)); done; [ -e "$FAKE/pull-fails" ] && exit 1; if [ -s "$FAKE/pull-fails-left" ]; then left=$(cat "$FAKE/pull-fails-left"); if [ "$left" -gt 0 ]; then echo $((left-1)) > "$FAKE/pull-fails-left"; exit 1; fi; fi; : > "$FAKE/full-present"; exit 0 ;;
 esac
 exit 0
 """
@@ -134,7 +134,8 @@ def box(tmp_path):
             **(windows_env(tmp_path) if WINDOWS else os.environ),
             "PATH": str(bin_dir) if WINDOWS else f"{bin_dir}{os.pathsep}/usr/bin{os.pathsep}/bin",
             "JHT_ENGINE_FILE": str(engine), "FAKE": str(fake), "T_RUNTIME": str(runtime), "T_HOME": str(home),
-            "T_FULL": FULL, "T_CORE": CORE_DIGEST, "T_STUB": str(stub), "T_TOOLS": str(TOOLS), "T_CLEAN_FAKES": str(clean_fakes), **extra,
+            "T_FULL": FULL, "T_CORE": CORE_DIGEST, "T_STUB": str(stub), "T_TOOLS": str(TOOLS), "T_CLEAN_FAKES": str(clean_fakes),
+            "JHT_TOOLS_RETRY_FOR": "0", **extra,   # one try, unless a test asks more
         }
         # Output goes to files, not pipes: on Linux the detached pull inherits the pipes of the harness and `capture_output` would wait
         # for it to close them, that is for the whole pull (Windows starts it with a window of its own and holds nothing).
@@ -228,6 +229,22 @@ def test_a_failed_pull_is_failed_with_its_code(box):
     assert _lines(box.run("exit (Invoke-ToolsCommand @('pull'))")) == ["JHT_PHASE tools_pull"]
     assert box.wait_for("failed")["reason"] == "pull_failed"
     assert status(box) == {"ok": True, "state": "failed", "tier": "core", "reason": "pull_failed"}
+
+
+def test_a_pull_the_network_broke_is_tried_again_by_itself(box):
+    """JHT-T367: two failed pulls, then the third goes; meanwhile the notice says `pulling` with `retrying`."""
+    box.tier()
+    (box.fake / "pull-fails-left").write_text("2\n", encoding="utf-8")
+    assert _lines(box.run("exit (Invoke-ToolsCommand @('pull'))", JHT_TOOLS_RETRY_WAITS="1 2", JHT_TOOLS_RETRY_FOR="60")) == ["JHT_PHASE tools_pull"]
+    box.wait_for("ready")
+    assert len((box.fake / "pulls").read_text(encoding="utf-8").splitlines()) == 3
+
+
+def test_the_windows_tries_end_with_failed_when_their_time_is_over(box):
+    box.tier()
+    (box.fake / "pull-fails").write_text("", encoding="utf-8")
+    box.run("exit (Invoke-ToolsCommand @('pull'))", JHT_TOOLS_RETRY_WAITS="1", JHT_TOOLS_RETRY_FOR="2")
+    assert box.wait_for("failed")["reason"] == "pull_failed"
 
 
 def test_switch_is_silent_until_the_profile_is_ready_and_the_full_image_is_here(box):
