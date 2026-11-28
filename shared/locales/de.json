@@ -940,6 +940,7 @@
   "installer.windows.delete_data_as_well": "Um auch die Daten zu löschen (Konfiguration, Datenbank, Lebensläufe, Ergebnisse):",
   "installer.windows.pairing_token_present_skipping": "Kopplungstoken vorhanden: Der interaktive Assistent wird übersprungen. Der Container schließt die Kopplung beim ersten Start ab.",
   "installer.windows.launching_setup_wizard": "Starte den Einrichtungsassistenten...",
+  "installer.windows.language_confirm": "Sprache: %s. Passt das? Drücke Enter für ja, oder wähle 1-7:",
   "installer.windows.wizard_exited_error_re": "Der Assistent wurde mit einem Fehler beendet. Starte ihn erneut mit: jht setup",
   "installer.windows.earlier_job_hunter_team": "ein früheres Job Hunter Team läuft noch auf Docker Desktop (Container %s). Seit 0.4 läuft das Team in einer Podman-Maschine: Daneben installiert, würden zwei Teams mit denselben Daten arbeiten. Nichts wurde geändert.",
   "installer.windows.earlier_job_hunter_team_2": "ein früheres Job Hunter Team ist noch auf Docker Desktop installiert (Container %s, gestoppt; er startet mit Docker Desktop wieder). Seit 0.4 läuft das Team in einer Podman-Maschine: Daneben installiert, würden zwei Teams mit denselben Daten arbeiten. Nichts wurde geändert.",

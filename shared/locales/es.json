@@ -940,6 +940,7 @@
   "installer.windows.delete_data_as_well": "Para borrar también los datos (configuración, db, CV, resultados):",
   "installer.windows.pairing_token_present_skipping": "Hay un token de emparejamiento: me salto la configuración guiada. El contenedor completará el emparejamiento en el primer arranque.",
   "installer.windows.launching_setup_wizard": "Iniciando la configuración guiada...",
+  "installer.windows.language_confirm": "Idioma: %s. ¿Está bien? Pulsa Intro para sí, o elige 1-7:",
   "installer.windows.wizard_exited_error_re": "La configuración guiada ha terminado con un error. Vuelve a ejecutarla con: jht setup",
   "installer.windows.earlier_job_hunter_team": "todavía hay un Job Hunter Team anterior en marcha en Docker Desktop (contenedor %s). Desde la 0.4 el equipo funciona en una máquina Podman: si lo instalas al lado, dos equipos trabajarían con los mismos datos. No se ha cambiado nada.",
   "installer.windows.earlier_job_hunter_team_2": "todavía hay un Job Hunter Team anterior instalado en Docker Desktop (contenedor %s, parado; vuelve a arrancar con Docker Desktop). Desde la 0.4 el equipo funciona en una máquina Podman: si lo instalas al lado, dos equipos trabajarían con los mismos datos. No se ha cambiado nada.",

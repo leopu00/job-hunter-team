@@ -940,6 +940,7 @@
   "installer.windows.delete_data_as_well": "Pour effacer aussi tes données (configuration, db, CV, résultats) :",
   "installer.windows.pairing_token_present_skipping": "Token d'appairage présent : je saute l'assistant interactif. Le conteneur terminera l'appairage à son premier démarrage.",
   "installer.windows.launching_setup_wizard": "Lancement de l'assistant de configuration...",
+  "installer.windows.language_confirm": "Langue : %s. C'est bon ? Appuie sur Entrée pour oui, ou choisis 1-7 :",
   "installer.windows.wizard_exited_error_re": "L'assistant s'est terminé avec une erreur. Relance-le avec : jht setup",
   "installer.windows.earlier_job_hunter_team": "un ancien Job Hunter Team tourne encore sur Docker Desktop (conteneur %s). Depuis la 0.4, l'équipe tourne dans une machine Podman : installées côte à côte, deux équipes travailleraient sur les mêmes données. Rien n'a été modifié.",
   "installer.windows.earlier_job_hunter_team_2": "un ancien Job Hunter Team est encore installé sur Docker Desktop (conteneur %s, arrêté ; il redémarre avec Docker Desktop). Depuis la 0.4, l'équipe tourne dans une machine Podman : installées côte à côte, deux équipes travailleraient sur les mêmes données. Rien n'a été modifié.",

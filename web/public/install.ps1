@@ -440,6 +440,7 @@ function Get-InstallerTextTable {
     'en:installer.windows.install_may_not_know' { return 'install and may not know it yet ("not recognized as the name of a cmdlet").' }
     'en:installer.windows.installation_complete' { return '|  Installation complete!                  |' }
     'en:installer.windows.jht_podman_are_your' { return 'jht is on your PATH from now on, but THIS PowerShell window was open before the' }
+    'en:installer.windows.language_confirm' { return 'Language: %s. Is that right? Press Enter for yes, or choose 1-7:' }
     'en:installer.windows.launching_setup_wizard' { return 'Launching the setup wizard...' }
     'en:installer.windows.mode_podman_machine_wsl' { return 'mode:    Podman machine (WSL)' }
     'en:installer.windows.next_steps' { return 'Next steps:' }
@@ -512,6 +513,7 @@ function Get-InstallerTextTable {
     'it:installer.windows.install_may_not_know' { return 'installazione e potrebbe non conoscerlo ancora ("non riconosciuto come nome di cmdlet").' }
     'it:installer.windows.installation_complete' { return '|  Installazione completata!               |' }
     'it:installer.windows.jht_podman_are_your' { return ('da adesso jht ' + [char]0x00E8 + ' nel PATH, ma QUESTA finestra di PowerShell era aperta prima dell''') }
+    'it:installer.windows.language_confirm' { return ('Lingua: %s. Va bene? Premi Invio per s' + [char]0x00EC + ', oppure scegli 1-7:') }
     'it:installer.windows.launching_setup_wizard' { return 'Avvio la configurazione guidata...' }
     'it:installer.windows.mode_podman_machine_wsl' { return 'modo:     macchina Podman (WSL)' }
     'it:installer.windows.next_steps' { return 'Prossimi passi:' }
@@ -584,6 +586,7 @@ function Get-InstallerTextTable {
     'hu:installer.windows.install_may_not_know' { return ('telep' + [char]0x00ED + 't' + [char]0x00E9 + 's el' + [char]0x0151 + 'tt ny' + [char]0x00ED + 'lt meg, ' + [char]0x00E9 + 's lehet, hogy m' + [char]0x00E9 + 'g nem ismeri ("not recognized as the name of a cmdlet").') }
     'hu:installer.windows.installation_complete' { return '|  A telepites kesz!                       |' }
     'hu:installer.windows.jht_podman_are_your' { return ('a jht mostant' + [char]0x00F3 + 'l benne van a PATH-ban, de EZ a PowerShell-ablak m' + [char]0x00E9 + 'g a') }
+    'hu:installer.windows.language_confirm' { return ('Nyelv: %s. Rendben? Nyomj Entert az igenhez, vagy v' + [char]0x00E1 + 'lassz 1-7 k' + [char]0x00F6 + 'z' + [char]0x00FC + 'l:') }
     'hu:installer.windows.launching_setup_wizard' { return ('A be' + [char]0x00E1 + 'll' + [char]0x00ED + 't' + [char]0x00F3 + ' var' + [char]0x00E1 + 'zsl' + [char]0x00F3 + ' ind' + [char]0x00ED + 't' + [char]0x00E1 + 'sa...') }
     'hu:installer.windows.mode_podman_machine_wsl' { return ('m' + [char]0x00F3 + 'd:  Podman-g' + [char]0x00E9 + 'p (WSL)') }
     'hu:installer.windows.next_steps' { return ('K' + [char]0x00F6 + 'vetkez' + [char]0x0151 + ' l' + [char]0x00E9 + 'p' + [char]0x00E9 + 'sek:') }
@@ -656,6 +659,7 @@ function Get-InstallerTextTable {
     'es:installer.windows.install_may_not_know' { return ('instalaci' + [char]0x00F3 + 'n y puede que a' + [char]0x00FA + 'n no lo conozca ("no se reconoce como nombre de un cmdlet").') }
     'es:installer.windows.installation_complete' { return '|  Instalacion completada!                 |' }
     'es:installer.windows.jht_podman_are_your' { return ('desde ahora jht est' + [char]0x00E1 + ' en tu PATH, pero ESTA ventana de PowerShell ya estaba abierta antes de la') }
+    'es:installer.windows.language_confirm' { return ('Idioma: %s. ' + [char]0x00BF + 'Est' + [char]0x00E1 + ' bien? Pulsa Intro para s' + [char]0x00ED + ', o elige 1-7:') }
     'es:installer.windows.launching_setup_wizard' { return ('Iniciando la configuraci' + [char]0x00F3 + 'n guiada...') }
     'es:installer.windows.mode_podman_machine_wsl' { return ('modo:    m' + [char]0x00E1 + 'quina Podman (WSL)') }
     'es:installer.windows.next_steps' { return ('Pr' + [char]0x00F3 + 'ximos pasos:') }
@@ -728,6 +732,7 @@ function Get-InstallerTextTable {
     'de:installer.windows.install_may_not_know' { return 'Installation offen und kennt es vielleicht noch nicht ("wird nicht als Name eines Cmdlet erkannt").' }
     'de:installer.windows.installation_complete' { return '|  Installation abgeschlossen!             |' }
     'de:installer.windows.jht_podman_are_your' { return 'jht ist ab jetzt in deinem PATH, aber DIESES PowerShell-Fenster war schon vor der' }
+    'de:installer.windows.language_confirm' { return ('Sprache: %s. Passt das? Dr' + [char]0x00FC + 'cke Enter f' + [char]0x00FC + 'r ja, oder w' + [char]0x00E4 + 'hle 1-7:') }
     'de:installer.windows.launching_setup_wizard' { return 'Starte den Einrichtungsassistenten...' }
     'de:installer.windows.mode_podman_machine_wsl' { return 'Modus:   Podman-Maschine (WSL)' }
     'de:installer.windows.next_steps' { return ('N' + [char]0x00E4 + 'chste Schritte:') }
@@ -800,6 +805,7 @@ function Get-InstallerTextTable {
     'fr:installer.windows.install_may_not_know' { return ('l''installation et ne le conna' + [char]0x00EE + 't peut-' + [char]0x00EA + 'tre pas encore ("n''est pas reconnu comme nom d''applet de commande").') }
     'fr:installer.windows.installation_complete' { return '|  Installation terminee !                 |' }
     'fr:installer.windows.jht_podman_are_your' { return ('jht est dans ton PATH d' + [char]0x00E8 + 's maintenant, mais CETTE fen' + [char]0x00EA + 'tre PowerShell ' + [char]0x00E9 + 'tait ouverte avant') }
+    'fr:installer.windows.language_confirm' { return ('Langue : %s. C''est bon ? Appuie sur Entr' + [char]0x00E9 + 'e pour oui, ou choisis 1-7 :') }
     'fr:installer.windows.launching_setup_wizard' { return 'Lancement de l''assistant de configuration...' }
     'fr:installer.windows.mode_podman_machine_wsl' { return 'mode :    machine Podman (WSL)' }
     'fr:installer.windows.next_steps' { return ('' + [char]0x00C9 + 'tapes suivantes :') }
@@ -872,6 +878,7 @@ function Get-InstallerTextTable {
     'pt:installer.windows.install_may_not_know' { return ('instala' + [char]0x00E7 + [char]0x00E3 + 'o e pode ainda n' + [char]0x00E3 + 'o o conhecer ("not recognized as the name of a cmdlet").') }
     'pt:installer.windows.installation_complete' { return '|  Instalacao concluida!                   |' }
     'pt:installer.windows.jht_podman_are_your' { return ('A partir de agora o jht est' + [char]0x00E1 + ' no teu PATH, mas ESTA janela do PowerShell j' + [char]0x00E1 + ' estava aberta antes da') }
+    'pt:installer.windows.language_confirm' { return ('Idioma: %s. Est' + [char]0x00E1 + ' bem? Prime Enter para sim, ou escolhe 1-7:') }
     'pt:installer.windows.launching_setup_wizard' { return ('A iniciar a configura' + [char]0x00E7 + [char]0x00E3 + 'o guiada...') }
     'pt:installer.windows.mode_podman_machine_wsl' { return ('modo:    m' + [char]0x00E1 + 'quina Podman (WSL)') }
     'pt:installer.windows.next_steps' { return ('Pr' + [char]0x00F3 + 'ximos passos:') }
@@ -1902,6 +1909,101 @@ function Test-WillAutoOnboard {
   return $true
 }
 
+# -- The language, confirmed before the setup (JHT-T359) ----------------------
+# The first lines of the installer are said in the language of Windows. Right before the setup starts, the person is asked to
+# confirm it or to choose another of the seven, as the installer of Linux and the Mac asks: "Language: Italiano. Is that right?
+# Press Enter for yes, or choose 1-7". The answer is saved where the setup, the wrapper and the agents read it: i18n-prefs.json
+# with the moment of the answer (asked_at, as host-setup.sh writes it: the wizard in the container does not ask a second time)
+# and host.env. Nothing is asked when a language was already chosen (i18n-prefs.json, or JHT_LANG set when the installer started),
+# when nobody can answer (the conditions of Test-WillAutoOnboard), or under powershell -NonInteractive.
+$script:JhtLangAtStart = [string]$env:JHT_LANG
+$script:JhtLanguages = @('en', 'it', 'hu', 'es', 'de', 'fr', 'pt')
+
+# The names of the languages in themselves, ASCII here ([char] for the other letters: Windows PowerShell 5.1 reads this file in the
+# legacy console encoding).
+function Get-JhtLanguageName {
+  param([string]$Code)
+  switch ($Code) {
+    'en' { return 'English' }
+    'it' { return 'Italiano' }
+    'hu' { return 'Magyar' }
+    'es' { return ('Espa' + [char]0x00F1 + 'ol') }
+    'de' { return 'Deutsch' }
+    'fr' { return ('Fran' + [char]0x00E7 + 'ais') }
+    'pt' { return ('Portugu' + [char]0x00EA + 's') }
+  }
+  return $Code
+}
+
+# True when the person already chose a language: a saved choice (i18n-prefs.json, by the setup or the picker), or JHT_LANG set in
+# this terminal before the installer started. The host.env of an earlier install is not a choice: that install did not ask.
+function Test-JhtLanguageChosen {
+  try {
+    $prefs = Join-Path $JhtHome 'i18n-prefs.json'
+    $item = Get-Item -LiteralPath $prefs -Force -ErrorAction Stop
+    if (-not $item.PSIsContainer -and -not ($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -and $item.Length -le 4096) {
+      if ([regex]::IsMatch(([IO.File]::ReadAllText($prefs) -replace '[\r\n]', ''), '"locale"\s*:\s*"[a-z]{2}"')) { return $true }
+    }
+  } catch { }
+  $asked = ($script:JhtLangAtStart.ToLowerInvariant() -replace '[-_.@].*$', '')
+  return ($script:JhtLanguages -contains $asked)
+}
+
+# True under `powershell -NonInteractive` (or any of its abbreviations, -noni included): Read-Host fails there, and no person is meant
+# to answer.
+function Test-JhtNonInteractiveShell {
+  foreach ($arg in [Environment]::GetCommandLineArgs()) {
+    $flag = ([string]$arg).ToLowerInvariant() -replace '^/', '-'
+    if ($flag.Length -ge 4 -and '-noninteractive'.StartsWith($flag)) { return $true }
+  }
+  return $false
+}
+
+# One line the person types (a test stands in for it).
+function Read-JhtLanguageAnswer {
+  return [string](Read-Host)
+}
+
+# The language the answer names: 1-7 picks one of the seven, anything else (Enter included) keeps the one proposed.
+function Resolve-JhtLanguageAnswer {
+  param([string]$Answer, [string]$Proposed)
+  $text = ([string]$Answer).Trim()
+  if ($text -match '^[1-7]$') { return $script:JhtLanguages[[int]$text - 1] }
+  return $Proposed
+}
+
+# The answer saved: i18n-prefs.json (locale and asked_at) and the JHT_LANG line of host.env, both through Write-HostFile; JHT_LANG of
+# this process too, for the setup it starts.
+function Save-JhtLanguageChoice {
+  param([string]$Code)
+  $env:JHT_LANG = $Code
+  $askedAt = [long][Math]::Floor(([DateTimeOffset]::UtcNow).ToUnixTimeSeconds())
+  Write-HostFile -Path (Join-Path $JhtHome 'i18n-prefs.json') -Content ("{`n  ""locale"": ""$Code"",`n  ""asked_at"": $askedAt`n}`n") -Encoding ASCII -NoNewline
+  $hostEnvFile = Join-Path $JhtHome 'host.env'
+  if (Test-Path -LiteralPath $hostEnvFile -PathType Leaf) {
+    $lines = @([IO.File]::ReadAllLines($hostEnvFile) | ForEach-Object { if ($_ -match '^\s*JHT_LANG=') { "JHT_LANG=$Code" } else { $_ } })
+    Write-HostFile -Path $hostEnvFile -Content (($lines -join "`n") + "`n") -NoNewline
+  }
+}
+
+# Asks the confirmation, right before the setup. Returns the language in force after it (the one proposed when nothing was asked).
+function Confirm-JhtLanguage {
+  $proposed = Get-JhtTextLanguage
+  if (Test-JhtLanguageChosen) { return $proposed }
+  if (Test-JhtNonInteractiveShell) { return $proposed }
+  Write-Host ""
+  Write-Host ("  " + (Tsf 'installer.windows.language_confirm' 'Language: %s. Is that right? Press Enter for yes, or choose 1-7:' (Get-JhtLanguageName $proposed)))
+  for ($i = 0; $i -lt $script:JhtLanguages.Count; $i++) {
+    Write-Host ("    {0}) {1}" -f ($i + 1), (Get-JhtLanguageName $script:JhtLanguages[$i]))
+  }
+  Write-Host -NoNewline "  > "
+  $answer = ''
+  try { $answer = Read-JhtLanguageAnswer } catch { $answer = '' }
+  $chosen = Resolve-JhtLanguageAnswer -Answer $answer -Proposed $proposed
+  Save-JhtLanguageChoice -Code $chosen
+  return $chosen
+}
+
 function Invoke-Onboard {
   if (-not (Test-WillAutoOnboard)) {
     if ($PairingToken) {
@@ -1909,6 +2011,8 @@ function Invoke-Onboard {
     }
     return
   }
+  # the language of the setup, confirmed or chosen by the person right before it starts (JHT-T359)
+  $null = Confirm-JhtLanguage
   Write-Host ""
   Write-Info (Ts 'installer.windows.launching_setup_wizard' 'Launching the setup wizard...')
   # Use the CMD shim, which handles the ExecutionPolicy. PathReady guarantees
