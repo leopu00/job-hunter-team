@@ -44,7 +44,7 @@ profilo in `/jht_home/profile/candidate_profile.yml` dentro il container `jht`.
    ───────────────────────────────────           ──────────────────────────────
    name, target_role, location, skills ✅    →    ✅ presenti
    languages [{name, level}]            ✅    →    ✅ (ma chiave 'name' vs 'language'⚠️)
-   ┌─ candidate.citizenship: Hungarian   ─┐  →    ❌ nationality = null
+   ┌─ candidate.citizenship: <country>   ─┐  →    ❌ nationality = null
    │  preferences.work_authorization{eu… │  →    ❌ work_authorization = []
    │  preferences.geography[14 città]    │  →    ❌ location_preferences = []
    │  preferences.role_focus / avoid     │  →    ❌ scartato
@@ -84,7 +84,7 @@ candidate:
   contacts: {email, phone, linkedin, address}
   experience: [{company, role, years, summary}]
   education:  [{institution, degree, year, details}]
-  citizenship: [Hungarian (EU)]
+  citizenship: [<country> (EU)]
 
 preferences:                     # ── semi-libero / narrativo
   work_mode  relocation  salary_annual_eur
