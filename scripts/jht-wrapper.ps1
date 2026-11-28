@@ -8087,7 +8087,7 @@ function Start-SubscriptionLoginBridge {
   try {
     $script:ChatGptTeam = Get-RunningComposeServiceId 'jht'
     if (-not $script:ChatGptTeam -or $script:ChatGptTeam -cnotmatch '^[0-9a-f]{12,64}\z') { return }
-    $dockerPath = (Get-Command docker -CommandType Application -ErrorAction Stop).Source
+    $dockerPath = (Get-Command docker -CommandType Application -ErrorAction Stop | Select-Object -First 1).Source
     $script:ChatGptWatcher = Start-Job -ArgumentList $dockerPath, $script:ChatGptTeam, $script:ChatGptHelper, $script:ChatGptSession, $script:ChatGptRelay, (${function:Test-SubscriptionLoginUrl}.ToString()) -ScriptBlock {
       param($Engine, $Team, $Helper, $Session, $Relay, $UrlCheck)
       Set-Item Function:Test-SubscriptionLoginUrl ([ScriptBlock]::Create($UrlCheck))
