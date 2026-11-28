@@ -8479,18 +8479,18 @@ switch ($Sub) {
     try {
       Start-SubscriptionLoginBridge
       $setupEnv += $ChatGptEnv
-    if ($null -ne $keyPlan.Key) {
-      # -i only: a pipe is not a terminal. No byte-order mark goes in front of the key (Invoke-NativeWithStdin).
-      try {
-        [string[]]$setupArgs = $keyPlan.Args
-        Invoke-NativeWithStdin { $keyPlan.Key | & docker exec -i @setupEnv $Container node $NodeEntry 'setup' @setupArgs }
-        if ($LASTEXITCODE -eq 0) { Write-Host (Format-JhtText 'line.the_setup_keeps_the_key' ($keyPlan.File)) }
-      } finally {
-        $keyPlan.Key = $null
+      if ($null -ne $keyPlan.Key) {
+        # -i only: a pipe is not a terminal. No byte-order mark goes in front of the key (Invoke-NativeWithStdin).
+        try {
+          [string[]]$setupArgs = $keyPlan.Args
+          Invoke-NativeWithStdin { $keyPlan.Key | & docker exec -i @setupEnv $Container node $NodeEntry 'setup' @setupArgs }
+          if ($LASTEXITCODE -eq 0) { Write-Host (Format-JhtText 'line.the_setup_keeps_the_key' ($keyPlan.File)) }
+        } finally {
+          $keyPlan.Key = $null
+        }
+      } else {
+        & { $ErrorActionPreference = 'Continue'; & docker exec @ExecFlags @setupEnv $Container node $NodeEntry 'setup' @Rest }
       }
-    } else {
-      & { $ErrorActionPreference = 'Continue'; & docker exec @ExecFlags @setupEnv $Container node $NodeEntry 'setup' @Rest }
-    }
       $setupCode = $LASTEXITCODE
     } finally { Stop-SubscriptionLoginBridge }
     $global:LASTEXITCODE = $setupCode

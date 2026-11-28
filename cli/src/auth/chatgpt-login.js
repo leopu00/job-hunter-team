@@ -121,7 +121,9 @@ export async function loginChatGpt({ load = loadProvider, output = console.log, 
           const poll = async () => {
             for (;;) {
               abort.signal.throwIfAborted();
-              if (session && fs.existsSync(responsePath(session))) return readSmall(responsePath(session)).url;
+              if (session && fs.existsSync(responsePath(session))) {
+                return validateRedirect(authorizeUrl, readSmall(responsePath(session)).url).href;
+              }
               await sleep(250, undefined, { signal: abort.signal });
             }
           };

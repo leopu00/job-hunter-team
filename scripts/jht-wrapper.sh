@@ -9103,12 +9103,12 @@ chatgpt_bridge_start() {
 setup_exec_container() {
   local rc=0
   if [ -n "${SETUP_KEY_VALUE:-}" ]; then
-    printf '%s\n' "$SETUP_KEY_VALUE" | docker exec -i "${CHATGPT_LOGIN_ENV[@]}" -e JHT_HOST_TYPE="$JHT_HOST_TYPE" "$ATTESTED_CONTAINER_ID" node "$NODE_ENTRY" ${SETUP_KEY_ARGS[@]+"${SETUP_KEY_ARGS[@]}"} || rc=$?
+    printf '%s\n' "$SETUP_KEY_VALUE" | docker exec -i ${CHATGPT_LOGIN_ENV[@]+"${CHATGPT_LOGIN_ENV[@]}"} -e JHT_HOST_TYPE="$JHT_HOST_TYPE" "$ATTESTED_CONTAINER_ID" node "$NODE_ENTRY" ${SETUP_KEY_ARGS[@]+"${SETUP_KEY_ARGS[@]}"} || rc=$?
     SETUP_KEY_VALUE=""
     if [ "$rc" -eq 0 ]; then info "$(jht_say line.the_setup_keeps_the_key "$SETUP_KEY_FILE")"; fi
     return "$rc"
   fi
-  docker exec $EXEC_FLAGS "${CHATGPT_LOGIN_ENV[@]}" -e JHT_HOST_TYPE="$JHT_HOST_TYPE" "$ATTESTED_CONTAINER_ID" node "$NODE_ENTRY" "$@" || rc=$?
+  docker exec $EXEC_FLAGS ${CHATGPT_LOGIN_ENV[@]+"${CHATGPT_LOGIN_ENV[@]}"} -e JHT_HOST_TYPE="$JHT_HOST_TYPE" "$ATTESTED_CONTAINER_ID" node "$NODE_ENTRY" "$@" || rc=$?
   return "$rc"
 }
 
@@ -10396,7 +10396,7 @@ case "$SUB" in
     require_docker
     ensure_up
     chatgpt_bridge_start || exit 1
-    docker exec $EXEC_FLAGS "${CHATGPT_LOGIN_ENV[@]}" "$ATTESTED_CONTAINER_ID" node "$NODE_ENTRY" login chatgpt
+    docker exec $EXEC_FLAGS ${CHATGPT_LOGIN_ENV[@]+"${CHATGPT_LOGIN_ENV[@]}"} "$ATTESTED_CONTAINER_ID" node "$NODE_ENTRY" login chatgpt
     exit $?
     ;;
 
