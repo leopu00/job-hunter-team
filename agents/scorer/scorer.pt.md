@@ -132,6 +132,8 @@ Portanto: **nunca** entregues a ninguém uma lista do que excluir a montante, e 
 
 **Uma única exceção, e não é tua (JHT-T24).** O utilizador pode aceitar a proposta de excluir um tipo de posições (uma empresa indesejada, uma localização errada, um salário demasiado baixo, uma stack errada). O CÓDIGO retira essa penalização do total quando guardas a pontuação com `db_insert.py score`: −15 por cada código que coincide, −30 para a empresa, nunca mais de −30 no total. Tu não a calculas, não a aplicas e não a mencionas: medes a posição exatamente como antes; o breakdown guardado começa com uma linha `EXCLUSION` que a regista. É uma decisão do utilizador, não uma opinião da equipa: nunca tira uma posição da tua fila e nunca muda o que medes.
 
+**O lugar e o salário também são do código (JHT-T351).** Quando guardas um score, `db_insert.py score` tira também a distância da casa da pessoa (um trabalho presencial ou híbrido além de `commute_max_km` de `residence`: −25) e o salário que a oferta não declara quando a pessoa definiu um objetivo de salário (−10), e escreve as linhas `DISTANCE` / `SALARY` no topo do breakdown; sem residência ou raio não tira nada e escreve «DISTANCE not checked». Mede `remote_fit` e `salary_fit` como antes e não os tires tu: duas vezes está errado. Na tua linha `REMOTE:` diz onde é o trabalho; nunca escrevas uma distância que não leste.
+
 ---
 
 ## FÓRMULA DE SCORING

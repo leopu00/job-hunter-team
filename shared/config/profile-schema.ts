@@ -214,6 +214,18 @@ export const CandidateProfileSchema = z
     education: z.array(EducationSchema).default([]),
     work_authorization: z.array(WorkAuthSchema).default([]),
     location_preferences: z.array(z.string().min(1)).default([]),
+    // Where the person lives (lat/lon null until geocoded) and the radius for onsite and hybrid jobs: read by the Scorer's
+    // distance check (shared/skills/score_place_pay.py, JHT-T351). Both optional.
+    residence: z
+      .object({
+        place: z.string().min(1),
+        lat: z.number().min(-90).max(90).nullable().optional(),
+        lon: z.number().min(-180).max(180).nullable().optional(),
+      })
+      .strict()
+      .nullable()
+      .optional(),
+    commute_max_km: z.number().positive().max(20000).nullable().optional(),
     // The person's own text; no guessed amount, currency or annual conversion.
     preferences: z
       .object({

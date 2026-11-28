@@ -238,6 +238,32 @@ def validate_target_role_choice(profile):
 # The only keys of `preferences` (the frontend reads them literally). What the Assistente writes there is exactly these: the
 # profile-yaml and profile-schema skills list them, and tests/test_profile_skills_match_the_validator.py proves they agree.
 PREFERENCE_KEYS = ("work_mode", "work_mode_flexibility", "relocation", "salary_annual_eur")
+RESIDENCE_KEYS = ("place", "lat", "lon")
+
+
+def _coordinate(value, low, high) -> bool:
+    return value is None or (not isinstance(value, bool) and isinstance(value, (int, float)) and low <= value <= high)
+
+
+def validate_residence(profile) -> None:
+    """`residence` {place, lat, lon} (where the person lives; lat/lon null until it is geocoded) and `commute_max_km` (the radius
+    for onsite and hybrid jobs): both optional, read by the Scorer's distance check (shared/skills/score_place_pay.py, JHT-T351)."""
+    residence = profile.get("residence")
+    if residence is not None:
+        if not isinstance(residence, dict):
+            err("residence: mapping {place, lat, lon} required when present")
+        else:
+            if set(residence) - set(RESIDENCE_KEYS):
+                err("residence: unknown field")
+            if not _is_str(residence.get("place")):
+                err("residence.place: non-empty text required")
+            if not _coordinate(residence.get("lat"), -90, 90):
+                err("residence.lat: number between -90 and 90, or null")
+            if not _coordinate(residence.get("lon"), -180, 180):
+                err("residence.lon: number between -180 and 180, or null")
+    radius = profile.get("commute_max_km")
+    if radius is not None and (isinstance(radius, bool) or not isinstance(radius, (int, float)) or not 0 < radius <= 20000):
+        err("commute_max_km: a number of km above 0, or null")
 
 
 def validate(profile) -> None:
@@ -272,6 +298,7 @@ def validate(profile) -> None:
                     err("preferences.salary_annual_eur: text exceeds 8192 UTF-8 bytes")
             except UnicodeError:
                 err("preferences.salary_annual_eur: valid UTF-8 text required")
+    validate_residence(profile)
     validate_skills(profile.get("skills"))
     validate_languages(profile.get("languages"))
     validate_blocks(profile.get("blocks"))

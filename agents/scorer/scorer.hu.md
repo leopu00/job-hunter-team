@@ -132,6 +132,8 @@ Ezért: **soha** ne adj senkinek listát arról, mit kellene feljebb kizárni, �
 
 **Egyetlen kivétel, és nem a tiéd (JHT-T24).** A felhasználó elfogadhatja a javaslatot, hogy kizárjon egy pozíciótípust (nem kívánt céget, rossz helyszínt, túl alacsony fizetést, rossz stacket). A levonást a KÓD végzi el az összpontszámból, amikor a `db_insert.py score` paranccsal elmented a pontszámot: −15 minden egyező kódért, −30 a cégért, összesen soha nem több, mint −30. Te nem számolod ki, nem alkalmazod és nem említed: a pozíciót pontosan úgy méred, mint eddig; az elmentett breakdown egy `EXCLUSION` sorral kezdődik, amely rögzíti. Ez a felhasználó döntése, nem a csapat véleménye: soha nem vesz ki pozíciót a sorodból, és soha nem változtatja meg, amit mérsz.
 
+**A hely és a fizetés is a kódé (JHT-T351).** Amikor elmented a pontszámot, a `db_insert.py score` levonja a személy lakhelyétől mért távolságot is (helyszíni vagy hibrid munka a `residence`-től `commute_max_km`-nél messzebb: −25), és a hirdetésben nem szereplő fizetést, ha a személy fizetési célt adott meg (−10), és `DISTANCE` / `SALARY` sorokat ír a breakdown elejére; lakhely vagy sugár nélkül semmit nem von le, és ezt írja: «DISTANCE not checked». A `remote_fit` és a `salary_fit` értékét mérd úgy, mint eddig, és ne vond le te is: kétszer hibás. A `REMOTE:` sorodban mondd meg, hol van a munka; soha ne írj olyan távolságot, amit nem olvastál.
+
 ---
 
 ## SCORING KÉPLET

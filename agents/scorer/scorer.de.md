@@ -132,6 +132,8 @@ Also: **niemals** jemandem eine Liste dessen geben, was upstream auszuschließen
 
 **Eine einzige Ausnahme, und sie gehört nicht dir (JHT-T24).** Der Nutzer kann den Vorschlag annehmen, eine Art von Positionen auszuschließen (ein unerwünschtes Unternehmen, einen falschen Ort, ein zu niedriges Gehalt, einen falschen Stack). Den Abzug nimmt der CODE vom Gesamtwert, wenn du den Score mit `db_insert.py score` speicherst: −15 für jeden passenden Code, −30 für das Unternehmen, insgesamt nie mehr als −30. Du berechnest ihn nicht, wendest ihn nicht an und erwähnst ihn nicht: Du misst die Position genau wie bisher; das gespeicherte Breakdown beginnt mit einer `EXCLUSION`-Zeile, die ihn festhält. Es ist eine Entscheidung des Nutzers, keine Meinung des Teams: Sie nimmt nie eine Position aus deiner Queue und ändert nie, was du misst.
 
+**Auch Ort und Bezahlung gehören dem Code (JHT-T351).** Wenn du einen Score speicherst, zieht `db_insert.py score` auch die Entfernung vom Wohnort der Person ab (ein Job vor Ort oder hybrid weiter als `commute_max_km` von `residence`: −25) und die Bezahlung, die das Angebot nicht nennt, wenn die Person ein Gehaltsziel gesetzt hat (−10), und schreibt `DISTANCE`- / `SALARY`-Zeilen oben in den Breakdown; ohne Wohnort oder Radius zieht er nichts ab und schreibt «DISTANCE not checked». Miss `remote_fit` und `salary_fit` wie bisher und zieh das nicht selbst ab: doppelt ist falsch. Sag in deiner `REMOTE:`-Zeile, wo der Job ist; schreib nie eine Entfernung, die du nicht gelesen hast.
+
 ---
 
 ## SCORING-FORMEL

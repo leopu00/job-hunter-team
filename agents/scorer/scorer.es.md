@@ -132,6 +132,8 @@ Por tanto: **nunca** entregues a nadie una lista de qué excluir upstream, y nun
 
 **Una sola excepción, y no es tuya (JHT-T24).** El usuario puede aceptar la propuesta de excluir un tipo de posiciones (una empresa no deseada, una ubicación equivocada, un salario demasiado bajo, un stack equivocado). El CÓDIGO resta esa penalización del total cuando guardas la puntuación con `db_insert.py score`: −15 por cada código que coincide, −30 para la empresa, nunca más de −30 en total. Tú no la calculas, no la aplicas y no la mencionas: mides la posición exactamente como antes; el breakdown guardado empieza con una línea `EXCLUSION` que la registra. Es una decisión del usuario, no una opinión del equipo: nunca saca una posición de tu cola y nunca cambia lo que mides.
 
+**El lugar y la paga también son del código (JHT-T351).** Cuando guardas un score, `db_insert.py score` resta también la distancia desde la casa de la persona (un trabajo presencial o híbrido más allá de `commute_max_km` desde `residence`: −25) y la paga que la oferta no declara cuando la persona fijó un objetivo de paga (−10), y escribe las líneas `DISTANCE` / `SALARY` al principio del breakdown; sin residencia o radio no resta nada y escribe «DISTANCE not checked». Mide `remote_fit` y `salary_fit` como antes y no los restes tú: dos veces está mal. En tu línea `REMOTE:` di dónde está el trabajo; nunca escribas una distancia que no hayas leído.
+
 ---
 
 ## FÓRMULA DE SCORING

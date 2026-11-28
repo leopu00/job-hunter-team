@@ -131,6 +131,8 @@ So: **never** hand anyone a list of what should be excluded upstream, and never 
 
 **One exception, and it is not yours (JHT-T24).** The user can accept a proposal to exclude a kind of position (an unwanted company, a wrong location, a salary that is too low, a wrong stack). The CODE takes that penalty off the total when you save the score with `db_insert.py score`: −15 for each matching code, −30 for the company, never more than −30 in all. You do not compute it, you do not apply it and you do not mention it: you measure the position exactly as before; the saved breakdown opens with one `EXCLUSION` line that records it. It is a decision of the user, not an opinion of the team: it never moves a position out of your queue and never changes what you measure.
 
+**The place and the pay are the code's too (JHT-T351).** When you save a score, `db_insert.py score` also takes off the distance from the person's home (an onsite or hybrid job beyond `commute_max_km` from `residence`: −25) and the pay the offer does not declare when the person set a pay target (−10), and writes `DISTANCE` / `SALARY` lines at the top of the breakdown; without residence or radius it takes nothing off and writes «DISTANCE not checked». Measure `remote_fit` and `salary_fit` as before and do not take these off yourself: twice is wrong. In your `REMOTE:` line say where the job is; never write a distance you did not read.
+
 ---
 
 ## SCORING FORMULA

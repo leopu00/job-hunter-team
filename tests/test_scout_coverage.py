@@ -650,3 +650,29 @@ def test_talent_hint_gives_the_search_and_the_ad_link_and_says_a_not_found_of_th
         # the 404 came from an id typed by hand (the shell variable left empty); the «NOT IN THE DATABASE YET» of check-url means the ad is new
         assert "404" in hint and "NOT IN THE DATABASE YET" in hint and "new to the database" in hint
         assert "robots.txt disallows /search-jobs/*" in hint and "allows /jobs and /view" in hint and "job-hunter-team-scout/1" in hint
+
+
+# ── JHT-T351: the country of a language is not a country of the search without being chosen ───────────────────────────
+LIVES_ELSEWHERE = ("languages:\n  - language: Svenska\n    level: native\n  - language: Español\n    level: B2\n"
+                   "  - language: English\n    level: B2\n"
+                   "location: anywhere\nresidence:\n  place: Valencia, Spain\npreferences:\n  relocation: true\n")
+
+
+def test_a_native_language_does_not_open_its_country_when_the_person_lives_elsewhere(profile):
+    profile.write_text(LIVES_ELSEWHERE, encoding="utf-8")
+    plan = cov.load_plan()
+    countries = {e["country"] for e in plan["entries"]}
+    assert "se" not in countries and "se" in plan["skipped_language_only"]
+    assert "es" in countries and "remote" in countries
+    assert "the country was not chosen: " in cov.render(plan, []) and " se" in cov.render(plan, [])
+
+
+def test_naming_the_country_brings_its_portals_back(profile):
+    profile.write_text(LIVES_ELSEWHERE + "location_preferences:\n  - Valencia, Spain\n  - Stockholm, Sweden\n", encoding="utf-8")
+    plan = cov.load_plan()
+    assert "se" in {e["country"] for e in plan["entries"]} and "se" not in plan["skipped_language_only"]
+
+
+def test_no_country_known_keeps_the_languages_as_the_only_sign(profile):
+    plan = cov.load_plan()        # Swedish and English, no place at all
+    assert plan["skipped_language_only"] == [] and "se" in {e["country"] for e in plan["entries"]}

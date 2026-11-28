@@ -635,6 +635,16 @@ def insert_score(args):
         line = profile_exclusions.breakdown_line(penalty, excluded_by)
         args.breakdown = f"{line}\n{args.breakdown}" if args.breakdown else line
 
+    # The distance from the person's home and the pay the offer does not declare (JHT-T351): the code's too, from the columns of
+    # the position and the profile. Without residence or radius nothing is taken off, and the breakdown says it was not checked.
+    import score_place_pay
+    place_points, place_lines = score_place_pay.for_position(conn, args.position_id)
+    if place_points or place_lines:
+        before_place = args.total
+        args.total = max(0, args.total - place_points)
+        block = "\n".join(place_lines)
+        args.breakdown = f"{block}\n{args.breakdown}" if args.breakdown else block
+
     # Un re-score è un aggiornamento della stessa valutazione. `REPLACE`
     # cancellerebbe la riga sul conflitto di position_id e ne creerebbe una
     # nuova: con AUTOINCREMENT cambierebbe scores.id, l'identità della riga
@@ -694,6 +704,10 @@ def insert_score(args):
         print(f"Score inserted for position {args.position_id}: {args.total}/100")
     if penalty:
         print(f"Profile exclusion: -{penalty} ({', '.join(excluded_by)}), {raw_total} -> {args.total}")
+    if place_points:
+        print(f"Place and pay: -{place_points}, {before_place} -> {args.total}")
+    for line in place_lines:
+        print(line)
     conn.close()
 
 

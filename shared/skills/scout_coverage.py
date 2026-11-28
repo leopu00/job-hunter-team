@@ -142,12 +142,19 @@ def work_rights(profile_path=None) -> frozenset:
     return frozenset(found)
 
 
-def build_plan(spoken: dict, mode: str = "", data: dict | None = None, rights=frozenset(), home=(), relocation: bool = True) -> dict:
+def build_plan(spoken: dict, mode: str = "", data: dict | None = None, rights=frozenset(), home=(), relocation: bool = True,
+               named=()) -> dict:
     """{languages, unmapped, remote, entries}: the portals to cover, core ones of every group first. A portal that needs a right
     to work (`needs_work_right`) is left out unless `rights` (see `work_rights`) has it, and `skipped` says which country it was. With
     `home` (the profile's home countries, see scout_area.read_area) and no `relocation`, a portal of ANOTHER country is left out too
     (`skipped_abroad`): its ads are onsite there, and the person lives elsewhere and did not say she would move. `remote` is nobody's
-    country. No home known, or willingness to relocate: nothing is left out for this."""
+    country. No home known, or willingness to relocate: nothing is left out for this.
+
+    `named` (JHT-T351): the countries the person CHOSE (named in their places or their residence, see `named_countries`). When there
+    is one, a portal of a country not named is left out too, even with relocation: speaking a country's language does not make it a
+    country of the search (a person living in one country, native speaker of another's language and searching «anywhere», got the
+    portals of that other country and its onsite jobs at the top). It is said in `skipped_language_only`, to be confirmed by naming the country in the profile's
+    places. No country named at all: the languages stay the only sign, as before."""
     data = data or table()
     strong = sorted(_lang.business_languages(spoken), key=lambda code: (-spoken[code], code))
     groups = [code for code in strong if code != "en"]
@@ -161,7 +168,8 @@ def build_plan(spoken: dict, mode: str = "", data: dict | None = None, rights=fr
     remote = bool(strong) and not onsite
     if remote:
         groups.append("remote")
-    entries, unmapped, skipped, abroad = [], [], set(), set()
+    entries, unmapped, skipped, abroad, language_only = [], [], set(), set(), set()
+    named = frozenset(named or ())
     for rank, code in enumerate(groups):
         listed = data["groups"].get(code)
         if not listed:
@@ -174,6 +182,9 @@ def build_plan(spoken: dict, mode: str = "", data: dict | None = None, rights=fr
             if home and not relocation and item["country"] != "remote" and item["country"] not in home:
                 abroad.add(item["country"])
                 continue
+            if named and item["country"] != "remote" and item["country"] not in named:
+                language_only.add(item["country"])
+                continue
             entry = dict(item)
             entry["language"] = code
             entry["portal_language"] = _portal_language(code, item)
@@ -183,7 +194,8 @@ def build_plan(spoken: dict, mode: str = "", data: dict | None = None, rights=fr
     for position, entry in enumerate(entries, 1):
         entry.pop("_rank")
         entry["priority"] = position
-    return {"languages": strong, "unmapped": unmapped, "remote": remote, "entries": entries, "skipped_no_work_right": sorted(skipped), "skipped_abroad": sorted(abroad)}
+    return {"languages": strong, "unmapped": unmapped, "remote": remote, "entries": entries, "skipped_no_work_right": sorted(skipped),
+            "skipped_abroad": sorted(abroad), "skipped_language_only": sorted(language_only - abroad)}
 
 
 def _portal_language(group: str, item: dict) -> str:
@@ -568,6 +580,24 @@ def default_since(now: float) -> float:
     return now - 12.0 * 3600
 
 
+def named_countries(profile_path=None) -> frozenset:
+    """The countries the person chose: named in their places (`location`, `location_preferences`) or in their residence
+    (`residence.place`). Empty when none names a country («Ovunque», a city without its country, no profile)."""
+    try:
+        import scout_area
+        import scout_search_scope as scope_mod
+        import yaml
+        path = scout_area._profile_path(profile_path)
+        places = list(scope_mod.read_scope(path).places)
+        raw = yaml.safe_load(path.read_text(encoding="utf-8")) if path.stat().st_size <= scope_mod.MAX_PROFILE_BYTES else None
+        residence = raw.get("residence") if isinstance(raw, dict) else None
+        if isinstance(residence, dict) and isinstance(residence.get("place"), str):
+            places.append(residence["place"])
+        return frozenset(c for c in (scout_area.country_of(place) for place in places) if c)
+    except Exception:  # noqa: BLE001 — nothing readable: no country named, the languages stay the only sign
+        return frozenset()
+
+
 def load_plan(profile_path=None) -> dict:
     home, relocation, mode = (), True, work_mode(profile_path)
     try:
@@ -581,7 +611,8 @@ def load_plan(profile_path=None) -> dict:
             home, relocation = tuple(area["home"]), area["relocation"]
     except Exception:  # noqa: BLE001 — no area, nothing is left out for being abroad
         pass
-    return build_plan(_lang.read_languages(profile_path), mode, rights=work_rights(profile_path), home=home, relocation=relocation)
+    return build_plan(_lang.read_languages(profile_path), mode, rights=work_rights(profile_path), home=home, relocation=relocation,
+                      named=named_countries(profile_path))
 
 
 def rows_since(since_ts: float) -> list:
@@ -598,6 +629,9 @@ def render(plan: dict, report: list) -> str:
             r["returned"], r["inserted"], "; ".join(r["missing"])))
     if plan["unmapped"]:
         lines.append("languages without a table yet: " + " ".join(plan["unmapped"]))
+    if plan.get("skipped_language_only"):
+        lines.append("left out, a language is spoken there but the country was not chosen: " + " ".join(plan["skipped_language_only"])
+                     + " (it enters only if the person names it in the profile's places; never search it on your own)")
     if not plan["entries"]:
         lines.append("(no plan: the profile's languages cannot be read)")
     return "\n".join(lines)

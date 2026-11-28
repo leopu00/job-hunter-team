@@ -165,10 +165,15 @@ def test_the_plan_of_a_profile_that_stays_has_only_its_own_country_and_the_remot
     assert not {("thehub", "se"), ("keepmeposted", "mt"), ("reed", "gb"), ("linkedin", "ie")} & {(e["slug"], e["country"]) for e in plan["entries"]}
 
 
-def test_the_plan_of_a_profile_willing_to_relocate_has_the_other_countries_back(home):
+def test_a_profile_willing_to_relocate_gets_back_only_the_countries_it_names(home):
+    # JHT-T351: willing to move is not a choice of country; a language spoken there does not make it one either
     _profile(home, IT_PROFILE + "  relocation: true\n")
     plan = cov.load_plan()
-    assert {"ie", "se", "mt"} <= {e["country"] for e in plan["entries"]} and plan["skipped_abroad"] == []
+    assert plan["skipped_abroad"] == [] and {"ie", "se", "mt"} <= set(plan["skipped_language_only"])
+    assert not {"ie", "se", "mt"} & {e["country"] for e in plan["entries"]}
+    _profile(home, IT_PROFILE + "  relocation: true\nlocation_preferences:\n  - Bologna, Italy\n  - Dublin, Ireland\n")
+    plan = cov.load_plan()
+    assert "ie" in {e["country"] for e in plan["entries"]} and "ie" not in plan["skipped_language_only"]
 
 
 @pytest.mark.parametrize("place", ["Bologna", "Lugano", ""])
