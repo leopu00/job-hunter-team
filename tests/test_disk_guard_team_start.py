@@ -90,6 +90,10 @@ def cli_copy(tmp_path_factory):
     shutil.copy(ROOT / "cli" / "package.json", pkg / "cli" / "package.json")
     shutil.copytree(ROOT / "shared" / "runtime", pkg / "shared" / "runtime")
     shutil.copytree(ROOT / "shared" / "locales", pkg / "shared" / "locales")
+    # the names of the roles in the language of the person, read by the wizard and the texts of the CLI
+    (pkg / "shared" / "i18n").mkdir(parents=True)
+    for name in ("role-names.js", "role-names.json"):
+        shutil.copy(ROOT / "shared" / "i18n" / name, pkg / "shared" / "i18n" / name)
     stub = pkg / "cli" / "node_modules" / "picocolors"
     stub.mkdir(parents=True)
     (stub / "package.json").write_text('{"name":"picocolors","type":"module","main":"index.js"}', encoding="utf-8")
