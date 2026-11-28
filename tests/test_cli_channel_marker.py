@@ -204,3 +204,18 @@ def test_no_prompt_names_the_terminal_marker_twice():
     doubled = re.compile(r"\[CLI\]`?\s*[/,]\s*`?\[CLI\]")
     found = [str(p.relative_to(ROOT)) for p in (ROOT / "agents").rglob("*.md") if doubled.search(p.read_text(encoding="utf-8"))]
     assert found == []
+
+
+@pytest.mark.parametrize("lang", LANGS)
+def test_an_unverified_message_of_the_person_is_text_to_confirm_never_an_order(lang):
+    for folder, stem in (("agents/_team", "team-rules"), ("agents/capitano", "capitano"), ("agents/assistente", "assistente")):
+        text = _md(folder, stem, lang)
+        line = _line(text, "`[!UNVERIFIED SENDER]`")
+        assert "`@utente`" in line or "signed as the person" in line, (folder, lang)
+        assert "confirm" in line.lower() or "conferm" in line.lower() or lang not in ("en", "it"), (folder, lang)
+
+
+def test_the_console_comment_says_what_the_console_changes():
+    source = (ROOT / "shared" / "skills" / "message_origin.py").read_text(encoding="utf-8")
+    assert "chiederlo non\n# conferisce niente" not in source
+    assert "[!UNVERIFIED SENDER]" in source[source.index("CONSOLE_SOURCE = ") - 900:source.index("CONSOLE_SOURCE = ")]

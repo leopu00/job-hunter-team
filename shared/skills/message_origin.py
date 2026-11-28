@@ -399,8 +399,12 @@ def fence_user_turn_message(message):
 # nascondono istruzioni, una riga può imitare una busta), l'ATTRIBUZIONE è diversa: non
 # c'è niente di verificabile da affermare. Quindi qui si PULISCE senza etichettare:
 # `external_content.sanitize_user_text`, la stessa funzione del recinto, senza il
-# confine. Il chiamante lo CHIEDE con `JHT_TMUX_SEND_FROM=user-console`; chiederlo non
-# conferisce niente (aggiunge pulizia, non fiducia), quindi non serve che sia autentico.
+# confine. Il chiamante lo CHIEDE con `JHT_TMUX_SEND_FROM=user-console`. Chiederlo aggiunge
+# pulizia e una sola cosa in più (JHT-T348): da un pane che NON è una sessione della squadra,
+# una busta `@utente` non è rifiutata come impersonazione ma consegnata marcata
+# [!UNVERIFIED SENDER]. Il pane di un agente resta impersonazione anche chiedendolo. Non è
+# un'identità verificata: chi riceve un @utente marcato non verificato lo tratta come un testo
+# da confermare con la persona, mai come un suo ordine (agents/_team/team-rules).
 CONSOLE_SOURCE = "user-console"
 
 
