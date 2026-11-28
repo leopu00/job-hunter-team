@@ -534,11 +534,15 @@ def _budget_verdict(config, budget, spent, now, held_by_pace=False, restart_esti
     # with 0.46 $ left, and then «riprende alle 17:41» 37 s later, were two opposite words for one pause. The stop stays the
     # budget's only when the pace has no pause to give.
     over = used + ahead >= budget["usd"] - team_budget.margin(budget["usd"])
+    if budget.get("daily"):
+        # the ceiling a day spread over the day: only the pace pauses here. The stop at the ceiling is no_quota_cap's (it lifts by
+        # itself the next day) and midnight is no «period over»: a new day is a new budget of one day.
+        over = False
     if over and used >= budget["usd"] - team_budget.margin(budget["usd"]):
         return stop
     if budget["starts"] is None:
         return stop if over else None  # a budget of a duration that has not started: no period and no pace yet, only the dollars
-    if now + CHECK_EVERY_SEC > budget["ends"]:  # the end falls before the next look: now, not a look late
+    if now + CHECK_EVERY_SEC > budget["ends"] and not budget.get("daily"):  # the end falls before the next look: now, not a look late
         return dict(common, why="period", ceiling=budget["usd"], resumes=None)
     if not budget.get("pace"):
         return stop if over else None   # the pace is the person's to ask for: off, the budget and the end of the period are all that stop the team
@@ -1162,7 +1166,7 @@ def stage_fit(home, now, sessions):
     names = [x for x in (sessions or []) if isinstance(x, str)]
     try:
         config = _read_state(Path(home) / "jht.config.json", FLAG_MAX_BYTES)
-        budget = team_budget.read(config, home) if isinstance(config, dict) else None
+        budget = (team_budget.read(config, home) or team_budget.daily_paced(config, now)) if isinstance(config, dict) else None
     except Exception:  # noqa: BLE001
         return {"taken": [], "waiting": names, "estimate": 0.0, "costs": {}}
     if budget is None or not budget.get("pace"):
@@ -1216,6 +1220,8 @@ def _tell_budget_changed(api, run, budget, config, now):
 
     done = run.state.setdefault("pi_spend_cap", {})
     saved = budget.get("saved_at") or "%s:%s:%s" % (budget["usd"], budget.get("starts"), budget.get("ends"))   # a fixed period has no stamp
+    if budget.get("daily"):
+        saved = "daily:%s" % budget["usd"]   # a new day is not a new budget: the Capitano is told only when the ceiling changes
     seen = done.get("budget_seen")
     if seen == saved:
         return
@@ -1248,7 +1254,7 @@ def step(api, run, notify_user=None):
         now = api.time.time()
         home = api._path("JHT_HOME")
         config = api._read_config_json()
-        budget = team_budget.read(config, home)
+        budget = team_budget.read(config, home) or team_budget.daily_paced(config, now)
         if budget is not None:
             try:    # a notice that fails is a notice lost, never a look of the brake lost
                 _tell_budget_changed(api, run, budget, config, now)

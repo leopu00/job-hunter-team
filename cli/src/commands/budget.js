@@ -46,10 +46,10 @@ function dailyOf(config) {
   const cap = config?.no_quota_cap;
   if (!cap || typeof cap !== 'object') return null;
   const usd = positive(cap.usd);
-  if (usd) return { usd, declared: usd, currency: 'USD' };
+  if (usd) return { usd, declared: usd, currency: 'USD', pace: cap.pace === true };
   const eur = positive(cap.eur);
   if (!eur) return null;
-  return { usd: Math.round(eur * (positive(cap.eur_to_usd) ?? 1) * 1e6) / 1e6, declared: eur, currency: 'EUR' };
+  return { usd: Math.round(eur * (positive(cap.eur_to_usd) ?? 1) * 1e6) / 1e6, declared: eur, currency: 'EUR', pace: cap.pace === true };
 }
 
 /** What is set now, as data: the budget (with the start the brake recorded), the ceiling per day, the working hours. */
@@ -125,6 +125,8 @@ export function describeState(state) {
   if (!d) lines.push(say('budget.line_no_daily'));
   else if (d.currency === 'EUR') lines.push(say('budget.line_daily_eur', { declared: d.declared, usd: d.usd }));
   else lines.push(say('budget.line_daily', { usd: d.usd }));
+  // the pace of the ceiling a day applies only without a budget of a period (the brake reads one or the other)
+  if (d && d.pace && !b) lines.push(say('budget.line_daily_pace_on'));
   const w = state.working_hours?.windows?.[0];
   if (!w) lines.push(say('budget.line_always'));
   else {
@@ -168,11 +170,21 @@ export function applySet(config, opts, { now = new Date(), timeZone = localTimeZ
     changed = true;
   }
 
+  if (opts.dailyPace !== undefined) {
+    const value = String(opts.dailyPace).trim().toLowerCase();
+    if (!['on', 'off'].includes(value)) return { error: say('budget.error_pace') };
+    const cap = next.no_quota_cap && typeof next.no_quota_cap === 'object' ? { ...next.no_quota_cap } : {};
+    if (value === 'on' && !(cap.usd > 0 || cap.eur > 0) && opts.dailyUsd === undefined) return { error: say('budget.error_daily_pace') };
+    if (value === 'on') cap.pace = true; else delete cap.pace;
+    next.no_quota_cap = cap;
+    changed = true;
+  }
+
   if (opts.dailyUsd !== undefined) {
     const text = String(opts.dailyUsd).trim().toLowerCase();
     const cap = next.no_quota_cap && typeof next.no_quota_cap === 'object' ? { ...next.no_quota_cap } : {};
     if (['none', 'off', '0'].includes(text)) {
-      delete cap.usd; delete cap.eur; delete cap.eur_to_usd;
+      delete cap.usd; delete cap.eur; delete cap.eur_to_usd; delete cap.pace;
     } else {
       const usd = parseUsd(text);
       if (usd === null) return { error: say('budget.error_daily') };
@@ -209,7 +221,7 @@ export function applyClear(config) {
   }
   if (next.no_quota_cap && typeof next.no_quota_cap === 'object') {
     const cap = { ...next.no_quota_cap };
-    delete cap.usd; delete cap.eur; delete cap.eur_to_usd;
+    delete cap.usd; delete cap.eur; delete cap.eur_to_usd; delete cap.pace;
     if (Object.keys(cap).length) next.no_quota_cap = cap; else delete next.no_quota_cap;
   }
   return next;
@@ -252,6 +264,7 @@ export function registerBudgetCommand(program) {
     .option('--until <time>', say('budget.opt.until'))
     .option('--pace <on|off>', say('budget.opt.pace'))
     .option('--daily-usd <dollars|none>', say('budget.opt.daily_usd'))
+    .option('--daily-pace <on|off>', say('budget.opt.daily_pace'))
     .option('--work-days <days>', say('budget.opt.work_days'))
     .option('--work-time <from-to>', say('budget.opt.work_time'))
     .option('--always', say('budget.opt.always'))

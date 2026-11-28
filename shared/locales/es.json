@@ -692,6 +692,7 @@
   "wizard.budget.subscription_note": "Con la suscripción de ChatGPT el equipo se ajusta solo a los límites de tu plan (5 horas y semana): no gasta dinero de más. Elige abajo cuándo trabaja.",
   "wizard.budget.summary_subscription": "Suscripción de ChatGPT: el equipo sigue los límites de tu plan y no gasta dinero de más; trabaja %s.",
   "wizard.budget.change_later": "Lo cambias cuando quieras con jht budget (por ejemplo: jht budget set --daily-usd 15).",
+  "wizard.budget.daily_pace_note": "Lo reparte a lo largo del día: cuando va más rápido, espera un rato por sí solo.",
   "wizard.budget.period_prompt": "¿Por cuánto tiempo? (30m, 2h, 3d, o una hora como 18:30)",
   "wizard.budget.period_invalid": "Escribe minutos, horas o días (30m, 2h, 3d) o una hora (18:30).",
   "wizard.budget.daily_prompt": "¿Como mucho cuántos dólares al día? (vacío = sin tope diario)",

@@ -692,6 +692,7 @@
   "wizard.budget.subscription_note": "Mit dem ChatGPT-Abo richtet sich das Team nach den Grenzen deines Plans (5 Stunden und Woche): Es gibt kein Geld darüber hinaus aus. Wähle unten, wann es arbeitet.",
   "wizard.budget.summary_subscription": "ChatGPT-Abo: Das Team folgt den Grenzen deines Plans und gibt kein Geld darüber hinaus aus; es arbeitet %s.",
   "wizard.budget.change_later": "Du kannst es jederzeit mit jht budget ändern (zum Beispiel: jht budget set --daily-usd 15).",
+  "wizard.budget.daily_pace_note": "Es verteilt ihn über den Tag: Wenn es schneller ist, wartet es von selbst eine Weile.",
   "wizard.budget.period_prompt": "Wie lange? (30m, 2h, 3d oder eine Uhrzeit wie 18:30)",
   "wizard.budget.period_invalid": "Schreib Minuten, Stunden oder Tage (30m, 2h, 3d) oder eine Uhrzeit (18:30).",
   "wizard.budget.daily_prompt": "Höchstens wie viele Dollar pro Tag? (leer = keine Tagesobergrenze)",

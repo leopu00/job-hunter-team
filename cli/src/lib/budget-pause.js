@@ -50,7 +50,8 @@ function staleForTheSavedBudget(home, flagPath, cap) {
     const config = JSON.parse(readFileSync(join(home, 'jht.config.json'), 'utf8'));
     // a pause of a budget when the config has no budget any more (a setup that chose a ceiling per day, `jht budget clear`):
     // the brake lifts it at its next tick, and it is not the person's budget to talk about (JHT-T345b)
-    if (cap?.why !== 'stop_at' && config && typeof config === 'object' && !config.team?.budget) return true;
+    const dailyPace = config?.no_quota_cap?.pace === true && cap?.why === 'pace';
+    if (cap?.why !== 'stop_at' && !dailyPace && config && typeof config === 'object' && !config.team?.budget) return true;
     const saved = Date.parse(config?.team?.budget?.saved_at);
     if (!Number.isFinite(saved)) return false;
     const before = (iso) => typeof iso === 'string' && Date.parse(iso) < saved;

@@ -693,6 +693,7 @@
   "wizard.budget.subscription_note": "A ChatGPT-előfizetéssel a csapat a csomagod korlátaihoz igazodik (5 órás és heti): ezen felül nem költ pénzt. Lent válaszd ki, mikor dolgozzon.",
   "wizard.budget.summary_subscription": "ChatGPT-előfizetés: a csapat a csomagod korlátait követi, és nem költ pénzt ezen felül; munkaidő: %s.",
   "wizard.budget.change_later": "Bármikor módosíthatod a jht budget paranccsal (például: jht budget set --daily-usd 15).",
+  "wizard.budget.daily_pace_note": "Elosztja a napon belül: ha gyorsabban halad, magától vár egy kicsit.",
   "wizard.budget.period_prompt": "Mennyi ideig? (30m, 2h, 3d, vagy egy időpont, például 18:30)",
   "wizard.budget.period_invalid": "Írj perceket, órákat vagy napokat (30m, 2h, 3d) vagy egy időpontot (18:30).",
   "wizard.budget.daily_prompt": "Legfeljebb hány dollár naponta? (üres = nincs napi plafon)",

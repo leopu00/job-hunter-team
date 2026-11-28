@@ -69,7 +69,7 @@ test('the state reads the start the brake recorded for this budget, and not one 
   const start = { saved_at: 'S1', starts_at: '2026-11-15T22:00:00+00:00', ends_at: '2026-11-15T22:15:00+00:00' };
   assert.equal(budgetState(config, start).budget.ends_at, start.ends_at);
   assert.equal(budgetState(config, { ...start, saved_at: 'OLD' }).budget.starts_at, null);
-  assert.deepEqual(budgetState({ ...BASE, no_quota_cap: { eur: 10, eur_to_usd: 1.1 } }, null).daily, { usd: 11, declared: 10, currency: 'EUR' });
+  assert.deepEqual(budgetState({ ...BASE, no_quota_cap: { eur: 10, eur_to_usd: 1.1 } }, null).daily, { usd: 11, declared: 10, currency: 'EUR', pace: false });
 });
 
 function box() {
@@ -112,4 +112,17 @@ test('with no configuration the command says to run the setup', () => {
   const r = jht({ root, home: join(root, '.jht') }, []);
   assert.equal(r.status, 1);
   assert.match(r.out, /jht setup/);
+});
+
+test('the ceiling a day spread over the day: --daily-pace on and off, and it needs a ceiling (JHT-T345b)', () => {
+  const on = applySet({ ...BASE, no_quota_cap: { usd: 10 } }, { dailyPace: 'on' }, { now: NOW });
+  assert.deepEqual(on.config.no_quota_cap, { usd: 10, pace: true });
+  assert.equal(on.newBudget, false);
+  assert.deepEqual(applySet(on.config, { dailyPace: 'off' }, { now: NOW }).config.no_quota_cap, { usd: 10 });
+  assert.ok(applySet(BASE, { dailyPace: 'on' }, { now: NOW }).error, 'no ceiling to spread');
+  assert.deepEqual(applySet(BASE, { dailyPace: 'on', dailyUsd: '5' }, { now: NOW }).config.no_quota_cap, { usd: 5, pace: true });
+  assert.ok(applySet(on.config, { dailyPace: 'maybe' }, { now: NOW }).error);
+  assert.equal('no_quota_cap' in applySet(on.config, { dailyUsd: 'none' }, { now: NOW }).config, false, 'no ceiling, no pace');
+  assert.equal('no_quota_cap' in applyClear(on.config), false);
+  assert.equal(budgetState(on.config, null).daily.pace, true);
 });
