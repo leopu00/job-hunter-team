@@ -109,6 +109,18 @@ def country_of(location, table: dict | None = None):
     return found[-1] if found else None
 
 
+def country_of_entry(entry, table: dict | None = None):
+    """The country an ENTRY of a list of places names (`location_preferences`, the card of the area): like `country_of`, and
+    an entry that is only a country code counts in lowercase too («it», «es»). In free text two lowercase letters are a word,
+    so `country_of` keeps asking for capitals; a whole entry of the list is not free text (JHT-T351 F-02)."""
+    if isinstance(entry, str):
+        raw = entry.strip()
+        table = table or _table()
+        if len(raw) == 2 and raw.isalpha() and raw.lower() in set(table["country_names"]):
+            return raw.lower()
+    return country_of(entry, table)
+
+
 def _names_table(table: dict | None = None):
     table = table or _table()
     names = {}
@@ -203,7 +215,8 @@ def read_area(profile=None, table: dict | None = None) -> dict | None:
         scope = scope_mod.read_scope(path)
     except Exception:  # noqa: BLE001 — no profile, no yaml, a broken file: no answer, never a guess
         return None
-    home = sorted({c for c in (country_of(place, table) for place in scope.places) if c})
+    # an entry that is only a code («it») names its country too (JHT-T351 F-02)
+    home = sorted({c for c in (country_of_entry(place, table) for place in scope.places) if c})
     if not home:
         return None
     return {"home": home, "relocation": relocation_allowed(scope.relocation), "work_mode": scope.work_mode}

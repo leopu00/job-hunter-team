@@ -92,9 +92,11 @@ Frage weiter, bis der Nutzer sagt, du sollst aufhören — mehr Daten = CV und S
 | Feld | YAML-Pfad | Neutrale Frage |
 |---|---|---|
 | Wohnort | `residence` = `{place: "Stadt, Land", lat: null, lon: null}` | "Wo wohnst du? Stadt und Land reichen." |
-| Radius für Stellen vor Ort und hybrid | `commute_max_km` (eine Zahl in km) | "Für eine Stelle im Büro oder hybrid: wie weit würdest du fahren? In km, oder als Zeit und ich rechne es um." |
+| Radius für Stellen vor Ort und hybrid | `commute_said` (die Worte der Person) oder `commute_max_km` (eine Zahl in km) | "Für eine Stelle im Büro oder hybrid: wie weit würdest du fahren? In km oder als Zeit, wie du magst." |
 
-- Schreib `place` als «Stadt, Land»; lass `lat`/`lon` auf `null` (nie Koordinaten aus dem Gedächtnis). Eine Zeit («45 Minuten mit dem Auto») rechnest du in km um und sagst die Zahl, die du geschrieben hast.
+- Schreib `place` als «Stadt, Land», immer mit dem Land: eine Stadt allein gibt der Entfernungsprüfung kein Land zum Vergleichen, und die Lücken fragen `residence` wieder. Lass `lat`/`lon` auf `null` (nie Koordinaten aus dem Gedächtnis).
+- Eine Zeit («45 Minuten mit dem Auto») rechnest du nicht selbst in km um: schreib die Worte der Person, wie sie sie gesagt hat, in `commute_said`, und der Code rechnet die Minuten mit einer festgelegten Geschwindigkeit je Verkehrsmittel in km um. `commute_max_km` nur, wenn die Person km gesagt hat.
+- «Nur Großstädte» für eine Stelle vor Ort oder hybrid: `preferences.only_big_cities: true`; der Scorer senkt dann eine Stelle in einem kleinen Ort und schreibt den Grund.
 - Den Radius fragst du nur, wenn die Arbeit nicht nur remote ist (`preferences.work_mode`).
 - «Überall» als Ort der Suche ist eine Wahl, keine Antwort zum Ablegen: stell EINE Detailfrage — die ganze Welt oder einige Länder? auch vor Ort im Ausland oder nur remote? würdest du umziehen? — und schreib, was sie sagt (eine Liste von Ländern, `preferences.relocation`), oder behalte «überall», wenn sie das meint (siehe nächster Abschnitt).
 

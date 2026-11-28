@@ -94,9 +94,11 @@ Keep asking until the user tells you to stop — more data = a more tailored CV 
 | Field | YAML path | Neutral question |
 |---|---|---|
 | Residence | `residence` = `{place: "Town, Country", lat: null, lon: null}` | "Where do you live? Town and country are enough." |
-| Radius for onsite and hybrid jobs | `commute_max_km` (a number of km) | "For a job in the office or hybrid, how far are you willing to travel? In km, or in time and I convert it." |
+| Radius for onsite and hybrid jobs | `commute_said` (the person's words) or `commute_max_km` (a number of km) | "For a job in the office or hybrid, how far are you willing to travel? In km or in time, as you prefer." |
 
-- Write `place` as «Town, Country»; leave `lat`/`lon` at `null` (never coordinates from memory). A time («45 minutes by car») you turn into km and say the figure you wrote.
+- Write `place` as «Town, Country», always with the country: a town alone gives the distance check no country to compare, and the gaps raise `residence` again. Leave `lat`/`lon` at `null` (never coordinates from memory).
+- A time («45 minutes by car») you do not turn into km yourself: write the person's words as they said them in `commute_said`, and the code turns the minutes into km with a declared speed for the way they travel. `commute_max_km` only when the person said km.
+- «Only big cities» for an office or hybrid job: `preferences.only_big_cities: true`; the Scorer then lowers a job in a small place and writes why.
 - Ask the radius only when the work is not only remote (`preferences.work_mode`).
 - «Anywhere» / «Ovunque» as the place of the search is a choice, not an answer to file away: ask ONE question of detail — the whole world, or some countries? onsite abroad too, or remote only? would they move? — then write what they say (a list of countries, `preferences.relocation`), or keep «anywhere» if that is what they mean (see the next section).
 

@@ -226,12 +226,17 @@ export const CandidateProfileSchema = z
       .nullable()
       .optional(),
     commute_max_km: z.number().positive().max(20000).nullable().optional(),
+    // The person's own words for the way to the office («20 min in auto»): kept as said, and a duration in them becomes km by the
+    // declared conversion of score_place_pay.py (JHT-T351 F-02).
+    commute_said: z.string().min(1).max(200).nullable().optional(),
     // The person's own text; no guessed amount, currency or annual conversion.
     preferences: z
       .object({
         work_mode: z.string().nullable().optional(),
         work_mode_flexibility: z.string().nullable().optional(),
         relocation: z.union([z.string(), z.boolean()]).nullable().optional(),
+        // «only big cities» for onsite and hybrid: the Scorer lowers an office in a small place (score_place_pay.py, JHT-T351 F-02).
+        only_big_cities: z.boolean().nullable().optional(),
         salary_annual_eur: z
           .string()
           .refine(

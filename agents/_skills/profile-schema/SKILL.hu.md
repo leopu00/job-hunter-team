@@ -70,6 +70,7 @@ preferences:
   work_mode_flexibility: <str|null>
   relocation: <str|bool|null>
   salary_annual_eur: <a személy bércélja a saját szavaival, vagy null>
+  only_big_cities: <true | null — csak nagyvárosok helyszíni vagy hibrid munkához>
 
 ```
 

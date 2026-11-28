@@ -133,6 +133,7 @@ preferences:                  # EXACT KEYS — the frontend looks for exactly th
   work_mode_flexibility: <optional, free text>
   relocation: <true|false|"per la giusta posizione">
   salary_annual_eur: <e.g. "30-35k" | null>
+  only_big_cities: <true | null — only big cities for an office or hybrid job>
 
 sector_details:
   <free keys, snake_case — see the section below>

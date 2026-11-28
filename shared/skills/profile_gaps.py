@@ -8,7 +8,8 @@ Assistente says them in the person's words, and a gap the person accepted on pur
 
   GAP              WHEN                                                         WHAT IT MEANS FOR THE SEARCH
   place_anywhere   `location` says anywhere (Ovunque, anywhere, worldwide...)   results from everywhere, onsite far away too
-  residence        no `residence.place`                                          no distance check: far onsite jobs not lowered
+  residence        no `residence.place`, or a place that names no country        no distance check: far onsite jobs not lowered
+                   («Roma» alone; «Roma, Italia» or coordinates are enough)
   commute          a residence, no `commute_max_km`, work not only remote        no limit on the way to the office
   salary           no `preferences.salary_annual_eur`                            offers without pay are not lowered
   skills           fewer than 3 `skills.primary`                                 the match is generic
@@ -104,6 +105,24 @@ def _has_cv(home: Path) -> bool:
         return False
 
 
+def _place_has_country(residence) -> bool:
+    """True when the residence says its country: by its coordinates, or by a country its place names (JHT-T351 F-02: a city alone
+    named none, and the distance check had no country to compare with). Unknown when the table cannot be read: no gap then."""
+    if not isinstance(residence, dict):
+        return False
+    lat, lon = residence.get("lat"), residence.get("lon")
+    if all(isinstance(v, (int, float)) and not isinstance(v, bool) for v in (lat, lon)):
+        return True
+    try:
+        here = str(Path(__file__).resolve().parent)
+        if here not in sys.path:
+            sys.path.insert(0, here)
+        import scout_area
+        return bool(scout_area.country_of(_text(residence.get("place"))))
+    except Exception:  # noqa: BLE001
+        return True
+
+
 def gaps_of(profile: dict, home: Path | None = None) -> list[str]:
     """Every gap the profile has, in the order the table above gives them (accepted ones included)."""
     profile = profile if isinstance(profile, dict) else {}
@@ -113,7 +132,7 @@ def gaps_of(profile: dict, home: Path | None = None) -> list[str]:
         found.append("place_anywhere")
     residence = profile.get("residence")
     place = _text(residence.get("place")) if isinstance(residence, dict) else ""
-    if not place:
+    if not place or not _place_has_country(residence):
         found.append("residence")
     prefs = profile.get("preferences") if isinstance(profile.get("preferences"), dict) else {}
     if place and profile.get("commute_max_km") in (None, "") and _text(prefs.get("work_mode")).lower() != "remote":

@@ -237,7 +237,7 @@ def validate_target_role_choice(profile):
 
 # The only keys of `preferences` (the frontend reads them literally). What the Assistente writes there is exactly these: the
 # profile-yaml and profile-schema skills list them, and tests/test_profile_skills_match_the_validator.py proves they agree.
-PREFERENCE_KEYS = ("work_mode", "work_mode_flexibility", "relocation", "salary_annual_eur")
+PREFERENCE_KEYS = ("work_mode", "work_mode_flexibility", "relocation", "salary_annual_eur", "only_big_cities")
 RESIDENCE_KEYS = ("place", "lat", "lon")
 
 
@@ -264,6 +264,9 @@ def validate_residence(profile) -> None:
     radius = profile.get("commute_max_km")
     if radius is not None and (isinstance(radius, bool) or not isinstance(radius, (int, float)) or not 0 < radius <= 20000):
         err("commute_max_km: a number of km above 0, or null")
+    said = profile.get("commute_said")
+    if said is not None and (not _is_str(said) or len(said) > 200):
+        err("commute_said: the person's words, non-empty text up to 200 characters, or null")
 
 
 def validate(profile) -> None:
@@ -289,6 +292,8 @@ def validate(profile) -> None:
                 err(f"preferences.{field}: text or null required")
         if preferences.get("relocation") is not None and not isinstance(preferences["relocation"], (str, bool)):
             err("preferences.relocation: text, boolean or null required")
+        if preferences.get("only_big_cities") is not None and not isinstance(preferences["only_big_cities"], bool):
+            err("preferences.only_big_cities: boolean or null required")
         salary = preferences.get("salary_annual_eur")
         if salary is not None and not isinstance(salary, str):
             err("preferences.salary_annual_eur: text or null required")

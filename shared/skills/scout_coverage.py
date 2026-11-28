@@ -593,7 +593,8 @@ def named_countries(profile_path=None) -> frozenset:
         residence = raw.get("residence") if isinstance(raw, dict) else None
         if isinstance(residence, dict) and isinstance(residence.get("place"), str):
             places.append(residence["place"])
-        return frozenset(c for c in (scout_area.country_of(place) for place in places) if c)
+        # an entry that is only a code («it») names its country too (scout_area.country_of_entry, JHT-T351 F-02)
+        return frozenset(c for c in (scout_area.country_of_entry(place) for place in places) if c)
     except Exception:  # noqa: BLE001 — nothing readable: no country named, the languages stay the only sign
         return frozenset()
 

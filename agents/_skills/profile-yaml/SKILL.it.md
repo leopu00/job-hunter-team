@@ -134,6 +134,7 @@ preferences:                  # CHIAVI ESATTE — il frontend cerca proprio ques
   work_mode_flexibility: <opzionale, testo libero>
   relocation: <true|false|"per la giusta posizione">
   salary_annual_eur: <es. "30-35k" | null>
+  only_big_cities: <true | null — solo grandi città per sede o ibrido>
 
 sector_details:
   <chiavi libere, snake_case — vedi sezione sotto>

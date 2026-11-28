@@ -92,9 +92,11 @@ Sigue preguntando hasta que el usuario diga que pare — más datos = CV y búsq
 | Campo | Ruta YAML | Pregunta neutra |
 |---|---|---|
 | Residencia | `residence` = `{place: "Ciudad, País", lat: null, lon: null}` | "¿Dónde vives? Bastan ciudad y país." |
-| Radio para trabajos presenciales e híbridos | `commute_max_km` (un número de km) | "Para un trabajo presencial o híbrido, ¿hasta dónde estás dispuesto a desplazarte? En km, o en tiempo y lo convierto yo." |
+| Radio para trabajos presenciales e híbridos | `commute_said` (las palabras de la persona) o `commute_max_km` (un número de km) | "Para un trabajo presencial o híbrido, ¿hasta dónde estás dispuesto a desplazarte? En km o en tiempo, como prefieras." |
 
-- Escribe `place` como «Ciudad, País»; deja `lat`/`lon` en `null` (nunca coordenadas de memoria). Un tiempo («45 minutos en coche») lo conviertes en km y dices la cifra que has escrito.
+- Escribe `place` como «Ciudad, País», siempre con el país: una ciudad sola no da al control de la distancia un país con el que comparar, y las lagunas vuelven a pedir `residence`. Deja `lat`/`lon` en `null` (nunca coordenadas de memoria).
+- Un tiempo («45 minutos en coche») no lo conviertes tú en km: escribe las palabras de la persona tal como las dijo en `commute_said`, y el código convierte los minutos en km con una velocidad declarada para cada medio. `commute_max_km` solo cuando la persona dijo km.
+- «Solo grandes ciudades» para un trabajo presencial o híbrido: `preferences.only_big_cities: true`; el Scorer baja entonces un trabajo en un lugar pequeño y escribe el motivo.
 - El radio pregúntalo solo cuando el trabajo no es solo en remoto (`preferences.work_mode`).
 - «En cualquier lugar» como lugar de búsqueda es una elección, no una respuesta para archivar: haz UNA pregunta de detalle — ¿todo el mundo o algunos países? ¿también presencial en el extranjero o solo remoto? ¿te mudarías? — y escribe lo que diga (una lista de países, `preferences.relocation`), o mantén «en cualquier lugar» si es lo que quiere (ver la sección siguiente).
 

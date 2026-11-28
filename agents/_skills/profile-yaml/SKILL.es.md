@@ -128,6 +128,7 @@ preferences:                  # CLAVES EXACTAS — el frontend busca precisament
   work_mode_flexibility: <opcional, texto libre>
   relocation: <true|false|"per la giusta posizione">
   salary_annual_eur: <ej. "30-35k" | null>
+  only_big_cities: <true | null — solo grandes ciudades para presencial o híbrido>
 
 sector_details:
   <claves libres, snake_case — ver seccion abajo>

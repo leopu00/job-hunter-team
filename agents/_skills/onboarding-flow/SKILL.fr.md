@@ -92,9 +92,11 @@ Continuez à poser des questions jusqu'à ce que l'utilisateur vous demande d'ar
 | Champ | Chemin YAML | Question neutre |
 |---|---|---|
 | Résidence | `residence` = `{place: "Ville, Pays", lat: null, lon: null}` | "Où habitez-vous ? La ville et le pays suffisent." |
-| Rayon pour les postes sur site et hybrides | `commute_max_km` (un nombre de km) | "Pour un poste sur site ou hybride, jusqu'où êtes-vous prêt à vous déplacer ? En km, ou en temps et je convertis." |
+| Rayon pour les postes sur site et hybrides | `commute_said` (les mots de la personne) ou `commute_max_km` (un nombre de km) | "Pour un poste sur site ou hybride, jusqu'où êtes-vous prêt à vous déplacer ? En km ou en temps, comme vous préférez." |
 
-- Écrivez `place` sous la forme « Ville, Pays » ; laissez `lat`/`lon` à `null` (jamais de coordonnées de mémoire). Un temps (« 45 minutes en voiture ») se convertit en km, et vous dites le chiffre écrit.
+- Écrivez `place` sous la forme « Ville, Pays », toujours avec le pays : une ville seule ne donne au contrôle de la distance aucun pays à comparer, et les lacunes redemandent `residence`. Laissez `lat`/`lon` à `null` (jamais de coordonnées de mémoire).
+- Un temps (« 45 minutes en voiture ») ne se convertit pas en km à la main : écrivez les mots de la personne tels qu'elle les a dits dans `commute_said`, et le code convertit les minutes en km avec une vitesse déclarée pour chaque moyen. `commute_max_km` seulement quand la personne a dit des km.
+- « Seulement les grandes villes » pour un poste sur site ou hybride : `preferences.only_big_cities: true` ; le Scorer baisse alors un poste dans une petite ville et écrit pourquoi.
 - Le rayon ne se demande que si le travail n'est pas uniquement à distance (`preferences.work_mode`).
 - « Partout » comme lieu de recherche est un choix, pas une réponse à classer : posez UNE question de détail — le monde entier ou quelques pays ? sur site à l'étranger aussi, ou à distance seulement ? déménageriez-vous ? — puis écrivez ce qu'elle dit (une liste de pays, `preferences.relocation`), ou gardez « partout » si c'est ce qu'elle veut (voir la section suivante).
 

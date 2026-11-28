@@ -128,6 +128,7 @@ preferences:                  # PONTOS KULCSOK — a frontend pontosan ezeket ke
   work_mode_flexibility: <opcionalis, szabad szoveg>
   relocation: <true|false|"per la giusta posizione">
   salary_annual_eur: <pl. "30-35k" | null>
+  only_big_cities: <true | null — csak nagyvárosok helyszíni vagy hibrid munkához>
 
 sector_details:
   <szabad kulcsok, snake_case — lasd lenti szekci>

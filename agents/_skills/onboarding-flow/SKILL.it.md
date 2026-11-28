@@ -95,9 +95,11 @@ Continua a chiedere finché l'utente non dice di fermarti — più dati = CV e r
 | Campo | Path YAML | Domanda neutra |
 |---|---|---|
 | Residenza | `residence` = `{place: "Città, Paese", lat: null, lon: null}` | "Dove vivi? Bastano città e paese." |
-| Raggio per i lavori in sede e ibridi | `commute_max_km` (un numero di km) | "Per un lavoro in sede o ibrido, fino a quanto sei disposto a spostarti? In km, oppure in tempo e lo converto io." |
+| Raggio per i lavori in sede e ibridi | `commute_said` (le parole della persona) o `commute_max_km` (un numero di km) | "Per un lavoro in sede o ibrido, fino a quanto sei disposto a spostarti? In km o in tempo, come preferisci." |
 
-- Scrivi `place` come «Città, Paese»; lascia `lat`/`lon` a `null` (mai coordinate a memoria). Un tempo («45 minuti in auto») lo converti in km e dici la cifra che hai scritto.
+- Scrivi `place` come «Città, Paese», sempre col paese: una città da sola non dà al controllo della distanza un paese con cui confrontare, e le lacune chiedono di nuovo `residence`. Lascia `lat`/`lon` a `null` (mai coordinate a memoria).
+- Un tempo («45 minuti in auto») non lo converti tu in km: scrivi le parole della persona come le ha dette in `commute_said`, e il codice converte i minuti in km con una velocità dichiarata per il mezzo. `commute_max_km` solo quando la persona ha detto dei km.
+- «Solo grandi città» per un lavoro in sede o ibrido: `preferences.only_big_cities: true`; lo Scorer abbassa allora un lavoro in un centro piccolo e scrive il motivo.
 - Il raggio chiedilo solo quando il lavoro non è solo da remoto (`preferences.work_mode`).
 - «Ovunque» come luogo della ricerca è una scelta, non una risposta da archiviare: fai UNA domanda di dettaglio — tutto il mondo o alcuni paesi? anche in sede all'estero o solo da remoto? ti trasferiresti? — poi scrivi quello che dice (una lista di paesi, `preferences.relocation`), oppure tieni «ovunque» se è quello che intende (vedi la sezione dopo).
 

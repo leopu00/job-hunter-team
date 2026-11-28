@@ -70,6 +70,7 @@ preferences:
   work_mode_flexibility: <str|null>
   relocation: <str|bool|null>
   salary_annual_eur: <objetivo salarial nas palavras exatas da pessoa, ou null>
+  only_big_cities: <true | null — só grandes cidades para presencial ou híbrido>
 
 ```
 

@@ -92,9 +92,11 @@ Continua a pedir até o utilizador dizer para parar — mais dados = CV e procur
 | Campo | Caminho YAML | Pergunta neutra |
 |---|---|---|
 | Residência | `residence` = `{place: "Cidade, País", lat: null, lon: null}` | "Onde vives? Basta a cidade e o país." |
-| Raio para trabalhos presenciais e híbridos | `commute_max_km` (um número de km) | "Para um trabalho presencial ou híbrido, até onde estás disposto a deslocar-te? Em km, ou em tempo e eu converto." |
+| Raio para trabalhos presenciais e híbridos | `commute_said` (as palavras da pessoa) ou `commute_max_km` (um número de km) | "Para um trabalho presencial ou híbrido, até onde estás disposto a deslocar-te? Em km ou em tempo, como preferires." |
 
-- Escreve `place` como «Cidade, País»; deixa `lat`/`lon` a `null` (nunca coordenadas de memória). Um tempo («45 minutos de carro») convertes em km e dizes o número que escreveste.
+- Escreve `place` como «Cidade, País», sempre com o país: uma cidade sozinha não dá ao controlo da distância um país para comparar, e as lacunas voltam a pedir `residence`. Deixa `lat`/`lon` a `null` (nunca coordenadas de memória).
+- Um tempo («45 minutos de carro») não o convertes tu em km: escreve as palavras da pessoa como as disse em `commute_said`, e o código converte os minutos em km com uma velocidade declarada para cada meio. `commute_max_km` só quando a pessoa disse km.
+- «Só grandes cidades» para um trabalho presencial ou híbrido: `preferences.only_big_cities: true`; o Scorer baixa então um trabalho num lugar pequeno e escreve o motivo.
 - O raio pergunta-o só quando o trabalho não é só remoto (`preferences.work_mode`).
 - «Em qualquer lugar» como lugar da procura é uma escolha, não uma resposta para arquivar: faz UMA pergunta de detalhe — o mundo inteiro ou alguns países? também presencial no estrangeiro ou só remoto? mudavas-te? — e escreve o que disser (uma lista de países, `preferences.relocation`), ou mantém «em qualquer lugar» se é isso que quer (ver a secção seguinte).
 

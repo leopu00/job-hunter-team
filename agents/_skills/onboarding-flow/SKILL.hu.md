@@ -92,9 +92,11 @@ A `location` az, ahol KERES; ahol ÉL, az egy másik mező, és a Scorer onnan m
 | Mező | YAML útvonal | Semleges kérdés |
 |---|---|---|
 | Lakóhely | `residence` = `{place: "Város, Ország", lat: null, lon: null}` | "Hol élsz? A város és az ország elég." |
-| Sugár helyszíni és hibrid munkákhoz | `commute_max_km` (km-ben egy szám) | "Helyszíni vagy hibrid munkáért meddig utaznál? Km-ben, vagy időben, és átszámolom." |
+| Sugár helyszíni és hibrid munkákhoz | `commute_said` (a személy szavai) vagy `commute_max_km` (km-ben egy szám) | "Helyszíni vagy hibrid munkáért meddig utaznál? Km-ben vagy időben, ahogy szeretnéd." |
 
-- A `place` legyen «Város, Ország»; a `lat`/`lon` maradjon `null` (soha emlékezetből vett koordináta). Egy időt («45 perc autóval») km-re váltasz, és megmondod a beírt számot.
+- A `place` legyen «Város, Ország», mindig az országgal: egy város magában nem ad országot a távolság ellenőrzésének, és a hiányok újra kérik a `residence`-t. A `lat`/`lon` maradjon `null` (soha emlékezetből vett koordináta).
+- Egy időt («45 perc autóval») nem te váltasz km-re: a személy szavait úgy írd a `commute_said`-be, ahogy mondta, és a kód a közlekedési módhoz megadott sebességgel váltja a perceket km-re. `commute_max_km` csak akkor, ha a személy km-t mondott.
+- «Csak nagyvárosok» helyszíni vagy hibrid munkához: `preferences.only_big_cities: true`; ekkor a Scorer lejjebb teszi a kis helyen lévő munkát, és leírja az okát.
 - A sugarat csak akkor kérdezd, ha a munka nem csak távmunka (`preferences.work_mode`).
 - A «bárhol» mint a keresés helye választás, nem archiválandó válasz: tegyél fel EGY pontosító kérdést — az egész világ vagy néhány ország? külföldön helyszínen is, vagy csak távmunka? költöznél? — és írd be, amit mond (országlista, `preferences.relocation`), vagy maradjon «bárhol», ha ezt akarja (lásd a következő részt).
 
