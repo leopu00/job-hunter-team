@@ -3186,8 +3186,8 @@ def _do_fetch(provider):
 
     if provider in ("anthropic", "claude"):
         # 1. PRIMARIO: TUI parser (no rate-limit, fragile a cambi modal). Solo con l'abbonamento: con una chiave
-        #    API il worker con Claude Code non deve esistere, ne' all'avvio ne' nel rilancio periodico (collaudo
-        #    W1 del 26/11, F-06/F-07); uno rimasto da un accesso precedente si spegne.
+        #    API il worker con Claude Code non deve esistere, ne' all'avvio ne' nel rilancio periodico
+        #    (F-06/F-07); uno rimasto da un accesso precedente si spegne.
         if _claude_worker_allowed():
             p = _try_claude_tui_parser()
             if p:

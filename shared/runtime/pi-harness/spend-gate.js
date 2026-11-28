@@ -23,7 +23,7 @@
  *
  * And the same gate holds the team while it is PAUSED or in STANDBY ($JHT_HOME/.team-standby.flag, standby.py: the person's «pause»
  * from the Assistente or `agent_control.py pause`, the zero-spend standby of the quota). That pause was only a message asking each
- * session to close its step and wait: a worker in the middle of a turn went on calling the model (collaudo W1 26/11: from 3.06 to
+ * session to close its step and wait: a worker in the middle of a turn went on calling the model (in a test run: from 3.06 to
  * 3.45 $ in twelve minutes «paused»). What arrives meanwhile is held and summarised into the [RIPRENDI] that ends the pause, the way
  * the queue of the pace does; the pause notice itself is not repeated there. A flag with no exit condition, or past its `until`, holds
  * nobody: standby.py reads it the same way.

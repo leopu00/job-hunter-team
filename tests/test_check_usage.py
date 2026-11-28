@@ -464,7 +464,7 @@ def test_check_claude_non_propaga_il_weekly_della_modal(cu, tmux_finto):
     assert res["weekly"] is None
 
 
-# ── Solo con l'abbonamento Claude (JHT-T350, collaudo W1 F-06/F-07) ──────
+# ── Solo con l'abbonamento Claude (JHT-T350, F-06/F-07) ──────
 
 @pytest.mark.parametrize("config", [
     {"active_provider": "claude", "providers": {"claude": {"auth_method": "api_key"}}},

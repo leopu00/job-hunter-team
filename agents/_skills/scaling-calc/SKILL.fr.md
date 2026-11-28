@@ -42,7 +42,7 @@ d'un coup.
 > workers veulent être à 100s les uns des autres.
 
 ## Avec un budget en dollars (clé API, budget de l'équipe en USD)
-L'unité est **l'USD par minute**, et la mesure est la dépense réelle de l'équipe, jamais un coût par worker estimé par toi (recette du 26/11 : 0,011 $/min estimés, 0,15 $/min réels) :
+L'unité est **l'USD par minute**, et la mesure est la dépense réelle de l'équipe, jamais un coût par worker estimé par toi (mesuré une fois : 0,011 $/min estimés, 0,15 $/min réels) :
 ```
 python3 /app/shared/skills/pi_spend_cap.py now        # dépensé, USD/min des 10 dernières min par agent
 python3 /app/agents/_skills/scaling-calc/scaling_calc.py --unit usd-min --target <USD/min> --measured-from-spend

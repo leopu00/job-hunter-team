@@ -313,8 +313,8 @@ def test_the_welcome_names_the_upload_command_that_works_on_every_host_before_th
 
 @pytest.mark.parametrize("lang", LANGS)
 def test_the_welcome_gives_only_the_way_of_the_place_where_the_team_runs(lang):
-    """JHT-T354, a test on a Linux VPS from the terminal: the first message gave the Mac and Linux folder, the Windows one,
-    Finder and Explorer together, and the person on the server did not know which way was theirs. Now one way, the one of
+    """JHT-T354: a first message with the Mac and Linux folder, the Windows one, Finder and Explorer together does not tell a
+    person on a server which way is theirs. Now one way, the one of
     the place: on the server the upload or `mv` into the folder of the server; at home the folder of that system; and when
     the place cannot be told, only the upload command, never the list of every system."""
     catalog = _catalog(lang)

@@ -35,7 +35,7 @@ def output(done):
 
 
 def printed_export(text):
-    """The export of the box the installer prints LAST (JHT-T352, collaudo L1 bis 26/11): one line to paste, which also opens the
+    """The export of the box the installer prints LAST (JHT-T352): one line to paste, which also opens the
     chat with the Assistente, and nothing printed after the box."""
     lines = [line.strip() for line in text.rstrip().splitlines()]
     assert lines.count(PREFIX) == 1, text

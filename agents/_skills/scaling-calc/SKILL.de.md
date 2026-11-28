@@ -42,7 +42,7 @@ Block auf einmal.
 > drei Worker 100s voneinander entfernt sein.
 
 ## Mit einem Budget in Dollar (API-Schlüssel, Team-Budget in USD)
-Die Einheit ist **USD pro Minute**, und gemessen werden die echten Ausgaben des Teams, nie selbst geschätzte Kosten pro Worker (Abnahme 26.11.: 0,011 $/min geschätzt, 0,15 $/min echt):
+Die Einheit ist **USD pro Minute**, und gemessen werden die echten Ausgaben des Teams, nie selbst geschätzte Kosten pro Worker (einmal gemessen: 0,011 $/min geschätzt, 0,15 $/min echt):
 ```
 python3 /app/shared/skills/pi_spend_cap.py now        # ausgegeben, USD/min der letzten 10 Min. pro Agent
 python3 /app/agents/_skills/scaling-calc/scaling_calc.py --unit usd-min --target <USD/min> --measured-from-spend

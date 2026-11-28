@@ -235,8 +235,8 @@ def brake(home=None) -> Optional[dict]:
     """The pause of the spending brake (pi_spend_cap.py: logs/daily-halt.flag with reason «pi_spend_cap»), or None.
 
     It is not a standby and nothing here lifts it, but it is a pause all the same: the sessions stay on and nobody works.
-    `status` without it said «operating normally» to an Assistente whose team had been stopped by its budget for minutes
-    (collaudo L1 bis 26/11). {why, spent, ceiling, budget_usd, ends_at, resumes_at}; the dollars as the brake wrote them."""
+    `status` without it said «operating normally» to an Assistente whose team had been stopped by its budget for minutes.
+    {why, spent, ceiling, budget_usd, ends_at, resumes_at}; the dollars as the brake wrote them."""
     try:
         base = Path(home) if home is not None else _path("JHT_HOME")
         flag = base / "logs" / "daily-halt.flag"

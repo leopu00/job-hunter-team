@@ -163,7 +163,7 @@ def test_the_assistente_is_not_held_by_the_queue_either(tmp_path):
     assert results[0]["handlers"] == 0 and results[1]["aborted"] == 0, "no handler at all: it is the person's voice"
 
 
-# The person's pause and the technical standby (standby.py, .team-standby.flag): collaudo W1 26/11, the spending went on during
+# The person's pause and the technical standby (standby.py, .team-standby.flag): in a test run, the spending went on during
 # «PAUSA TEAM» because the pause was only a message. Flags written the way standby.enter writes them.
 def _standby(hours=1.0, **extra):
     from datetime import datetime, timedelta, timezone

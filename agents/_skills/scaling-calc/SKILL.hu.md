@@ -40,7 +40,7 @@ Megadja: **hány worker**, **milyen throttle**, és egy **lépcsőzetes tervet**
 > három worker 100s távolságra akar lenni egymástól.
 
 ## Dolláros kerettel (API-kulcs, a csapat USD-kerete)
-Az egység **USD percenként**, a mérés pedig a csapat valódi költése, soha nem általad becsült worker-költség (11/26-i átvétel: 0,011 $/perc becsült, 0,15 $/perc valós):
+Az egység **USD percenként**, a mérés pedig a csapat valódi költése, soha nem általad becsült worker-költség (egyszer mérve: 0,011 $/perc becsült, 0,15 $/perc valós):
 ```
 python3 /app/shared/skills/pi_spend_cap.py now        # elköltött összeg, az utolsó 10 perc USD/perc értéke ügynökönként
 python3 /app/agents/_skills/scaling-calc/scaling_calc.py --unit usd-min --target <USD/perc> --measured-from-spend

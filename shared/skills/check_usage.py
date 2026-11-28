@@ -116,7 +116,7 @@ SHELL_COMMANDS = ("", "bash", "sh", "zsh", "dash", "-bash", "-sh", "-zsh")
 def worker_cli_alive(name=WORKER_SESSION):
     """True solo se nel pane della sessione (target ancorato) gira un CLI e non una shell.
 
-    Collaudo W1 del 26/11: il CLI era uscito sulla finestra di fiducia, la sessione restava con un bash nudo e
+    In un test di prova: il CLI era uscito sulla finestra di fiducia, la sessione restava con un bash nudo e
     `/usage` finiva digitato nella shell («-bash: /usage: No such file or directory»)."""
     r = subprocess.run(
         ["tmux", "display-message", "-p", "-t", f"={name}:", "#{pane_current_command}"],
@@ -140,7 +140,7 @@ def claude_subscription_access(config):
     """True solo per il provider Claude con `auth_method: subscription`.
 
     /usage del CLI legge i limiti dell'abbonamento: con una chiave API (o un altro provider) non c'e' niente da
-    leggere, e il worker con Claude Code non deve nemmeno partire (collaudo W1 del 26/11, F-06)."""
+    leggere, e il worker con Claude Code non deve nemmeno partire (F-06)."""
     if not isinstance(config, dict):
         return False
     active = config.get("active_provider")

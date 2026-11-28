@@ -1,6 +1,6 @@
 """SENTINELLA-WORKER (Claude Code idle che legge /usage) solo con l'abbonamento Claude, mai con una chiave API.
 
-JHT-T350, collaudo W1 del 26/11 (F-06, F-07): con `auth_method: api_key` il bridge rilanciava il worker ogni 20 minuti
+JHT-T350 (F-06, F-07): con `auth_method: api_key` il bridge rilanciava il worker ogni 20 minuti
 anche in modalita' senza quota; il controllo d'avvio dichiarava «started» con la finestra di fiducia aperta, che un
 Enter chiudeva su «No, exit», e `/usage` finiva digitato in una shell.
 """

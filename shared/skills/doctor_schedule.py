@@ -598,7 +598,7 @@ def _turn_verdict(slot: str, spawned_at: float, now_s: float):
 
 # The switch onto the full image recreates the container at the end of the onboarding (JHT-T346): the job writes this file BEFORE
 # the core goes down. A Dottore or a Mantenitore whose round was done and whose session that recreation took away was not started
-# again until its next slot (collaudo W1 26/11, F-08: both gone after 15:22). Their round is opened again, once per recreation.
+# again until its next slot (F-08: both gone after 15:22). Their round is opened again, once per recreation.
 SWITCH_FILE = JHT_HOME / "state" / "tools-switch.json"
 SWITCH_LOOKBACK_SEC = 6 * 3600   # a recreation older than this is not the one that took the session away
 

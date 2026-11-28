@@ -289,7 +289,7 @@ def declare(api, run, notify_user=None):
         done["captain"] = bool(notice(api, state, "no_quota:captain", api.CAPITANO_SESSION,
                                       captain_text(reason, ceiling)))
     # The person is not told: a provider that reports no limits is internal news for the Captain, and the person reads it as an
-    # alarm with configuration words in it, one minute after the brake's own sentence (collaudo L1 bis 26/11: two notices that
+    # alarm with configuration words in it, one minute after the brake's own sentence (in a test run: two notices that
     # said nearly the same thing). The one sentence the person gets is the brake's (pi_spend_cap: no budget, do you want one?).
 
 

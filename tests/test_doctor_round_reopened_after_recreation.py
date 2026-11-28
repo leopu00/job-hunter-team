@@ -1,4 +1,4 @@
-"""JHT-T352 F-08 (collaudo W1 26/11): at the end of the onboarding the container is recreated for the switch onto the full image
+"""JHT-T352 F-08: at the end of the onboarding the container is recreated for the switch onto the full image
 (JHT-T346), and the Dottore and the Mantenitore, whose rounds were done, were gone and not started again until their next slot.
 The switch job writes $JHT_HOME/state/tools-switch.json {"schema": 1, "at": <ISO UTC>} BEFORE the core goes down: a done round
 whose session that recreation took away is opened again, once per recreation. Synthetic state, no tmux, no LLM.

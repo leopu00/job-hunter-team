@@ -1,8 +1,7 @@
 """JHT-T354: the Assistente says the true state of the team and knows where it runs, in the seven languages.
 
-Seen in a test on a Linux VPS from the terminal: the Assistente said the team was active while the budget brake had paused it
-(it read the open tmux sessions, which stay open in a pause), gave the Windows and Finder paths on a server, told the person
-to attach the PDFs with the paperclip of an app that is not there, and could not take two PDFs that sat in the home of the server.
+Without this the Assistente could say the team was active while the budget brake had paused it (the tmux sessions stay open in
+a pause), give the Windows and Finder paths on a Linux server, and ask for the paperclip of an app the terminal does not have.
 
 The prompt now has one source for the state (`jht team status --json`, with the pause), only `$JHT_HOME/...` paths, a section
 on where it runs (kind of host, system, channel) with the ways that work from a terminal on a VPS, and the onboarding skill and

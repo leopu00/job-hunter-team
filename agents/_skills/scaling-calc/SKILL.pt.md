@@ -42,7 +42,7 @@ uma vez.
 > 100s uns dos outros.
 
 ## Com um orçamento em dólares (chave API, orçamento da equipa em USD)
-A unidade é **USD por minuto**, e a medida é o gasto real da equipa, nunca um custo por worker estimado por ti (ensaio de 26/11: 0,011 $/min estimados, 0,15 $/min reais):
+A unidade é **USD por minuto**, e a medida é o gasto real da equipa, nunca um custo por worker estimado por ti (medido uma vez: 0,011 $/min estimados, 0,15 $/min reais):
 ```
 python3 /app/shared/skills/pi_spend_cap.py now        # gasto, USD/min dos últimos 10 min por agente
 python3 /app/agents/_skills/scaling-calc/scaling_calc.py --unit usd-min --target <USD/min> --measured-from-spend

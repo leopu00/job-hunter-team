@@ -11,7 +11,7 @@ from agent_control import Refusal, parse_session
 
 # Sessions of the team that are not agents in chat but run all the same and count in `jht team status`: the Sentinella's usage
 # sensor (a TUI read for its /usage). It was left out of the inventory, and a team that ran it said «12 of 12» without it
-# (collaudo W1 26/11, F-10). Listed, never controlled: agent_control refuses every action on it as before.
+# (F-10). Listed, never controlled: agent_control refuses every action on it as before.
 OBSERVED_ONLY = frozenset({"SENTINELLA-WORKER"})
 
 

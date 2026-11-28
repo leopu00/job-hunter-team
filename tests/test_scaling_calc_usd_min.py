@@ -1,4 +1,4 @@
-"""JHT-T349 (collaudo W1 26/11, F-04): the Captain set aside scaling_calc because it worked in units per hour, and projected with a
+"""JHT-T349 (F-04): the Captain set aside scaling_calc because it worked in units per hour, and projected with a
 cost per worker he made up (0.011 $/min) when the team spent 0.15 $/min. scaling_calc now takes and gives USD per minute, and can
 read the measured rate of the workers from the brake. Synthetic pi sessions in a private JHT_HOME."""
 from __future__ import annotations

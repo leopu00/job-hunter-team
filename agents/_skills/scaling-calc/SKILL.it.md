@@ -42,7 +42,7 @@ blocco in una volta.
 > dall'altro.
 
 ## Con un budget in dollari (chiave API, budget del team in USD)
-L'unità è **USD al minuto**, e la misura è la spesa vera del team, mai un costo per worker stimato da te (collaudo 26/11: 0,011 $/min stimati, 0,15 $/min veri):
+L'unità è **USD al minuto**, e la misura è la spesa vera del team, mai un costo per worker stimato da te (misurato una volta: 0,011 $/min stimati, 0,15 $/min veri):
 ```
 python3 /app/shared/skills/pi_spend_cap.py now        # speso, USD/min degli ultimi 10 min per agente
 python3 /app/agents/_skills/scaling-calc/scaling_calc.py --unit usd-min --target <USD/min> --measured-from-spend

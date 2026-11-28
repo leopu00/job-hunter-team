@@ -33,7 +33,7 @@ entrambe in % weekly / h, entrambe in % finestra-5h / h, oppure, con un accesso 
 consumo (chiave API, budget in dollari), entrambe in USD al minuto con
 `--unit usd-min`. Con `--measured-from-spend` il burn misurato e il numero di
 worker li prende dalla spesa VERA degli ultimi 10 minuti (pi_spend_cap.py now):
-mai un costo per worker stimato a mano (collaudo W1 26/11: 0,011 $/min stimati,
+mai un costo per worker stimato a mano (misurato una volta: 0,011 $/min stimati,
 0,15 $/min veri).
 
   scaling_calc.py --unit usd-min --target 0.05 --measured-from-spend

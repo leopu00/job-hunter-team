@@ -291,8 +291,8 @@ if [ "$ROLE" = "worker" ]; then
   fi
   # Il worker legge /usage dell'ABBONAMENTO Claude: con un altro accesso (chiave
   # API, provider diverso) non c'e' niente da leggere, e un Claude Code acceso
-  # nel container di un accesso a consumo non deve esistere (collaudo W1 del
-  # 26/11: «API Usage Billing» nella testata del worker con `auth_method:
+  # nel container di un accesso a consumo non deve esistere («API Usage
+  # Billing» nella testata del worker con `auth_method:
   # api_key`). Config assente o illeggibile = nessun abbonamento dichiarato.
   _spawn_stage="worker_access"
   _w_access="$(python3 - "$JHT_HOME/jht.config.json" <<'PYEOF' 2>/dev/null || echo "unreadable"

@@ -155,7 +155,7 @@ MEASURE_WINDOW_SEC = 600   # the rate the Captain projects with: the measured sp
 
 def measured(home, now_ts, window_sec=MEASURE_WINDOW_SEC):
     """What the team spent in the last `window_sec`, in dollars and dollars per minute, per session too. The Captain's projections
-    were made with a cost per worker he made up (0.011 $/min) when the team spent 0.15 $/min (collaudo W1 26/11): this is the measure."""
+    were made with a cost per worker he made up (0.011 $/min) when the team spent 0.15 $/min: this is the measure."""
     since = now_ts - window_sec
     by_agent = {}
     for event in list(pi_sessions.usage_events(home, since)) + list(pi_sessions.search_events(home, since)):
@@ -780,7 +780,7 @@ ASSISTENTE_SESSION = "ASSISTENTE"
 def assistant_text(text):
     """What the Assistente reads of a pause or a resume: the state, for when the person asks, never a message to pass on (the person
     has the notifier's sentence already). Without it the Assistente read the tmux sessions and said «the team is active» to a person
-    whose team had been paused by its budget for seven minutes (collaudo L1 bis 26/11)."""
+    whose team had been paused by its budget for seven minutes."""
     return ("[BRIDGE INFO] FOR YOUR KNOWLEDGE, NOT TO RELAY: the state of the team changed. %s The person has already been told by "
             "the system in one sentence: do not repeat it unasked. When they ask how the team is, the source is `jht team status` "
             "(python3 /app/shared/skills/standby.py status in the container), never the tmux sessions." % text)

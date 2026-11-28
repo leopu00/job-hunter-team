@@ -1,4 +1,4 @@
-"""JHT-T352 F-12 (collaudo W1 26/11): «jht-notify-user failed with exit 2: … insert fallita: no such table:
+"""JHT-T352 F-12: «jht-notify-user failed with exit 2: … insert fallita: no such table:
 pending_user_messages». The jobs.db the tool opened existed but had no schema yet (a reader opens it before the first agent
 writes), and the notice to the person was lost. The tool now creates the schema of shared/skills/_db.py on that same file, and
 an error names the file it opened. A private JHT_HOME, made-up texts, no Telegram.

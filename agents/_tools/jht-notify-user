@@ -74,7 +74,7 @@ def interpret_escapes(text: str) -> str:
 def ensure_messages_table(db_path: str) -> None:
     """The table of the messages is there before the insert. A jobs.db that exists but has no schema yet (created by a reader
     before the first agent wrote to it) answered «no such table: pending_user_messages», and the notice to the person was
-    lost (collaudo W1 26/11, F-12). The schema is the one of shared/skills/_db.py, created on THIS file: never another one."""
+    lost (F-12). The schema is the one of shared/skills/_db.py, created on THIS file: never another one."""
     conn = sqlite3.connect(db_path, timeout=10)
     try:
         if conn.execute(

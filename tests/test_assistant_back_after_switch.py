@@ -1,7 +1,7 @@
 """JHT-T346: after the switch of the tools the Assistente says it is back, what happens now and what the person can do.
 
-Seen on Linux (L1 bis): the container was created again on the full image under the person's chat, the Assistente started again
-with no word of it, and the chat looked dead («ci sei?»). The host writes state/tools-switch.json just before it stops the core
+The container is created again on the full image under the person's chat, and the Assistente started again with no word of it:
+the chat looked dead. The host writes state/tools-switch.json just before it stops the core
 team; at the first start of the Assistente after it (the launcher runs `assistant_welcome.py settled`, the welcome runs `deliver`)
 one line in its name says it is back, with no call of the model, once per switch. A paused team is said paused, never working.
 

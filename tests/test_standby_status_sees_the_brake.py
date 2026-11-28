@@ -1,4 +1,4 @@
-"""JHT-T354 (collaudo L1 bis 26/11): with the team paused by the spending brake (logs/daily-halt.flag, reason pi_spend_cap)
+"""JHT-T354: with the team paused by the spending brake (logs/daily-halt.flag, reason pi_spend_cap)
 `standby.py status` said «STANDBY off — the team is operating normally», and the Assistente told the person the team was
 working. The status now says the brake's pause, in the text and in the JSON. Synthetic figures, a private JHT_HOME.
 """
