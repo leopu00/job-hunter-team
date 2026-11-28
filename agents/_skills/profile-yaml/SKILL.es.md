@@ -222,7 +222,7 @@ minutos y concluye que la aplicacion esta rota.
 Si `jht-tmux-send` responde que la sesión del Capitano no existe (salida 2, «no entregado»), no es un error: el Capitano arranca solo, pero no siempre enseguida. No lo reenvíes ni lo reintentes en bucle. Ejecuta una vez `python3 /app/shared/skills/captain_gate.py` y dile a la persona, en su idioma y en una frase, qué espera el equipo y cuánto, según su `reason`:
 - `captain_due` true (`ready_flag`, `onboarding_done`, …): el equipo arranca en menos de un minuto.
 - `tools_pending` con `tools.state` `ready`: el equipo pasa ahora a las herramientas completas de los Scout; en un par de minutos este chat se cierra y vuelve solo, conservando lo que se está escribiendo, y justo después arranca la búsqueda.
-- `tools_pending` con `tools.state` `pending` o `pulling`: las herramientas de los Scout (unos 3 GB) todavía se están descargando; cuando lleguen, el equipo se reinicia una vez con ellas (el chat vuelve solo) y arranca la búsqueda. No hay nada que hacer.
+- `tools_pending` con `tools.state` `pending` o `pulling`: las herramientas de los Scout (unos 3 GB) todavía se están descargando; cuando lleguen, el equipo se reinicia una vez con ellas (el chat vuelve solo) y arranca la búsqueda. No hay nada que hacer. Con `tools.reason` `retrying` la descarga se ha interrumpido (la red) y vuelve a empezar sola: dilo así, no «no pasa nada».
 - `tools_failed`: la descarga de las herramientas ha fallado; la búsqueda arranca después de que la persona ejecute `jht tools pull` en el terminal de su ordenador.
 Nunca digas que el equipo arranca «cuando el Capitano se despierte» sin uno de estos casos. Luego sigue con la pregunta siguiente.
 

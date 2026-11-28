@@ -38,7 +38,7 @@ def test_the_message_that_the_profile_is_ready_to_a_missing_capitano_is_not_an_e
     assert "`jht-tmux-send`" in tail, f"SKILL{lang}.md: the case of a Capitano that is not there yet"
     # JHT-T362: the person is told what the team waits for and how long, from the gate, never «when the Capitano wakes up»
     for word in ("`python3 /app/shared/skills/captain_gate.py`", "`tools_pending`", "`tools_failed`", "`jht tools pull`", "`ready`",
-                 "`pulling`"):
+                 "`pulling`", "`retrying`"):
         assert word in tail, f"SKILL{lang}.md: {word} is missing from the case of a Capitano that is not there yet"
 
 
