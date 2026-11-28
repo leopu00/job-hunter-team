@@ -298,7 +298,7 @@ export default {
   "budget.spend_now_today": "Spesi oggi: {spent} $ · {rate} $ al minuto negli ultimi {window} min (aggiornato alle {at})",
   "budget.spend_now_budget": "Spesi del budget: {spent} $ su {budget} $ · {rate} $ al minuto negli ultimi {window} min (aggiornato alle {at})",
   'alerts.open': "{agent} ti avvisa: {body}",
-  'alerts.where': "Lo trovi anche nella chat con l'Assistente (jht team chat assistente) e nei Messaggi dell'app.",
+  'alerts.where': "Lo trovi anche nella chat con l'Assistente (jht team chat assistente).",
   'budget.onboarding_spend': "{spent} $ del tuo budget di {budget} $ sono andati nell'onboarding e nel Capitano prima che gli Scout cominciassero a cercare: con un budget così piccolo alla squadra resta poco per cercare. Alzalo con: jht setup",
   "chat.answer.recorded": "Risposta registrata",
   "chat.answer.recorded_label": "Risposta registrata: {label}",

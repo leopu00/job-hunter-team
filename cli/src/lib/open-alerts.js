@@ -8,7 +8,7 @@ import { existsSync, statSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { JHT_DB_PATH } from '../jht-paths.js';
 
-/** An alert older than this is not said again at every status: it is in the Messages of the app. */
+/** An alert older than this is not said again at every status: it stays in the chat with the Assistente. */
 export const ALERT_WINDOW_DAYS = 7;
 const MAX_ALERTS = 3;
 const MAX_BODY = 400;

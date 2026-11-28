@@ -43,7 +43,7 @@ test('an alert nobody read is said, newest first, one per source; read, old, oth
   assert.deepEqual(await openAlertLines({ dbPath: join(root, 'jobs.db') }), [
     `Capitano says: ${CEILING}`,
     'Sentinella says: The box no longer reaches the website.',
-    'Also in the chat with the Assistente (jht team chat assistente) and in the Messages of the app.',
+    'Also in the chat with the Assistente (jht team chat assistente).',
   ]);
 });
 

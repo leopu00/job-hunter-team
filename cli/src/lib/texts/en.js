@@ -265,7 +265,7 @@ export default {
   "budget.spend_now_today": "Spent today: ${spent} · ${rate} a minute over the last {window} min (updated at {at})",
   "budget.spend_now_budget": "Spent of the budget: ${spent} of ${budget} · ${rate} a minute over the last {window} min (updated at {at})",
   'alerts.open': "{agent} says: {body}",
-  'alerts.where': "Also in the chat with the Assistente (jht team chat assistente) and in the Messages of the app.",
+  'alerts.where': "Also in the chat with the Assistente (jht team chat assistente).",
   'budget.onboarding_spend': "${spent} of your ${budget} budget went to the onboarding and the Capitano before the Scouts started searching: with a budget this small the team has little left to search with. Raise it with: jht setup",
   "chat.answer.recorded": "Answer recorded",
   "chat.answer.recorded_label": "Answer recorded: {label}",

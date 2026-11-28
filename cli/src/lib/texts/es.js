@@ -50,7 +50,7 @@ export default {
   "budget.spend_now_budget": "Gastado del presupuesto: ${spent} de ${budget} · ${rate} por minuto en los últimos {window} min (actualizado a las {at})",
   "budget.onboarding_spend": "${spent} de tu presupuesto de ${budget} se fueron en el onboarding y el Capitano antes de que los Scouts empezaran a buscar: con un presupuesto tan pequeño al equipo le queda poco para buscar. Súbelo con: jht setup",
   "alerts.open": "{agent} avisa: {body}",
-  "alerts.where": "También en el chat con el Assistente (jht team chat assistente) y en los Mensajes de la app.",
+  "alerts.where": "También en el chat con el Assistente (jht team chat assistente).",
   "team.wait_before": "Esperando {s} s antes de {session}...",
   "team.wait_ready": "Esperando a que {previous} esté listo (hasta {s} s) antes de {session}...",
   "team.ready_after": "{session} listo tras {s} s",
