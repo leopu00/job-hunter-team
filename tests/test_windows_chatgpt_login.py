@@ -1,5 +1,4 @@
 """Host browser allowlist and relay lifecycle in both native PowerShell engines."""
-import json
 import os
 import subprocess
 from pathlib import Path
@@ -46,8 +45,10 @@ if ($script:ChatGptRelay -or $script:ChatGptWatcher) { throw 'relay or observer 
 '''
 
 
+@pytest.mark.parametrize("shell", ["powershell", "pwsh"] if WINDOWS else ["pwsh"])
 @pytest.mark.parametrize("busy", [False, True])
-def test_chatgpt_host_allowlist_and_core_relay_cleanup(tmp_path, busy):
+def test_chatgpt_host_allowlist_and_core_relay_cleanup(tmp_path, busy, shell, monkeypatch):
+    monkeypatch.setenv("JHT_TEST_SHELL", shell)
     state = tmp_path / "state"
     state.mkdir()
     bin_dir = tmp_path / "bin"

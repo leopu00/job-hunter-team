@@ -149,8 +149,8 @@ test('OpenAI in the wizard with the ChatGPT subscription: Pi, its own sign-in, n
   const order = calls.map((c) => c.replace(/ dir=.*/, ''));
   assert.ok(order.includes('jht providers update pi'));
   assert.equal(order.some((c) => /^codex |providers update codex/.test(c)), false, 'Codex is not touched');
-  assert.ok(order.findIndex((c) => c.startsWith('chatgpt-login ')) > order.indexOf('jht providers update pi'));
-  assert.ok(order.indexOf('jht team start') > order.findIndex((c) => c.startsWith('chatgpt-login ')));
+  assert.ok(order.indexOf('chatgpt-login') > order.indexOf('jht providers update pi'));
+  assert.ok(order.indexOf('jht team start') > order.indexOf('chatgpt-login'));
   assert.match(calls.find((c) => c.startsWith('chatgpt-login ')), new RegExp(`dir=${join(box.home, '.pi', 'agent').replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`));
   assert.equal(keyFiles(box).length, 0, 'no key kept');
   assert.equal(events.at(-1).ok, true, out);

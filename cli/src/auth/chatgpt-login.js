@@ -93,6 +93,7 @@ export async function loginChatGpt({ load = loadProvider, output = console.log, 
     fs.mkdirSync(stateDir(), { recursive: true, mode: 0o700 });
     fs.mkdirSync(lock, { mode: 0o700 });
     locked = true;
+    privateWrite(join(lock, 'owner.json'), session || null);
     const { oauth, store } = await load();
     // Give the provider's lazily imported Node crypto a turn to initialize.
     await sleep(0);
@@ -165,7 +166,7 @@ export async function loginChatGpt({ load = loadProvider, output = console.log, 
         if (path !== requestPath() || readSmall(path).session === session) fs.unlinkSync(path);
       } catch { /* absent or owned by another session */ }
     }
-    if (locked) fs.rmdirSync(lock);
+    if (locked) { fs.unlinkSync(join(lock, 'owner.json')); fs.rmdirSync(lock); }
   }
 }
 
@@ -174,14 +175,16 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   try {
     if (verb === '--relay') {
       const server = await startRelay();
-      const stop = () => server.close();
+      const stop = () => { server.closeAllConnections(); server.close(); };
       process.once('SIGTERM', stop); process.once('SIGINT', stop);
       setTimeout(stop, TTL).unref();
     } else if (verb === '--relay-read') {
       process.stdout.write(Buffer.from(readSmall('/tmp/jht-login-callback.json').url).toString('base64url'));
     } else if (verb === '--request') process.stdout.write(readLoginRequest(id).url);
     else if (verb === '--accept') acceptRedirect(id, Buffer.from(data, 'base64url').toString('utf8'));
-    else if (verb === '--cancel') privateWrite(cancelPath(id), true);
+    else if (verb === '--cancel') {
+      if (readSmall(join(stateDir(), 'chatgpt-login.lock', 'owner.json')) === sessionId(id)) privateWrite(cancelPath(id), true);
+    }
     else process.exitCode = 2;
   } catch { process.exitCode = 1; }
 }
