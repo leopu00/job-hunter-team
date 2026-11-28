@@ -1979,8 +1979,12 @@ function Save-JhtLanguageChoice {
   $env:JHT_LANG = $Code
   $askedAt = [long][Math]::Floor(([DateTimeOffset]::UtcNow).ToUnixTimeSeconds())
   Write-HostFile -Path (Join-Path $JhtHome 'i18n-prefs.json') -Content ("{`n  ""locale"": ""$Code"",`n  ""asked_at"": $askedAt`n}`n") -Encoding ASCII -NoNewline
+  # host.env sits in the folder the container writes: read only as a plain file of at most 4096 bytes, never through a link an
+  # agent put in its place (the same check as Get-JhtSavedHostEnvValue). Anything else is left alone: i18n-prefs.json, written
+  # above, is what the setup and the wrapper read first.
   $hostEnvFile = Join-Path $JhtHome 'host.env'
-  if (Test-Path -LiteralPath $hostEnvFile -PathType Leaf) {
+  $hostEnvItem = Get-Item -LiteralPath $hostEnvFile -Force -ErrorAction SilentlyContinue
+  if ($hostEnvItem -and -not $hostEnvItem.PSIsContainer -and -not ($hostEnvItem.Attributes -band [IO.FileAttributes]::ReparsePoint) -and $hostEnvItem.Length -le 4096) {
     $lines = @([IO.File]::ReadAllLines($hostEnvFile) | ForEach-Object { if ($_ -match '^\s*JHT_LANG=') { "JHT_LANG=$Code" } else { $_ } })
     # ASCII: host.env is all ASCII, and the UTF8 of Windows PowerShell 5.1 would put a BOM before its first line
     Write-HostFile -Path $hostEnvFile -Content (($lines -join "`n") + "`n") -Encoding ASCII -NoNewline

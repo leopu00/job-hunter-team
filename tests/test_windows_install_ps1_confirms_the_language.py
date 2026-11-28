@@ -91,7 +91,7 @@ def _shell(name: str) -> str:
 
 def _case(shell: str, tmp_path: Path, *, proposed: str = "it", answer: str | None = "", prefs: dict | None = None,
           host_env: str | None = "# Host env\nJHT_HOST_TYPE=local\nJHT_LANG=it\nJHT_USER_TZ=Europe/Paris\n",
-          jht_lang: str | None = None, non_interactive: bool = False) -> dict:
+          jht_lang: str | None = None, non_interactive: bool = False, prepare=None) -> dict:
     """Confirm-JhtLanguage in a box: Get-JhtTextLanguage proposes `proposed`, the person types `answer` (None: the read
     fails). Returns what it printed, what it returned, whether it asked, and the files after."""
     home = tmp_path / "profile" / ".jht"
@@ -100,6 +100,8 @@ def _case(shell: str, tmp_path: Path, *, proposed: str = "it", answer: str | Non
         (home / "i18n-prefs.json").write_text(json.dumps(prefs), encoding="utf-8")
     if host_env is not None:
         (home / "host.env").write_text(host_env, encoding="utf-8")
+    if prepare is not None:
+        prepare(home)
     reader = ("function Read-JhtLanguageAnswer { throw 'no console' }" if answer is None
               else "function Read-JhtLanguageAnswer { $script:Asked = $true; return '%s' }" % answer.replace("'", "''"))
     script = "\n".join([
@@ -136,10 +138,12 @@ def _case(shell: str, tmp_path: Path, *, proposed: str = "it", answer: str | Non
         "Espa\u00f1ol", "Fran\u00e7ais", "Portugu\u00eas"]
     prefs_file = home / "i18n-prefs.json"
     env_file = home / "host.env"
+    if env_file.is_symlink():
+        env_file = None
     return {
         "out": out, "chosen": result.group(1), "asked": result.group(2) == "True", "env": result.group(3),
         "prefs": json.loads(prefs_file.read_text(encoding="utf-8")) if prefs_file.exists() else None,
-        "host_env": env_file.read_text(encoding="utf-8") if env_file.exists() else None,
+        "host_env": env_file.read_text(encoding="utf-8") if env_file is not None and env_file.exists() else None,
         "leftovers": sorted(p.name for p in (tmp_path / "profile").iterdir() if p.name != ".jht"),
     }
 
@@ -204,3 +208,22 @@ def test_nothing_is_asked_under_non_interactive_and_nothing_is_written(shell, tm
 def test_a_console_that_cannot_be_read_keeps_the_language_proposed(shell, tmp_path):
     r = _case(shell, tmp_path, proposed="hu", answer=None)
     assert r["chosen"] == "hu" and r["prefs"]["locale"] == "hu"
+
+
+@pytest.mark.parametrize("shell", SHELLS)
+def test_a_host_env_that_is_a_link_or_too_big_is_not_read_nor_written(shell, tmp_path):
+    """host.env sits in the folder the container writes: a link an agent put there would bring the file it names into host.env.
+    It is read only as a plain file of at most 4096 bytes; otherwise it is left alone (i18n-prefs.json carries the choice)."""
+    victim = tmp_path / "victim.txt"
+    victim.write_text("private line of the person\nJHT_LANG=xx\n", encoding="utf-8")
+
+    def link(home):
+        (home / "host.env").symlink_to(victim)
+
+    r = _case(shell, tmp_path / "link", proposed="it", answer="4", host_env=None, prepare=link)
+    assert r["chosen"] == "es" and r["prefs"]["locale"] == "es"
+    assert victim.read_text(encoding="utf-8") == "private line of the person\nJHT_LANG=xx\n", "the file the link names is untouched"
+    assert (tmp_path / "link" / "profile" / ".jht" / "host.env").is_symlink(), "the link is not replaced by a copy of what it names"
+    big = "# x\n" * 2000 + "JHT_LANG=it\n"
+    r = _case(shell, tmp_path / "big", proposed="it", answer="4", host_env=big)
+    assert r["prefs"]["locale"] == "es" and r["host_env"] == big, "a host.env over 4096 bytes is left as it is"
