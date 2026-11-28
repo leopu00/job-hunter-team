@@ -325,6 +325,25 @@ tools_wait_quiet() {
 # core container, then the tier goes and `up` starts it on the full one: never a window in which the running container is the
 # core one and the wrapper already expects the full one (the commands of the person in that window refused it as not ours).
 # Refused still: the marker says so, and `jht up` / `jht status` tell the person to run `jht down` and `jht up`.
+# The seconds the switch gives the chat to read its notice (JHT_TOOLS_SWITCH_NOTICE_WAIT): a whole number from 0 to 30. Anything else
+# (a word, a negative or decimal number, an hour) is the default, 3, and is written down: on stderr, and in $RUNTIME_DIR/tools.log,
+# since the job of the switch runs detached with no output of its own.
+TOOLS_SWITCH_NOTICE_WAIT_DEFAULT=3
+TOOLS_SWITCH_NOTICE_WAIT_MAX=30
+tools_switch_notice_wait() {
+  local given="${JHT_TOOLS_SWITCH_NOTICE_WAIT-}"
+  [ -n "$given" ] || { printf '%s\n' "$TOOLS_SWITCH_NOTICE_WAIT_DEFAULT"; return 0; }
+  case "$given" in
+    *[!0-9]*) ;;
+    *) if [ "${#given}" -le 2 ] && [ "$((10#$given))" -le "$TOOLS_SWITCH_NOTICE_WAIT_MAX" ]; then printf '%s\n' "$((10#$given))"; return 0; fi ;;
+  esac
+  local line
+  line="$(tools_now) JHT_TOOLS_SWITCH_NOTICE_WAIT is not a whole number of seconds from 0 to $TOOLS_SWITCH_NOTICE_WAIT_MAX: using $TOOLS_SWITCH_NOTICE_WAIT_DEFAULT"
+  printf '%s\n' "$line" >&2
+  [ -L "$RUNTIME_DIR/tools.log" ] || printf '%s\n' "$line" >> "$RUNTIME_DIR/tools.log" 2>/dev/null || true
+  printf '%s\n' "$TOOLS_SWITCH_NOTICE_WAIT_DEFAULT"
+}
+
 tools_switch_auto() {
   local stopped=0 up=0
   tools_wait_quiet
@@ -336,7 +355,7 @@ tools_switch_auto() {
     printf '%s\n' "${BASHPID:-$(exec sh -c 'echo "$PPID"')}" > "$TOOLS_SWITCHING_FILE"
     tools_switch_notice
     # the chat of the person reads the notice every second or so: it says the restart and keeps the line before the down ends it
-    sleep "${JHT_TOOLS_SWITCH_NOTICE_WAIT:-3}"
+    sleep "$(tools_switch_notice_wait)"
     "$WRAPPER_PATH" down </dev/null >/dev/null 2>&1 || true
   fi
   rm -f "$RUNTIME_TIER_FILE" && rm -f "$RUNTIME_TIER_INTEGRITY" || { rm -f "$TOOLS_SWITCHING_FILE"; return 0; }
