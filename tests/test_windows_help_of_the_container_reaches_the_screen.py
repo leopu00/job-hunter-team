@@ -24,6 +24,7 @@ def test_the_help_of_the_container_reaches_the_screen_from_powershell(tmp_path, 
     the value the function returns: the help of the container ended up in the code of the exit, not on the screen."""
     ps = PS1.replace("\r\n", "\n")
     fn = re.search(r"^function Invoke-HelpWithoutDocker \{\n.*?^\}\n", ps, re.S | re.M).group(0)
+    terminal_fn = re.search(r"^function Get-JhtTerminalEnv \{\n.*?^\}\n", ps, re.S | re.M).group(0)
     if sub == "enrichment":
         start = ps.index("  if (Test-HostCommandUsesLocalHelp $Sub) {\n")
         call = ps[ps.index("\n  }\n", start) + 5:]
@@ -40,11 +41,12 @@ def test_the_help_of_the_container_reaches_the_screen_from_powershell(tmp_path, 
         "function Test-DockerReachable { $true }\nfunction Test-ContainerUp { $true }\n"
         "function Write-LocalHelp { Write-Output 'LOCAL HELP' }\n"
         "function docker { Write-Output 'Usage: jht [command]'; Write-Output \"ARGS $($args -join ' ')\"; $global:LASTEXITCODE = 3 }\n"
+        + terminal_fn + "\n$env:JHT_UNICODE = '0'; $JhtTerminalEnv = @(Get-JhtTerminalEnv)\n"
         + fn + call + "\nWrite-Output 'AFTER THE HELP'\n", encoding="utf-8")
     done = subprocess.run([POWERSHELL, "-NoProfile", "-NonInteractive", "-File", str(script)],
                           capture_output=True, text=True, timeout=60)
     out = done.stdout.replace("\r\n", "\n")
     assert "Usage: jht [command]" in out, (out, done.stderr)
-    assert f"ARGS exec -e JHT_HOST_TYPE=windows jht node /app/cli/bin/jht.js {' '.join(rest)}" in out
+    assert f"ARGS exec -e JHT_TERMINAL_PLATFORM=win32 -e JHT_UNICODE=0 -e JHT_HOST_TYPE=windows jht node /app/cli/bin/jht.js {' '.join(rest)}" in out
     # the code of the help is the code of the wrapper, and nothing runs after it
     assert done.returncode == 3 and "AFTER THE HELP" not in out and "LOCAL HELP" not in out
