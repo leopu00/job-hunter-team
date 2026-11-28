@@ -235,7 +235,7 @@ def test_a_pull_the_network_broke_is_tried_again_by_itself(box):
     """JHT-T367: two failed pulls, then the third goes; meanwhile the notice says `pulling` with `retrying`."""
     box.tier()
     (box.fake / "pull-fails-left").write_text("2\n", encoding="utf-8")
-    assert _lines(box.run("exit (Invoke-ToolsCommand @('pull'))", JHT_TOOLS_RETRY_WAITS="1 2", JHT_TOOLS_RETRY_FOR="60")) == ["JHT_PHASE tools_pull"]
+    assert _lines(box.run("exit (Invoke-ToolsCommand @('pull'))", JHT_TOOLS_RETRY_WAITS="1 2", JHT_TOOLS_RETRY_FOR="60", JHT_TOOLS_RETRY_MIN="1")) == ["JHT_PHASE tools_pull"]
     box.wait_for("ready")
     assert len((box.fake / "pulls").read_text(encoding="utf-8").splitlines()) == 3
 
@@ -243,7 +243,7 @@ def test_a_pull_the_network_broke_is_tried_again_by_itself(box):
 def test_the_windows_tries_end_with_failed_when_their_time_is_over(box):
     box.tier()
     (box.fake / "pull-fails").write_text("", encoding="utf-8")
-    box.run("exit (Invoke-ToolsCommand @('pull'))", JHT_TOOLS_RETRY_WAITS="1", JHT_TOOLS_RETRY_FOR="2")
+    box.run("exit (Invoke-ToolsCommand @('pull'))", JHT_TOOLS_RETRY_WAITS="1", JHT_TOOLS_RETRY_FOR="2", JHT_TOOLS_RETRY_MIN="1")
     assert box.wait_for("failed")["reason"] == "pull_failed"
 
 

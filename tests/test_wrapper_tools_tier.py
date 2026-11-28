@@ -1430,7 +1430,7 @@ def test_a_pull_the_network_broke_is_tried_again_by_itself_and_says_so_meanwhile
     growing waits, says `pulling`/`retrying` meanwhile (the Capitano keeps waiting), and ends `ready` the third time."""
     box.tier()
     (box.fake / "pull-fails-left").write_text("2\n", encoding="utf-8")
-    assert box.run("tools_main pull", JHT_TOOLS_RETRY_WAITS="1 2", JHT_TOOLS_RETRY_FOR="60").returncode == 0
+    assert box.run("tools_main pull", JHT_TOOLS_RETRY_WAITS="1 2", JHT_TOOLS_RETRY_FOR="60", JHT_TOOLS_RETRY_MIN="1").returncode == 0
     seen = box.wait_for("pulling")
     for _ in range(100):
         seen = box.notice()
@@ -1450,7 +1450,24 @@ def test_a_pull_the_network_broke_is_tried_again_by_itself_and_says_so_meanwhile
 def test_the_tries_end_with_failed_when_their_time_is_over(box):
     box.tier()
     (box.fake / "pull-fails").write_text("", encoding="utf-8")
-    assert box.run("tools_main pull", JHT_TOOLS_RETRY_WAITS="1", JHT_TOOLS_RETRY_FOR="2").returncode == 0
+    assert box.run("tools_main pull", JHT_TOOLS_RETRY_WAITS="1", JHT_TOOLS_RETRY_FOR="2", JHT_TOOLS_RETRY_MIN="1").returncode == 0
     box.wait_for_pull_end()
     assert box.notice()["state"] == "failed" and box.notice()["reason"] == "pull_failed"
     assert len((box.fake / "pulls").read_text(encoding="utf-8").splitlines()) == 3, "1 s + 1 s of waits, then the time is over"
+
+
+@pytest.mark.parametrize("least,waits_seen", [("", "30"), ("0", "1"), ("x", "30"), ("5", "5")])
+def test_a_wait_of_zero_is_never_a_loop_of_pulls_with_no_pause(box, least, waits_seen):
+    """A JHT_TOOLS_RETRY_WAITS of 0 made the pull run again and again with no pause: a wait under the least is the least (30 s by
+    default, never under 1). Seen through the sleep the job asks for."""
+    box.tier()
+    (box.fake / "pull-fails").write_text("", encoding="utf-8")
+    body = ('sleep() { echo "$1" >> "$FAKE/sleeps"; }\n'
+            'tools_notice() { :; }\ntools_pull_with_retries 2026-11-28T00:00:00Z; echo rc=$?\n')
+    env = {"JHT_TOOLS_RETRY_WAITS": "0", "JHT_TOOLS_RETRY_FOR": "90"}
+    if least:
+        env["JHT_TOOLS_RETRY_MIN"] = least
+    done = box.run(body, **env)
+    assert "rc=1" in done.stdout, done.stdout + done.stderr
+    sleeps = (box.fake / "sleeps").read_text(encoding="utf-8").split()
+    assert sleeps and set(sleeps) == {waits_seen}, sleeps

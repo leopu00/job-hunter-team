@@ -109,13 +109,18 @@ EOF
 # `pulling` with the reason `retrying`: the Capitano keeps waiting and the Assistente says the download stopped and goes on by itself.
 tools_pull_with_retries() {
   local since="$1" waits="${JHT_TOOLS_RETRY_WAITS:-60 120 300 600 900}" total="${JHT_TOOLS_RETRY_FOR:-86400}" spent=0 wait=900 w
+  local least="${JHT_TOOLS_RETRY_MIN:-30}"
   case "$total" in ''|*[!0-9]*) total=86400 ;; esac
+  # never a loop of pulls with no pause: a wait under the least (30 s; never under 1) is the least
+  case "$least" in ''|*[!0-9]*) least=30 ;; esac
+  [ "$least" -ge 1 ] || least=1
   set -- $waits
   while :; do
     tools_full_here && return 0
     docker pull "$DEFAULT_RUNTIME_IMAGE" >/dev/null 2>&1 && tools_full_here && return 0
     [ -f "$RUNTIME_TIER_FILE" ] || return 1
     if [ "$#" -gt 0 ]; then w="$1"; shift; case "$w" in ''|*[!0-9]*) ;; *) wait="$w" ;; esac; fi
+    [ "$wait" -ge "$least" ] || wait="$least"
     [ $((spent + wait)) -le "$total" ] || return 1
     tools_notice pulling core retrying "$since"
     sleep "$wait"

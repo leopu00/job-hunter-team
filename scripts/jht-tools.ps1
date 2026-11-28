@@ -163,6 +163,8 @@ function Invoke-ToolsPullWithRetries {
   $waits = @(([string]([Environment]::GetEnvironmentVariable('JHT_TOOLS_RETRY_WAITS')) -split '\s+') | Where-Object { $_ -match '^[0-9]{1,6}$' } | ForEach-Object { [int]$_ })
   if ($null -eq [Environment]::GetEnvironmentVariable('JHT_TOOLS_RETRY_WAITS')) { $waits = @(60, 120, 300, 600, 900) }
   $total = Get-ToolsWaitSeconds 'JHT_TOOLS_RETRY_FOR' 86400
+  # never a loop of pulls with no pause: a wait under the least (30 s; never under 1) is the least
+  $least = [Math]::Max(1, (Get-ToolsWaitSeconds 'JHT_TOOLS_RETRY_MIN' 30))
   $spent = 0
   $wait = 900
   $next = 0
@@ -172,6 +174,7 @@ function Invoke-ToolsPullWithRetries {
     if ($LASTEXITCODE -eq 0 -and (Test-ToolsFullHere)) { return $true }
     if (-not (Test-Path -LiteralPath $RuntimeTierFile -PathType Leaf)) { return $false }
     if ($next -lt $waits.Count) { $wait = $waits[$next]; $next++ }
+    if ($wait -lt $least) { $wait = $least }
     if (($spent + $wait) -gt $total) { return $false }
     Write-ToolsNotice 'pulling' 'core' 'retrying' $Since
     Start-Sleep -Seconds $wait
