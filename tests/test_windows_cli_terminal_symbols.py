@@ -69,3 +69,12 @@ if ($script:words -cne 'team chat assistente') { throw 'chat arguments changed' 
 'PASS'
 """
     assert run_shell(tmp_path, body) == "PASS"
+
+
+def test_the_clack_console_regressions_also_run_with_native_node():
+    node = shutil.which("node")
+    if not node:
+        pytest.skip("node not installed")
+    result = subprocess.run([node, "--test", "cli/tests/terminal-symbols.test.mjs"], cwd=ROOT,
+                            capture_output=True, text=True, encoding="utf-8", timeout=45)
+    assert result.returncode == 0, result.stdout + result.stderr
