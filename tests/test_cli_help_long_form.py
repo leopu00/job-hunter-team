@@ -52,5 +52,5 @@ def test_the_help_of_a_command_of_the_container_runs_without_a_terminal(tmp_path
         "exec -e JHT_HOST_TYPE=local jht node /app/cli/bin/jht.js enrichment --help"]
     ps = PS1.replace("\r\n", "\n")
     fn = re.search(r"^function Invoke-HelpWithoutDocker \{\n.*?^\}\n", ps, re.S | re.M).group(0)
-    assert "& docker exec -e \"JHT_HOST_TYPE=$env:JHT_HOST_TYPE\" $Container node $NodeEntry @HelpArgs" in fn
+    assert "& docker exec @JhtTerminalEnv -e \"JHT_HOST_TYPE=$env:JHT_HOST_TYPE\" $Container node $NodeEntry @HelpArgs" in fn
     assert "ExecFlags" not in fn

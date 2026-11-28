@@ -153,7 +153,7 @@ def test_the_powershell_branch_reads_and_never_starts():
     assert "Get-RunningComposeServiceId $Container" in body
     assert "[Console]::Out.WriteLine('{\"ok\":false,\"error\":\"agent_control_no_team\"}')" in body
     assert (
-        '& docker exec -i -e "JHT_HOST_TYPE=$env:JHT_HOST_TYPE" $containerId node $NodeEntry agent-control @ControlArgs'
+        '& docker exec -i @JhtTerminalEnv -e "JHT_HOST_TYPE=$env:JHT_HOST_TYPE" $containerId node $NodeEntry agent-control @ControlArgs'
         in body
     )
     for forbidden in ("Ensure-Up", "Invoke-Compose", "Start-PodmanMachineForUp", "@ExecFlags", "$Container node"):
